@@ -12,6 +12,9 @@
 ## Branching
 - One feature, one branch, one concern. feat/<phase>-<slug>, fix/, test/, docs/, chore/.
 - A branch that grows a second concern is split, not extended.
+- Create the branch explicitly with git before any work. Do not rely on an auto-generated
+  name: the account-level branch prefix setting is "claude" and cannot be cleared, so an
+  auto-named branch lands as claude/... and loses the phase the convention carries.
 
 ## Function design
 - One function, one reason to change. If its name or its docstring's first line needs
@@ -46,6 +49,9 @@
   docs/adr/APPROVED_ABSTRACTIONS.md.
 - Ponytail never removes error handling, validation, safety/, a test, a fixture, or a
   registered abstraction. Those findings are rejected on sight.
+- If the ponytail skill is not available in this session, write that under ## Ponytail
+  review in the PR body, in those words. Never claim it ran, and never quietly skip it.
+  Its status is tracked in docs/THIRD_PARTY.md.
 
 ## How work is gated
 - Read the relevant build-plan.md phase section first. Restate goal, deliverable, gate.
