@@ -76,6 +76,15 @@ Every missed or partial mention gets exactly one:
   fits, or before the first word that does not fit when there is none. Windows do not overlap.
   The run prints how many paragraphs were cut and how many cuts were not at a sentence end.
 - Text extraction: `.txt` as UTF-8; `.docx` body paragraphs and table cells in document order.
+- Characters the tokenizer cannot represent: every Unicode space separator becomes a plain
+  space, and every format character (zero-width space, soft hyphen, byte order mark,
+  direction marks) is removed, before the text reaches the model and the worksheet. Measured
+  on the tokenizer at the pinned commit, `משה`, a no-break space, `כהן` becomes one `[UNK]`
+  piece, which would hide both words from the model. Phase 3 normalizes whitespace too.
+- Two counts are printed per document so that lost text is never silent: `unknown_pieces`,
+  the `[UNK]` pieces left after that rewriting, and `unread_chars`, the characters of `.docx`
+  body text the extraction did not return (tracked insertions, content controls, fields,
+  text boxes). A document with `unread_chars` above 0 is fixed in Word and run again.
 
 ## Decision rule
 
@@ -87,6 +96,15 @@ fraction `found / (found + partial + missed)`.
 - Anything else: outside the prediction, threshold not crossed.
 
 No number is rounded before it is compared.
+
+## Amended on 2026-11-11, before any real document was run
+
+The Ponytail review of the harness found three ways the number could be wrong for a reason
+that is not the model. The two input-handling bullets above about characters and counts were
+added in answer. The prediction, the threshold, the counting rules and the decision rule are
+unchanged. `README.md` now also says how to record a name the model split into two partial
+highlights, and that a highlight on a name that does not count is listed in
+`not_person_ids`; both follow from the rules above and change none of them.
 
 ## Known limits, stated before the run
 

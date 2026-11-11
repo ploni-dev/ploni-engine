@@ -44,7 +44,7 @@ import transformers
 from transformers import AutoModel, AutoTokenizer
 
 from chunking import MAX_WORDPIECES, split_into_windows
-from corpus import document_id, is_inside, list_documents, read_paragraphs
+from corpus import document_id, is_inside, list_documents, read_checked, unread_characters
 from tally import write_template
 from worksheet import Entity, count_person_highlights, render_document
 
@@ -78,13 +78,16 @@ class DocumentResult(NamedTuple):
     what the private worksheet is drawn from.
 
     Contract: `cut_paragraphs` counts paragraphs that needed more than one
-    window; `hard_cuts` counts cuts that were not at a sentence end.
+    window; `hard_cuts` counts cuts that were not at a sentence end;
+    `unknown_pieces` counts pieces the tokenizer could not represent, each of
+    which hides at least one word from the model.
     """
 
     entities: list[Entity]
     windows: int
     cut_paragraphs: int
     hard_cuts: int
+    unknown_pieces: int
 
 
 def load_ner_model(model_dir: Path, *, all_heads: bool = False):
@@ -146,18 +149,19 @@ def document_entities(model, tokenizer, paragraphs: list[str]) -> DocumentResult
     Raises WindowTooLongError as `window_entities` does.
     """
     entities: list[Entity] = []
-    window_count = cut_paragraphs = hard_cuts = 0
+    window_count = cut_paragraphs = hard_cuts = unknown_pieces = 0
     for index, paragraph in enumerate(paragraphs):
         windows = split_into_windows(paragraph, lambda word: len(tokenizer.tokenize(word)))
         window_count += len(windows)
         cut_paragraphs += len(windows) > 1
         hard_cuts += sum(window.hard_cut for window in windows)
+        unknown_pieces += tokenizer.tokenize(paragraph).count(tokenizer.unk_token)
         for window in windows:
             for start, end, label in window_entities(
                 model, tokenizer, paragraph[window.start : window.end]
             ):
                 entities.append(Entity(index, window.start + start, window.start + end, label))
-    return DocumentResult(entities, window_count, cut_paragraphs, hard_cuts)
+    return DocumentResult(entities, window_count, cut_paragraphs, hard_cuts, unknown_pieces)
 
 
 def check_private_directories(corpus_dir: Path, out_dir: Path) -> None:
@@ -200,13 +204,20 @@ def run(corpus_dir: Path, out_dir: Path, model_dir: Path) -> None:
     Why: see the module docstring.
 
     Contract: prints one line of counts per document, keyed by document id.
-    Raises as `check_private_directories`, `list_documents`, `read_paragraphs`
+    Raises as `check_private_directories`, `list_documents`, `read_checked`
     and `window_entities` do; nothing is caught, so a failed document stops the
     run instead of shrinking it.
     """
     check_private_directories(corpus_dir, out_dir)
     documents = list_documents(corpus_dir)
+    # Asked first: a git failure after the model has run would cost a whole re-run.
+    code = code_revision()
     out_dir.mkdir(parents=True, exist_ok=True)
+    # Written first, so a document that fails under its id can be looked up.
+    with (out_dir / "index.csv").open("w", encoding="utf-8-sig", newline="") as handle:
+        csv.writer(handle).writerows(
+            [document_id(position), path.name] for position, path in enumerate(documents, start=1)
+        )
     torch.set_num_threads(TORCH_THREADS)
     model, tokenizer = load_ner_model(model_dir)
 
@@ -214,7 +225,7 @@ def run(corpus_dir: Path, out_dir: Path, model_dir: Path) -> None:
     for position, path in enumerate(documents, start=1):
         doc_id = document_id(position)
         started = time.perf_counter()
-        paragraphs = read_paragraphs(path)
+        paragraphs = read_checked(doc_id, path)
         result = document_entities(model, tokenizer, paragraphs)
         (out_dir / f"{doc_id}.html").write_text(
             render_document(doc_id, paragraphs, result.entities), encoding="utf-8"
@@ -224,16 +235,14 @@ def run(corpus_dir: Path, out_dir: Path, model_dir: Path) -> None:
             "windows": result.windows,
             "cut_paragraphs": result.cut_paragraphs,
             "hard_cuts": result.hard_cuts,
+            "unknown_pieces": result.unknown_pieces,
+            "unread_chars": unread_characters(path),
             "per_highlights": count_person_highlights(result.entities),
             "all_entities": len(result.entities),
             "seconds": round(time.perf_counter() - started, 1),
         }
         print(doc_id, json.dumps(per_document[doc_id]), flush=True)
 
-    with (out_dir / "index.csv").open("w", encoding="utf-8-sig", newline="") as handle:
-        csv.writer(handle).writerows(
-            [document_id(position), path.name] for position, path in enumerate(documents, start=1)
-        )
     write_template(
         out_dir / "tally.csv",
         {doc_id: counts["per_highlights"] for doc_id, counts in per_document.items()},
@@ -243,7 +252,7 @@ def run(corpus_dir: Path, out_dir: Path, model_dir: Path) -> None:
         "torch": torch.__version__,
         "transformers": transformers.__version__,
         "torch_threads": TORCH_THREADS,
-        "code": code_revision(),
+        "code": code,
         "documents": per_document,
     }
     (out_dir / "run_meta.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")

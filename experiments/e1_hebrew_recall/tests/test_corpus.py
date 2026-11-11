@@ -24,6 +24,20 @@ read_paragraphs
   B3   blank and whitespace-only lines       -> dropped
   H1   niqqud, gershayim (both code points), geresh, final letters, Latin run -> unchanged
   E2   unsupported suffix                    -> UnsupportedDocumentError
+  H2   characters the tokenizer cannot see (no-break and thin space, zero-width
+       space, soft hyphen, inner byte order mark, direction marks) -> a plain
+       space or nothing, in .txt and in .docx
+
+unread_characters
+  EC9  .txt, plain .docx, merged table cells -> 0
+  A4   .docx text in a tracked insertion     -> its length
+  A5   .docx text in a content control       -> its length
+
+read_checked
+  EC10 a readable document                   -> its paragraphs
+  E3   a file that is not a Word package     -> DocumentReadError naming the id,
+       never the file name
+  B5   a document with no text               -> DocumentReadError
 
 document_id
   B4   1 -> doc01, 10 -> doc10
@@ -36,12 +50,18 @@ from pathlib import Path
 import docx
 import pytest
 
+from docx.oxml import parse_xml
+from docx.oxml.ns import nsdecls
+
 from corpus import (
+    DocumentReadError,
     UnsupportedDocumentError,
     document_id,
     is_inside,
     list_documents,
+    read_checked,
     read_paragraphs,
+    unread_characters,
 )
 
 
@@ -147,3 +167,82 @@ def test_e2_read_unsupported_suffix_raises(tmp_path: Path):
 def test_b4_document_id_is_zero_padded():
     assert document_id(1) == "doc01"
     assert document_id(10) == "doc10"
+
+
+# Findings of the Ponytail review, 2026-11-11
+
+INVISIBLE = [
+    ("משה\u00a0כהן", "משה כהן"),
+    ("משה\u2009כהן", "משה כהן"),
+    ("מ\u200bשה כהן", "משה כהן"),
+    ("מ\u00adשה כהן", "משה כהן"),
+    ("משה\ufeff כהן", "משה כהן"),
+    ("\u200fמשה כהן\u200e", "משה כהן"),
+]
+
+
+@pytest.mark.parametrize(("raw", "clean"), INVISIBLE)
+def test_h2_invisible_characters_in_txt(tmp_path: Path, raw: str, clean: str):
+    path = tmp_path / "a.txt"
+    path.write_text(f"{raw} הגיע\n", encoding="utf-8")
+    assert read_paragraphs(path) == [f"{clean} הגיע"]
+
+
+def test_h2_invisible_characters_in_docx(tmp_path: Path):
+    document = docx.Document()
+    for raw, _ in INVISIBLE:
+        document.add_paragraph(f"{raw} הגיע")
+    path = tmp_path / "a.docx"
+    document.save(str(path))
+    assert read_paragraphs(path) == [f"{clean} הגיע" for _, clean in INVISIBLE]
+
+
+def test_ec9_nothing_unread_in_txt_plain_docx_and_merged_cells(tmp_path: Path):
+    text = tmp_path / "a.txt"
+    text.write_text("משה כהן\n", encoding="utf-8")
+    document = docx.Document()
+    document.add_paragraph("משה כהן")
+    table = document.add_table(rows=2, cols=2)
+    table.cell(0, 0).merge(table.cell(0, 1)).text = "תא ממוזג"
+    table.cell(1, 0).text = "תא"
+    word = tmp_path / "b.docx"
+    document.save(str(word))
+    assert (unread_characters(text), unread_characters(word)) == (0, 0)
+
+
+SKIPPED_BY_PYTHON_DOCX = {
+    "a4_tracked_insertion": '<w:ins %s w:id="1" w:author="a"><w:r><w:t>יעקב לוי</w:t></w:r></w:ins>',
+    "a5_content_control": "<w:sdt %s><w:sdtContent><w:r><w:t>יעקב לוי</w:t></w:r></w:sdtContent></w:sdt>",
+}
+
+
+@pytest.mark.parametrize("xml", SKIPPED_BY_PYTHON_DOCX.values(), ids=SKIPPED_BY_PYTHON_DOCX.keys())
+def test_a4_a5_text_python_docx_skips_is_counted(tmp_path: Path, xml: str):
+    document = docx.Document()
+    document.add_paragraph("לפני")._p.append(parse_xml(xml % nsdecls("w")))
+    path = tmp_path / "a.docx"
+    document.save(str(path))
+    assert read_paragraphs(path) == ["לפני"]
+    assert unread_characters(path) == len("יעקב לוי")
+
+
+def test_ec10_read_checked_returns_the_paragraphs(tmp_path: Path):
+    path = tmp_path / "a.txt"
+    path.write_text("משה כהן\n", encoding="utf-8")
+    assert read_checked("doc01", path) == ["משה כהן"]
+
+
+def test_e3_unreadable_document_error_has_the_id_and_no_file_name(tmp_path: Path):
+    path = tmp_path / "CLIENT-NAME.docx"
+    path.write_bytes(b"not a Word package")
+    with pytest.raises(DocumentReadError) as caught:
+        read_checked("doc07", path)
+    assert "doc07" in str(caught.value) and "CLIENT" not in str(caught.value)
+    assert caught.value.__suppress_context__
+
+
+def test_b5_document_with_no_text_is_refused(tmp_path: Path):
+    path = tmp_path / "a.txt"
+    path.write_text("\n  \n", encoding="utf-8")
+    with pytest.raises(DocumentReadError, match="doc03"):
+        read_checked("doc03", path)

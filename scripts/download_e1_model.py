@@ -27,7 +27,6 @@ REPO_ID = "dicta-il/dictabert-joint"
 # refs/heads/main on 2026-11-11.
 REVISION = "7b1256fc0846e22d1af431eae299e2dcecee2778"
 MODELS_ROOT = Path(__file__).resolve().parent.parent / "models"
-HASH_READ_BYTES = 1024 * 1024  # read size only; any value gives the same digest
 
 
 def snapshot_dir() -> Path:
@@ -55,7 +54,11 @@ def download_snapshot() -> Path:
     to force a clean fetch.
     """
     target = snapshot_dir()
-    snapshot_download(REPO_ID, revision=REVISION, local_dir=target, token=False)
+    # The pickle copy of the weights is never loaded (run_model.py reads
+    # model.safetensors only), so it is not fetched.
+    snapshot_download(
+        REPO_ID, revision=REVISION, local_dir=target, token=False, ignore_patterns=["pytorch_model.bin"]
+    )
     return target
 
 
@@ -68,11 +71,8 @@ def file_sha256(path: Path) -> str:
     Contract: `path` must be a readable file. Reads in chunks, so a weights
     file larger than free memory is fine. Raises OSError if unreadable.
     """
-    digest = hashlib.sha256()
     with path.open("rb") as handle:
-        while chunk := handle.read(HASH_READ_BYTES):
-            digest.update(chunk)
-    return digest.hexdigest()
+        return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
 def inventory_lines(directory: Path) -> list[str]:

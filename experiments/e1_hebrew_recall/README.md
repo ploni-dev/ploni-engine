@@ -13,7 +13,7 @@ experiments/.venv/Scripts/python.exe -m pip install -r experiments/e1_hebrew_rec
 experiments/.venv/Scripts/python.exe -I scripts/download_e1_model.py
 ```
 
-The download is about 1.5 GB into `models/dictabert-joint/<commit>/` and prints a SHA-256 per
+The download is about 750 MB into `models/dictabert-joint/<commit>/` and prints a SHA-256 per
 file. Then check the harness reads the model correctly, on invented sentences:
 
 ```bash
@@ -32,7 +32,8 @@ cd experiments/e1_hebrew_recall && ../.venv/Scripts/python.exe -m pytest -q
 1. Put the ten documents, `.docx` or UTF-8 `.txt`, in a folder **outside the repository**, with
    nothing else in it. A PDF or a legacy `.doc` stops the run; convert it to `.docx` in Word
    first, and say so in the findings note, because the conversion is then part of what was
-   measured.
+   measured. In a `.txt`, one line is one paragraph: unwrap a file that has line breaks
+   inside sentences, or supply it as `.docx`.
 2. Run the model. The output folder must be new and also outside the repository.
 
    ```bash
@@ -42,14 +43,25 @@ cd experiments/e1_hebrew_recall && ../.venv/Scripts/python.exe -m pytest -q
 
    It prints one line of counts per document and nothing from the documents. Roughly five
    seconds per full window on this laptop, so a few minutes for a long decision.
+
+   Two of the counts must be looked at before any counting by hand:
+
+   - `unread_chars` above 0: the `.docx` holds body text the worksheet does not show, such
+     as tracked insertions, content controls, fields or text boxes. Accept all changes in
+     Word, save, run again in a new output folder, and say so in the findings note.
+   - `unknown_pieces` above 0: the text holds characters the model cannot read, and each
+     one hides a word from it. Report the count in the findings note.
+
+   If a document cannot be read, the error names it as `docNN`; `index.csv` in the output
+   folder says which file that is.
 3. Open `e1_out/doc01.html` in a browser, and `e1_out/tally.csv` beside it. Read the document
    once, top to bottom, and fill in the row:
 
    | Column | What goes in it |
    |---|---|
-   | `not_person_ids` | Numbers of yellow highlights that are not a person's name, space-separated. |
+   | `not_person_ids` | Numbers of yellow highlights that are not a counted mention under "What counts as a person name" in `PREREGISTRATION.md`: not a person, a placeholder, or a name inside an organisation, street, statute or cited precedent. Space-separated. |
    | `partial_ids` | Numbers of yellow highlights that cover only part of a name. |
-   | `found_adjust` | Usually `0`. `+1` for each extra person inside one highlight that holds two names; `-1` for each surplus highlight when two adjacent ones cover a single name. |
+   | `found_adjust` | Usually `0`. `+1` for each extra person inside one highlight that holds two names; `-1` for each surplus highlight when two adjacent ones cover a single name. If two highlights each cover only part of the same name, list one of them in `partial_ids` and add `-1` here, so the name counts as one error and not two. |
    | `missed` | Person-name mentions with no yellow highlight on them at all. |
    | `missed_other_label` | How many of those misses sit fully inside a grey highlight. |
    | `err_ordinary_word`, `err_proclitic`, `err_both`, `err_other` | Each missed or partial mention goes in exactly one. They must add up to `missed` plus the number of `partial_ids`. |

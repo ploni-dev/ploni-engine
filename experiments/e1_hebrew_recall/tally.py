@@ -96,15 +96,16 @@ def parse_id_list(cell: str, highest: int) -> frozenset[int]:
     second reader re-check the count against the worksheet.
 
     Contract: a blank cell is the empty set. Raises TallyError for anything
-    that is not an integer, an id outside `1..highest`, or a repeated id.
+    that is not an integer, an id outside `1..highest`, or a repeated id. The
+    message never repeats the cell, which a note typed by hand may be in.
     """
     ids = []
     for token in cell.split():
         if not token.isdecimal() or not 1 <= int(token) <= highest:
-            raise TallyError(f"highlight id {token!r} is not a number in 1..{highest}")
+            raise TallyError(f"not a list of numbers in 1..{highest}")
         ids.append(int(token))
     if len(ids) != len(set(ids)):
-        raise TallyError(f"a highlight id is listed twice: {cell!r}")
+        raise TallyError("a highlight id is listed twice")
     return frozenset(ids)
 
 
@@ -163,8 +164,13 @@ def parse_row(row: dict[str, str]) -> DocumentCount:
     a person, or an inconsistent count.
     """
     per_highlights = _parse_count(row, "per_highlights")
-    not_person = parse_id_list(row.get("not_person_ids") or "", per_highlights)
-    partial = parse_id_list(row.get("partial_ids") or "", per_highlights)
+    id_lists = {}
+    for field in ID_LIST_FIELDS:
+        try:
+            id_lists[field] = parse_id_list(row.get(field) or "", per_highlights)
+        except TallyError as error:
+            raise TallyError(f"{row.get('doc_id')}: {field}: {error}") from None
+    not_person, partial = id_lists["not_person_ids"], id_lists["partial_ids"]
     if not_person & partial:
         raise TallyError(f"{row.get('doc_id')}: a highlight is both partial and not a person")
     count = DocumentCount(

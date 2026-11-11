@@ -15,6 +15,7 @@ parse_row
   E4   a count left blank (document not annotated yet) -> TallyError
   E5   negative count                  -> TallyError
   E6   an id in both lists             -> TallyError
+  A1   a bad id list names the document and the column, and never repeats the cell
   E7   categories do not sum to missed plus partial -> TallyError
   E8   missed_other_label above missed -> TallyError
   E9   derived found below zero        -> TallyError
@@ -277,3 +278,11 @@ def test_e11_template_never_overwrites(tmp_path: Path):
     with pytest.raises(FileExistsError):
         write_template(path, {"doc01": 1})
     assert path.read_text(encoding="utf-8") == "annotated by hand"
+
+
+def test_a1_bad_id_list_names_document_and_column_without_the_cell():
+    with pytest.raises(TallyError) as caught:
+        parse_row(row(doc_id="doc04", partial_ids="7,9 יעקב"))
+    message = str(caught.value)
+    assert "doc04" in message and "partial_ids" in message
+    assert "7,9" not in message and "יעקב" not in message
