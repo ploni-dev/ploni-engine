@@ -1,0 +1,9 @@
+{
+  "_comment": "Counters that may only increase. PROMOTION.md section 6. A decrease fails the build unless the PR body carries a ratchet-override line and touches no file under ploni/. Zeroes are the honest starting state: no code exists yet.",
+  "_updated": "2026-11-11",
+  "test_functions": {},
+  "assertions": {},
+  "fixture_cases": {},
+  "registered_detectors": 0,
+  "system_journeys": 0
+}

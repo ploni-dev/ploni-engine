@@ -1,0 +1,21 @@
+# Review ownership. Not enforced on GitHub Free for a private repo
+# (PROMOTION.md section 11); it becomes real on upgrade to Team.
+# Kept accurate now so the upgrade needs no archaeology.
+
+*                           @AchiaIR
+
+# Frozen or load-bearing. Changing any of these is a deliberate act.
+/ploni/api.py               @AchiaIR
+/eval/baselines.json        @AchiaIR
+/.github/workflows/         @AchiaIR
+/.ratchet.json              @AchiaIR
+/docs/WAIVERS.md            @AchiaIR
+/docs/adr/APPROVED_ABSTRACTIONS.md  @AchiaIR
+/CLAUDE.md                  @AchiaIR
+/build-plan.md              @AchiaIR
+/PROCESS.md                 @AchiaIR
+/PROMOTION.md               @AchiaIR
+
+# Tomer owns every externally visible claim the product makes.
+# Add him as a collaborator and uncomment when ploni/i18n/claims/ exists.
+# /ploni/i18n/claims/       @tomer-github-handle
