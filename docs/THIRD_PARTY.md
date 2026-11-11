@@ -14,7 +14,9 @@ That row is written by hand: `scripts/download_e1_model.py` fetches the model fo
 
 Phase 3 adds `dicta-il/dictabert-joint` (CC BY 4.0) to the product and Phase 4 adds `fastino/gliner2-base-v1` (Apache 2.0), each pinned by commit hash.
 
-Python packages for the experiment are pinned in `experiments/e1_hebrew_recall/requirements.txt`. None is shipped. Licenses of the direct ones, as declared in their installed metadata: torch 2.15.0 (Apache-2.0 and BSD-family, per its SPDX expression), transformers 5.22.2 (Apache 2.0), huggingface_hub 2.4.0 (Apache-2.0), python-docx 1.2.0 (MIT), pytest 9.2.0 (MIT).
+`experiments/e2_int8_latency/export.py` derives two ONNX files from that model, the encoder and NER head in FP32 and in dynamic INT8. They are written under `models/`, which is not in the repository, carry the same CC BY 4.0 license, and are not shipped.
+
+Python packages for the experiments are pinned in `experiments/e1_hebrew_recall/requirements.txt` and, with the ONNX packages added, in `experiments/e2_int8_latency/requirements.txt`. None is shipped. Licenses of the direct ones, as declared in their installed metadata: torch 2.15.0 (Apache-2.0 and BSD-family, per its SPDX expression), transformers 5.22.2 (Apache 2.0), huggingface_hub 2.4.0 (Apache-2.0), python-docx 1.2.0 (MIT), pytest 9.2.0 (MIT), onnx 1.23.2 (Apache-2.0), onnxruntime 1.31.1 (MIT).
 
 Two licensing traps, recorded here because they are easy to walk into:
 
