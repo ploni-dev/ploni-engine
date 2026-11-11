@@ -112,6 +112,8 @@ Required status checks on the PR. Under five minutes. **Enforced by GitHub Actio
 
 A PR cannot merge with any of these red. Branch protection enforces that, not discipline.
 
+**On the current plan it does not.** See section 11: GitHub Free does not enforce branch protection on a private repository, so today these checks run and report but do not block a merge. Read every "cannot merge" and "enforced by branch protection" claim in this document against that section.
+
 ### Level 2: your review
 
 What a machine cannot judge. Read in this order, and stop early if an earlier item fails.
@@ -363,3 +365,52 @@ In this order. Nothing in Class A exists until it is built, so build it before t
 8. A PR body citing `waiver: WAIVER-999`, which does not exist
 
 If any of those eight merges, the enforcement layer is decoration and the number eight is the only honest way to find out.
+
+---
+
+## 11. Enforcement status on the current plan
+
+Recorded 2026-11-11. This section overrides any stronger claim made above, and it is the first thing to re-read when deciding whether a rule is real.
+
+### What the repo actually is
+
+`ploni-dev/ploni-engine`, private, on GitHub Free. The decision not to pay is deliberate: GitHub Team is $4 per user per month, and the enforcement it buys is not worth paying for until there is code to protect. Making the repo public would restore every protection for free and is rejected for a different reason: the repo carries the build plan, the competitor analysis and the pricing model, and publishing those to save $4 a month is a bad trade.
+
+### What this costs, exactly
+
+On a private repository, GitHub Free does not enforce branch protection or rulesets, and does not support CODEOWNERS review. So:
+
+- A red required check does **not** block a merge. It reports.
+- Nothing stops a direct push to `main`.
+- CODEOWNERS on `api.py`, `baselines.json` or the plan files requests nothing and blocks nothing.
+- Squash-only and linear history are repo settings and still apply.
+- GitHub Actions still runs on private repos within the free monthly minutes, so every Class A check still **runs** and still goes red.
+
+The distinction that matters: the checks are not gone, the **blocking** is gone. A violation is still visible in the PR; it is just no longer impossible to merge past it.
+
+### What this does to section 5
+
+Section 5.1 sorts rules into Class A, machine-enforced and not silently bypassable. On the current plan, every row in that table degrades from "cannot be bypassed" to "cannot be bypassed without it being visible in the PR". That is a real downgrade and it is not a small one: the entire argument of section 1 is that the gate should not depend on anyone's discipline, and today it does.
+
+Class B and Class C are unaffected. They were never blocking.
+
+### What compensates, and what does not
+
+Compensating, honestly:
+
+- Every check still runs in CI and is visible before merge.
+- One developer, one reviewer. The failure mode that branch protection exists to stop, someone else merging past a red check, has no one to perform it.
+- The agent has no authority to merge. Merging is a human act, performed by Achia, after reading the PR. An agent that pushes to `main` directly is violating `CLAUDE.md`, and that violation shows in the commit history with no PR attached.
+- `git log --first-parent main` shows any commit that arrived without a PR. Check it at every phase close.
+
+Not compensating, and worth saying plainly: none of the above is a mechanism. All of it is discipline, which is exactly what section 1 said not to rely on. This section exists so that nobody reads section 4 in six months and believes the gate held when it was only ever requested.
+
+### When to revisit
+
+Upgrade to Team, one seat, at the first of these:
+
+1. The first PR that contains real product code rather than scaffolding, because that is the first merge where a red check actually means something.
+2. Tomer, or anyone else, getting write access.
+3. The first time a red check is merged past, whatever the reason. If it happens once it will happen again, and at that point $4 is cheap.
+
+Until then, this section is the truthful answer to "is this rule enforced", and the answer for every Class A row is: it runs, it reports, it does not block.
