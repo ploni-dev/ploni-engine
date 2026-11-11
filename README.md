@@ -1,9 +1,10 @@
-# tomer-engine
+# ploni-engine
 
-Local, offline, Hebrew-first document pseudonymization for lawyers, accountants and clinicians.
-Codename only; the product name is still open (build-plan.md section 15, item 6).
+**Ploni** (פלוני): local, offline, Hebrew-first document pseudonymization for lawyers, accountants and clinicians. Python package and CLI: `ploni`.
 
-כלי מקומי, ללא רשת, להתממת מסמכים בעברית לפני העלאה לכלי AI. שם קוד בלבד, שם המוצר עדיין פתוח.
+כלי מקומי, ללא רשת, להתממת מסמכים בעברית לפני העלאה לכלי AI.
+
+Named for the word Israeli legal writing already uses for an unnamed party. The name is not a claim: the product never says a document is anonymized, compliant or safe to upload (build-plan.md section 1).
 
 ## Status
 
@@ -23,4 +24,4 @@ Planning complete. No product code yet. Next: Phase 0 (build-plan.md section 16,
 ## Ownership
 
 - Engineering: Achia
-- Legal, regulatory and all external-facing claims: Tomer (`tomer/i18n/claims/` once it exists)
+- Legal, regulatory and all external-facing claims, including the name's trademark check: Tomer (`ploni/i18n/claims/` once it exists)

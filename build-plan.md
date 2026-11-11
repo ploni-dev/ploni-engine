@@ -1,6 +1,6 @@
 # Build Plan v3.0: Local Hebrew-First Document Pseudonymization Tool
 
-Codename: **Tomer** (final name TBD).
+Product name: **Ploni** (פלוני). Python package and CLI: `ploni`. Repo: `ploni-engine`. Decided 2026-11-11; trademark check still open with Tomer.
 Achia owns engineering. Tomer (lawyer) owns everything legal and regulatory.
 Implementer: Claude Code, phase by phase.
 Date: 2026-11-01. Supersedes v2.0. Changelog in section 30.
@@ -14,7 +14,7 @@ Date: 2026-11-01. Supersedes v2.0. Changelog in section 30.
 1. **Engine before UI.** Phases 1 to 10 produce a library plus CLI. No UI code before Phase 12.
 2. **A phase is not done until its own gate passes.** Each phase in Part IV lists an explicit gate with numbers. Do not advance on "it looks right".
 3. **Never weaken a test to pass a gate.** If a gate cannot be met, stop and report the measured number. The plan changes, not the test.
-4. **No network in product code.** Model downloads happen once in `scripts/`. `eval/` may use the network and must never be importable from `tomer/`. Both enforced by tests.
+4. **No network in product code.** Model downloads happen once in `scripts/`. `eval/` may use the network and must never be importable from `ploni/`. Both enforced by tests.
 5. **No fabricated numbers.** Where this plan predicts a measurement, it states a disagreement threshold. Measure, print, report. Do not tune until the prediction matches.
 6. **Pin everything.** Dependency versions, model revisions by commit hash, thread counts in tests.
 7. **English code and logs, Hebrew-first UI through i18n from the first UI commit.**
@@ -240,7 +240,7 @@ Inference runs in a worker process, not a thread. Reasons: real cancellation, me
 ### 4.7 Repo layout
 
 ```
-tomer/
+ploni/
   api.py              # the four public functions, frozen
   types.py  config.py  profiles.py  session.py  errors.py
   adapters/  base.py docx/ txt/
@@ -264,7 +264,7 @@ tomer/
   worker/    host.py protocol.py
   i18n/      he.json en.json
 ui/
-eval/                 # dev-only; network allowed; never imported by tomer/
+eval/                 # dev-only; network allowed; never imported by ploni/
   corpus/ generate.py run_eval.py baselines.json
 tests/
   t0_contract/ t1_unit/ t2_property/ t3_golden/ t4_integration/
@@ -454,8 +454,8 @@ Two zero-leak numbers, never collapsed into one. A single figure would either ov
 
 ### T8: what privacy testing actually checks
 
-- AST scan: no networking imports under `tomer/`.
-- `eval/` is not importable from `tomer/`.
+- AST scan: no networking imports under `ploni/`.
+- `eval/` is not importable from `ploni/`.
 - Canary test: a document seeded with unique canary strings runs the full pipeline; no canary appears in any log record, any file under the temp directory, or any artifact other than the encrypted mapping.
 - Scrub assertions: metadata fields empty, comments gone, tracked-change deletions gone, image EXIF stripped, output filename neutral.
 - Co-location: `apply()` refuses to write a mapping into the output directory.
@@ -522,7 +522,7 @@ Each phase states: goal, deliverable, tests added, **gate**, and what breaks dow
 
 **Tests added.** T0 type contracts. T8 no-network AST scan, eval-isolation, log canary, temp-file canary. T1 atomic-write unit tests including simulated crash between write and rename.
 
-**Gate.** `tomer selftest` prints the model inventory and "offline OK". T0, T1, T8 green. CI fails if a model in `models/` is absent from `THIRD_PARTY.md`.
+**Gate.** `ploni selftest` prints the model inventory and "offline OK". T0, T1, T8 green. CI fails if a model in `models/` is absent from `THIRD_PARTY.md`.
 
 **If wrong.** Logging and temp-file leaks retrofitted later are found by whoever audits the product, not by you.
 
@@ -840,7 +840,7 @@ Scrub defaults, all on:
 
 ### Mapping store
 
-One encrypted file per matter, `<matter_id>.tomer`.
+One encrypted file per matter, `<matter_id>.ploni`.
 - **Schema version in the header**, with `migrate.py` from day one. A matter lives two years and the app will change. Retrofitting a version field means breaking every existing matter.
 - Argon2id key derivation with parameters in the header; AES-256-GCM or XChaCha20-Poly1305, AEAD over the whole payload, per-record nonces. On Windows, optionally wrap the key with DPAPI so the user is not prompted every time; passphrase-only mode for portability.
 - Contents: matter id, timestamps, schema version, `model_bundle_version`, `name_bank_version`, entity records, surrogate records with forms and transliterations, number modes, the matter date offset and amount factor, source document hashes, and a session hash chain.
@@ -1116,7 +1116,7 @@ Nothing here is needed for v1.
 3. **Public entity policy.** Keep courts, laws, ministries and precedents by default? Recommended yes; confirm with Tomer and a pilot lawyer.
 4. **Identifier surrogate style.** Marked pseudo-identifiers (`[מזהה-1]`) by default, or checksum-valid non-issued values?
 5. **Passphrase or OS keystore** as the mapping default. Portability against friction.
-6. **Product name.** "Censors" frames the value as suppression, which is wrong for this audience; the Hebrew term in use is התממה. Decide before UI strings are written.
+6. ~~**Product name.**~~ Decided 2026-11-11: **Ploni** (פלוני), the word Israeli legal writing already uses for an unnamed party. Package and CLI `ploni`, repo `ploni-engine`. Still open and owned by Tomer: a trademark check, and whether the name's association with anonymity conflicts with the rule in section 1 that the product never claims anonymity.
 7. **Pilot users.** Who are the first three who will let you measure recall on their documents, on their machines?
 
 ## 16. First instruction to Claude Code

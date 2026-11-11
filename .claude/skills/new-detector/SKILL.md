@@ -1,6 +1,6 @@
 ---
 name: new-detector
-description: Add or change an entity detector in the Tomer pipeline, with its fixture corpus, conformance tests and measured precision and recall printed. Use when adding or modifying a detector under tomer/detect/.
+description: Add or change an entity detector in the Ploni pipeline, with its fixture corpus, conformance tests and measured precision and recall printed. Use when adding or modifying a detector under ploni/detect/.
 ---
 
 # Adding a detector

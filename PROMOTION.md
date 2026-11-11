@@ -55,7 +55,7 @@ This is the natural wrong turn, so it is stated explicitly. Phase 2 has several 
 
 The reason: a long-lived integration branch defers the moment of truth. Bugs compound behind it, the eventual merge is unreviewable, and `main` stops being a trustworthy baseline.
 
-**The constraint this creates:** every PR must leave `main` green and coherent. For a library this is easy, because a new module that nothing calls yet is inert. The rule that follows: **wire it up last.** The PR that adds `tomer/detect/hebrew_ner.py` does not register it in the pipeline. A later, small PR does, once it is proven.
+**The constraint this creates:** every PR must leave `main` green and coherent. For a library this is easy, because a new module that nothing calls yet is inert. The rule that follows: **wire it up last.** The PR that adds `ploni/detect/hebrew_ner.py` does not register it in the pipeline. A later, small PR does, once it is proven.
 
 If a change genuinely cannot be split without breaking `main`, that is a design signal, not a reason for a long branch. Put the new path behind a flag in `config.py`, default off, and flip it in the final PR.
 
@@ -124,7 +124,7 @@ What a machine cannot judge. Read in this order, and stop early if an earlier it
 
 ### Level 3: merge to `main`
 
-Squash merge, linear history, branch deleted. Requires Levels 1 and 2. CODEOWNERS approval additionally required if the PR touches `tomer/api.py`, `eval/baselines.json`, `config.py` gate values, any CI workflow, `docs/adr/APPROVED_ABSTRACTIONS.md`, `docs/WAIVERS.md`, `CLAUDE.md`, `build-plan.md`, `PROCESS.md`, `PROMOTION.md`, or `tomer/i18n/claims/`.
+Squash merge, linear history, branch deleted. Requires Levels 1 and 2. CODEOWNERS approval additionally required if the PR touches `ploni/api.py`, `eval/baselines.json`, `config.py` gate values, any CI workflow, `docs/adr/APPROVED_ABSTRACTIONS.md`, `docs/WAIVERS.md`, `CLAUDE.md`, `build-plan.md`, `PROCESS.md`, `PROMOTION.md`, or `ploni/i18n/claims/`.
 
 ### Level 4: phase close
 
@@ -163,8 +163,8 @@ Every rule in `CLAUDE.md` falls into one of three classes. Knowing which class a
 
 | Rule | Mechanism |
 |---|---|
-| No networking imports under `tomer/` | AST test in the fast suite |
-| `tomer/` never imports `eval/` | AST test |
+| No networking imports under `ploni/` | AST test in the fast suite |
+| `ploni/` never imports `eval/` | AST test |
 | Layering boundaries | AST test, fails with `file:line` |
 | No document text in logs or temp files | canary test through the full pipeline |
 | Docstring present with a `Why:` section | AST test |
@@ -225,7 +225,7 @@ A decrease fails the build with the exact counter and the delta. To decrease one
 ratchet-override: tests/t1_unit/test_phone_il.py  -3  merged duplicate separator cases into a parametrized case
 ```
 
-CI accepts the override only when the line is present and the PR touches no file under `tomer/`. So loosening a test and changing code in the same breath is impossible.
+CI accepts the override only when the line is present and the PR touches no file under `ploni/`. So loosening a test and changing code in the same breath is impossible.
 
 **Why a ratchet rather than a coverage target:** a coverage percentage can be gamed by adding trivial tests. A ratchet on real counters cannot be gamed in the direction that matters, which is downward.
 
@@ -239,7 +239,7 @@ The weakest point in any agent workflow is a number in a message. Three mechanis
 
 **CI is the source of truth for anything CI can run.** The pasted output in a PR body is a convenience for your reading, not the gate. The gate is the green check from GitHub. When the two disagree, CI is right.
 
-**Staleness is a failure, not a silence.** If `tomer/` changed and no results file exists for the new SHA, the build fails. An out-of-date measurement cannot pass as a current one.
+**Staleness is a failure, not a silence.** If `ploni/` changed and no results file exists for the new SHA, the build fails. An out-of-date measurement cannot pass as a current one.
 
 ---
 
@@ -353,7 +353,7 @@ In this order. Nothing in Class A exists until it is built, so build it before t
 
 **Phase 0 is not closed until eight deliberately bad PRs are each rejected by CI.** Prove the guardrails before trusting them, because a guardrail you never tested is a guardrail you are only assuming:
 
-1. `import requests` under `tomer/`
+1. `import requests` under `ploni/`
 2. `detect/` importing `write/`
 3. A public function with no docstring
 4. A public function whose docstring has no `Why:` section

@@ -1,9 +1,9 @@
 # Project rules
 
 ## Hard constraints
-- No networking imports anywhere under tomer/. Downloads live in scripts/ only.
-- eval/ may use the network. tomer/ must never import from eval/.
-- No document text in logs or temp files. Use tomer/safety/ helpers.
+- No networking imports anywhere under ploni/. Downloads live in scripts/ only.
+- eval/ may use the network. ploni/ must never import from eval/.
+- No document text in logs or temp files. Use ploni/safety/ helpers.
 - Pin every dependency version and every model revision by commit hash.
 - Never use PyMuPDF. It is AGPL.
 - GLiNER v0 and v1 checkpoints are CC-BY-NC and unusable here. Only v2.1 and PII variants.

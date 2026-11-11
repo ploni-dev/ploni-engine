@@ -26,7 +26,9 @@ If the plan's gate for this phase is ambiguous, stop and ask. Do not invent a ga
 
 ## 2. Branch
 
-`phase-<N>/<slug>`, one branch per PR.
+`feat/<phase>-<slug>` for a feature, or `fix/<slug>`, `test/<slug>`, `docs/<slug>`, `chore/<slug>`. One branch, one concern, one PR. A branch that grows a second concern is split, not extended.
+
+Then **invoke the ponytail skill**, before writing any code, so its rules are in context while the code is written rather than retrofitted afterwards.
 
 ## 3. Write the failing test first
 
@@ -70,31 +72,51 @@ Instead write `docs/findings/<YYYY-MM-DD>-<slug>.md` with: what was measured, th
 Use this body. A PR without pasted gate evidence will be closed unreviewed.
 
 ```markdown
-## Phase and issue
-Phase N, issue #NN
+## Orientation
+Goal:
+Deliverable:
+Gate:
+Downstream risk if wrong:
+
+## Phase, issue, branch
+Phase N, issue #NN, feat/N-slug
 
 ## What this does
 
 ## Gate evidence
-(paste the actual command and its actual output)
+(paste the actual command and its actual output; results file SHA if applicable)
 
 ## Prediction vs measurement
 Predicted:
 Measured:
 Within threshold: yes / no
 
-## Tests added
+## Test evidence
+Failing-first output, then passing output.
+Equivalence classes and axes covered.
+Sample size:
+
+## Ponytail review
+(skill output on this diff)
+Accepted:
+Rejected, with ADR:
 
 ## Golden file changes
 None, or: changed because ...
 
 ## Checklist
+- [ ] One concern, one branch
 - [ ] Failing test written before implementation
+- [ ] Docstring with Why on every public function touched
+- [ ] Edge cases from equivalence classes covered
+- [ ] Ponytail review run and findings addressed
 - [ ] No test, threshold or baseline weakened
 - [ ] No baseline or gate change in this PR
 - [ ] Fast suite green locally
 - [ ] Layering test green
 ```
+
+CI checks that the orientation block and the Ponytail section are present and non-empty, so a PR built from an older template is rejected before review.
 
 ## Hard limits on a single PR
 

@@ -1,6 +1,6 @@
 ---
 name: eval-baseline
-description: Run the Tomer metric suite, compare the results against eval/baselines.json, and handle a regression or a proposed baseline change. Use at a phase boundary, after a model or quantization change, or when a baseline needs updating.
+description: Run the Ploni metric suite, compare the results against eval/baselines.json, and handle a regression or a proposed baseline change. Use at a phase boundary, after a model or quantization change, or when a baseline needs updating.
 ---
 
 # Running the metric gates

@@ -32,7 +32,7 @@ Absolute, because this product's entire value is correctness:
 
 - error handling
 - input validation
-- anything under `tomer/safety/`
+- anything under `ploni/safety/`
 - any test
 - any fixture
 - anything in the approved abstractions register
