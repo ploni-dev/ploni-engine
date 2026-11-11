@@ -17,14 +17,22 @@ Two licensing traps, recorded here because they are easy to walk into:
 
 | Tool | Source | Version | License | Status |
 |---|---|---|---|---|
-| Ponytail | not recorded | not recorded | MIT per its own docs, unverified | **Unresolved. See below.** |
+| Ponytail | GitHub `DietrichGebert/ponytail`, installed as the Claude Code plugin `ponytail@ponytail` | 4.7.0, commit `45f7d2f83fb430a65fd512a98ad7b14d79e06636` | MIT, read from the `LICENSE` file of the installed copy | **Available on Achia's laptop. Not available to cloud sessions. See below.** |
 
-### Ponytail, unresolved as of 2026-11-11
+### Ponytail, resolved locally and open for cloud sessions as of 2026-11-11
 
-`CLAUDE.md` requires every session that writes code to invoke the ponytail skill before writing any, and `PROCESS.md` section 7.1 makes it a merge condition. As of today that requirement cannot be met in a cloud session:
+`CLAUDE.md` requires every session that writes code to invoke the ponytail skill before writing any, and `PROCESS.md` section 7.1 makes it a merge condition.
 
-- It is not among the account's enabled skills.
-- Nothing matching it is in the plugin catalog.
-- Achia has a copy he uses locally. Its exact source, version and whether it exposes intensity modes are not recorded, which `PROCESS.md` section 13 items 2 and 3 already list as open.
+What is installed, read from the copy on Achia's laptop:
 
-Until that is resolved, a session that cannot invoke it says so in the PR body rather than skipping it silently or claiming it ran. Resolving it means one of: publishing the local copy as an account-level skill so cloud sessions get it, vendoring it into this repo with its license and commit, or a PR against `CLAUDE.md` and `PROCESS.md` dropping the requirement. The third is a real option; what is not an option is leaving a rule in place that sessions cannot follow.
+- Five skills: `ponytail`, `ponytail-review`, `ponytail-audit`, `ponytail-debt`, `ponytail-help`. The `ponytail` skill has three intensity levels, `lite`, `full` (its default) and `ultra`. That answers `PROCESS.md` section 13 item 2; which level this project uses is still Achia's to write into `CLAUDE.md`.
+- Two hooks, on session start and on every prompt, each running a Node script from the plugin.
+
+Where it is enabled: for this project on Achia's laptop, through `.claude/settings.local.json`, which is not in the repository. Until 2026-11-11 it was enabled for a different project only, which is why earlier sessions here did not have it. A session already running when it was enabled has to reload plugins or restart before the skill appears.
+
+What is still open:
+
+- **Cloud sessions do not get it.** A local settings file does not travel with the repository.
+- **The version is not pinned.** The marketplace entry names the GitHub repository without a commit, so a plugin update changes what shapes the code. The version and commit above are what was installed on 2026-11-11, not a guarantee.
+
+A session that cannot invoke the skill says so in the PR body rather than skipping it silently or claiming it ran. Closing the cloud gap means one of: enabling the plugin in a checked-in `.claude/settings.json` so every session of this repository loads it, vendoring the skills into this repo with their license and commit, or a PR against `CLAUDE.md` and `PROCESS.md` dropping the requirement. The third is a real option; what is not an option is leaving a rule in place that sessions cannot follow.
