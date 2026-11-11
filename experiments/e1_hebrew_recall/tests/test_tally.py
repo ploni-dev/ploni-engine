@@ -16,6 +16,17 @@ parse_row
   E5   negative count                  -> TallyError
   E6   an id in both lists             -> TallyError
   A1   a bad id list names the document and the column, and never repeats the cell
+  EC9  public_ids and missed_public split found and errors into public figures
+       and private parties, and the two groups add up to the whole
+  EC10 found_adjust_public moves the public count only
+  E12  a public id that is also not a person; missed_public above missed;
+       public found below zero or above found -> TallyError
+
+gap_verdict  (pre-registration: 10 points, at least 30 mentions per group)
+  B10  29 mentions in either group     -> too_few_mentions
+  B11  exactly 10 points               -> large_gap
+  B12  9.9 points                      -> small_gap
+  EC11 private recall above public     -> large_gap as well
   E7   categories do not sum to missed plus partial -> TallyError
   E8   missed_other_label above missed -> TallyError
   E9   derived found below zero        -> TallyError
@@ -57,6 +68,7 @@ from tally import (
     TallyError,
     errors_concentrated,
     format_report,
+    gap_verdict,
     parse_id_list,
     parse_row,
     pool,
@@ -82,6 +94,8 @@ def row(**overrides: str) -> dict[str, str]:
         "err_proclitic": "1",
         "err_both": "1",
         "err_other": "1",
+        "found_adjust_public": "0",
+        "missed_public": "0",
     }
     return {**base, **overrides}
 
@@ -261,6 +275,7 @@ def test_ec8_template_round_trip(tmp_path: Path):
     assert [r["doc_id"] for r in rows] == ["doc01", "doc02"]
     assert rows[0]["per_highlights"] == "20"
     assert rows[0]["missed"] == ""
+    assert rows[0]["public_ids"] == ""
 
     with pytest.raises(TallyError):
         read_tally(path)  # nothing annotated yet
@@ -286,3 +301,53 @@ def test_a1_bad_id_list_names_document_and_column_without_the_cell():
     message = str(caught.value)
     assert "doc04" in message and "partial_ids" in message
     assert "7,9" not in message and "יעקב" not in message
+
+
+def test_ec9_public_and_private_split():
+    split = parse_row(row(public_ids="1 2 7", missed_public="1"))
+    assert (split.public_found, split.public_errors) == (2, 2)
+    assert (split.private_found, split.private_errors) == (15, 3)
+    assert split.public_total + split.private_total == split.total
+    pooled = pool([split, split])
+    assert (pooled.public_found, pooled.private_errors) == (4, 6)
+
+
+def test_ec10_found_adjust_public_moves_only_the_public_count():
+    adjusted = parse_row(row(public_ids="1 2", found_adjust="1", found_adjust_public="1"))
+    assert (adjusted.found, adjusted.public_found, adjusted.private_found) == (18, 3, 15)
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"public_ids": "4"},
+        {"missed_public": "4"},
+        {"found_adjust_public": "-1"},
+        {"public_ids": "1", "found_adjust_public": "17"},
+    ],
+    ids=["public_and_not_a_person", "more_than_missed", "below_zero", "above_found"],
+)
+def test_e12_inconsistent_public_counts(overrides):
+    with pytest.raises(TallyError, match="doc01"):
+        parse_row(row(**overrides))
+
+
+@pytest.mark.parametrize(
+    ("public", "private", "expected"),
+    [
+        ((29, 29), (50, 100), "too_few_mentions"),
+        ((30, 30), (20, 29), "too_few_mentions"),
+        ((27, 30), (80, 100), "large_gap"),
+        ((27, 30), (801, 1000), "small_gap"),
+        ((24, 30), (90, 100), "large_gap"),
+    ],
+)
+def test_gap_verdict_boundaries(public, private, expected):
+    assert gap_verdict(*public, *private) == expected
+
+
+def test_report_carries_both_groups_and_the_gap():
+    report = format_report([parse_row(row(public_ids="1 2 7", missed_public="1"))])
+    assert "public figures: 2/4" in report
+    assert "private parties: 15/18" in report
+    assert "too_few_mentions" in report

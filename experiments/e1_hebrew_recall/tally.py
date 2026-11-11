@@ -25,7 +25,7 @@ PREDICTED_RECALL_HIGH_PERCENT = 92
 # build-plan.md section 11, E1: "Threshold: below 80 percent".
 THRESHOLD_RECALL_PERCENT = 80
 
-ID_LIST_FIELDS = ("not_person_ids", "partial_ids")
+ID_LIST_FIELDS = ("not_person_ids", "partial_ids", "public_ids")
 COUNT_FIELDS = (
     "missed",
     "missed_other_label",
@@ -34,7 +34,13 @@ COUNT_FIELDS = (
     "err_both",
     "err_other",
 )
-FIELDS = ("doc_id", "per_highlights", *ID_LIST_FIELDS, "found_adjust", *COUNT_FIELDS)
+# The part of found_adjust and of missed that concerns public figures.
+PUBLIC_COUNT_FIELDS = ("found_adjust_public", "missed_public")
+FIELDS = ("doc_id", "per_highlights", *ID_LIST_FIELDS, "found_adjust", *COUNT_FIELDS, *PUBLIC_COUNT_FIELDS)
+# PREREGISTRATION.md, "Public figures and private parties": a difference of this
+# many percentage points is a finding, if each group has this many mentions.
+GAP_POINTS = 10
+MIN_GROUP_MENTIONS = 30
 
 
 class TallyError(ValueError):
@@ -59,6 +65,8 @@ class DocumentCount:
     `found_adjust` is signed: +1 for each extra person inside a highlight that
     holds two names, -1 for each surplus highlight where two adjacent
     highlights cover one name. The four `err_*` fields partition `errors`.
+    `public_found` and `public_errors` are the part of `found` and `errors`
+    that are names of public figures; the rest are private parties.
     """
 
     doc_id: str
@@ -72,6 +80,8 @@ class DocumentCount:
     err_proclitic: int
     err_both: int
     err_other: int
+    public_found: int = 0
+    public_errors: int = 0
 
     @property
     def found(self) -> int:
@@ -87,6 +97,26 @@ class DocumentCount:
     def total(self) -> int:
         """Every person-name mention in the extracted text."""
         return self.found + self.errors
+
+    @property
+    def public_total(self) -> int:
+        """Mentions of public figures."""
+        return self.public_found + self.public_errors
+
+    @property
+    def private_found(self) -> int:
+        """Mentions of private parties fully covered by `PER` highlights."""
+        return self.found - self.public_found
+
+    @property
+    def private_errors(self) -> int:
+        """Mentions of private parties that were partial or missed."""
+        return self.errors - self.public_errors
+
+    @property
+    def private_total(self) -> int:
+        """Mentions of private parties."""
+        return self.private_found + self.private_errors
 
 
 def parse_id_list(cell: str, highest: int) -> frozenset[int]:
@@ -136,8 +166,9 @@ def _check_consistent(count: DocumentCount) -> None:
     the recall figure without leaving a trace.
 
     Contract: raises TallyError if `found` is negative, if more misses are
-    marked as covered by another label than there are misses, or if the four
-    error categories do not add up to `errors`.
+    marked as covered by another label than there are misses, if the four
+    error categories do not add up to `errors`, or if the public figures
+    found are fewer than zero or more than all that were found.
     """
     categorised = (
         count.err_ordinary_word + count.err_proclitic + count.err_both + count.err_other
@@ -146,6 +177,8 @@ def _check_consistent(count: DocumentCount) -> None:
         raise TallyError(f"{count.doc_id}: more exceptions than highlights")
     if count.missed_other_label > count.missed:
         raise TallyError(f"{count.doc_id}: missed_other_label is larger than missed")
+    if not 0 <= count.public_found <= count.found:
+        raise TallyError(f"{count.doc_id}: public figures found is outside 0..found")
     if categorised != count.errors:
         raise TallyError(
             f"{count.doc_id}: error categories add to {categorised}, "
@@ -161,7 +194,8 @@ def parse_row(row: dict[str, str]) -> DocumentCount:
 
     Contract: `row` maps the names in FIELDS to cell text. Raises TallyError
     for a blank or invalid cell, a highlight id listed as both partial and not
-    a person, or an inconsistent count.
+    a person, or as both a public figure and not a person, or an inconsistent
+    count.
     """
     per_highlights = _parse_count(row, "per_highlights")
     id_lists = {}
@@ -170,7 +204,10 @@ def parse_row(row: dict[str, str]) -> DocumentCount:
             id_lists[field] = parse_id_list(row.get(field) or "", per_highlights)
         except TallyError as error:
             raise TallyError(f"{row.get('doc_id')}: {field}: {error}") from None
-    not_person, partial = id_lists["not_person_ids"], id_lists["partial_ids"]
+    not_person, partial, public = (id_lists[field] for field in ID_LIST_FIELDS)
+    if not_person & public:
+        raise TallyError(f"{row.get('doc_id')}: a highlight is both a public figure and not a person")
+    missed_public = _parse_count(row, "missed_public")
     if not_person & partial:
         raise TallyError(f"{row.get('doc_id')}: a highlight is both partial and not a person")
     count = DocumentCount(
@@ -180,7 +217,11 @@ def parse_row(row: dict[str, str]) -> DocumentCount:
         partial=len(partial),
         found_adjust=_parse_count(row, "found_adjust", signed=True),
         **{field: _parse_count(row, field) for field in COUNT_FIELDS},
+        public_found=len(public - partial) + _parse_count(row, "found_adjust_public", signed=True),
+        public_errors=len(public & partial) + missed_public,
     )
+    if missed_public > count.missed:
+        raise TallyError(f"{count.doc_id}: missed_public is larger than missed")
     _check_consistent(count)
     return count
 
@@ -241,6 +282,24 @@ def errors_concentrated(count: DocumentCount) -> bool | None:
     return predicted_kinds * 2 > count.errors
 
 
+def gap_verdict(public_found: int, public_total: int, private_found: int, private_total: int) -> str:
+    """Say whether recall differs between public figures and private parties.
+
+    Why: names of judges and officials are common in the model's training
+    text and names of private parties are not, so a pooled number can look
+    better than the product will do on a private client's document.
+
+    Contract: "too_few_mentions" when either group has fewer than
+    MIN_GROUP_MENTIONS mentions; otherwise "large_gap" when the two recalls
+    differ by GAP_POINTS percentage points or more in either direction, else
+    "small_gap". Integer comparison, nothing rounded.
+    """
+    if min(public_total, private_total) < MIN_GROUP_MENTIONS:
+        return "too_few_mentions"
+    difference = abs(public_found * private_total - private_found * public_total) * 100
+    return "large_gap" if difference >= GAP_POINTS * public_total * private_total else "small_gap"
+
+
 def _ratio(numerator: int, denominator: int) -> str:
     """Format a fraction as `n/d = p%`, or `n/a` when the denominator is zero.
 
@@ -261,7 +320,8 @@ def format_report(counts: list[DocumentCount]) -> str:
 
     Contract: `counts` holds one checked DocumentCount per document. Returns
     the pooled strict recall with its verdict, the lenient and any-label
-    figures, `PER` precision, the error breakdown, the macro mean, and one line
+    figures, recall for public figures and for private parties with the gap
+    verdict, `PER` precision, the error breakdown, the macro mean, and one line
     per document. Raises TallyError when no mention was counted at all.
     """
     pooled = pool(counts)
@@ -278,6 +338,11 @@ def format_report(counts: list[DocumentCount]) -> str:
         f"{_ratio(pooled.found + pooled.partial, pooled.total)}",
         f"any-label recall (found, or missed but under another label): "
         f"{_ratio(pooled.found + pooled.missed_other_label, pooled.total)}",
+        f"public figures: {_ratio(pooled.public_found, pooled.public_total)}",
+        f"private parties: {_ratio(pooled.private_found, pooled.private_total)}",
+        f"gap between the two: "
+        f"{gap_verdict(pooled.public_found, pooled.public_total, pooled.private_found, pooled.private_total)} "
+        f"(large is {GAP_POINTS} points or more, with at least {MIN_GROUP_MENTIONS} mentions in each group)",
         f"macro mean of per-document strict recall: {100 * macro:.2f}% "
         f"over {len(with_mentions)} documents with at least one mention",
         f"PER highlight precision: "

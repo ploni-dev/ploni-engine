@@ -54,10 +54,10 @@ def download_snapshot() -> Path:
     to force a clean fetch.
     """
     target = snapshot_dir()
-    # The pickle copy of the weights is never loaded (run_model.py reads
-    # model.safetensors only), so it is not fetched.
+    # Not fetched: the pickle copy of the weights, which is never loaded, and the
+    # model's Python, which runs from the vendored copy in the experiment folder.
     snapshot_download(
-        REPO_ID, revision=REVISION, local_dir=target, token=False, ignore_patterns=["pytorch_model.bin"]
+        REPO_ID, revision=REVISION, local_dir=target, token=False, ignore_patterns=["pytorch_model.bin", "*.py"]
     )
     return target
 

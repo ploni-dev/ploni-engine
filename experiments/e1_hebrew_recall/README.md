@@ -54,7 +54,11 @@ cd experiments/e1_hebrew_recall && ../.venv/Scripts/python.exe -m pytest -q
 
    If a document cannot be read, the error names it as `docNN`; `index.csv` in the output
    folder says which file that is.
-3. Open `e1_out/doc01.html` in a browser, and `e1_out/tally.csv` beside it. Read the document
+3. `e1_out/doc01_spans.csv` lists every PERSON span the model found in that document: its
+   number on the worksheet, the paragraph (counted from 0), the start and end offsets in
+   characters of that paragraph, and the text. Use it to check the spans against the original.
+
+   Then open `e1_out/doc01.html` in a browser, and `e1_out/tally.csv` beside it. Read the document
    once, top to bottom, and fill in the row:
 
    | Column | What goes in it |
@@ -62,11 +66,15 @@ cd experiments/e1_hebrew_recall && ../.venv/Scripts/python.exe -m pytest -q
    | `not_person_ids` | Numbers of yellow highlights that are not a counted mention under "What counts as a person name" in `PREREGISTRATION.md`: not a person, a placeholder, or a name inside an organisation, street, statute or cited precedent. Space-separated. |
    | `partial_ids` | Numbers of yellow highlights that cover only part of a name. |
    | `found_adjust` | Usually `0`. `+1` for each extra person inside one highlight that holds two names; `-1` for each surplus highlight when two adjacent ones cover a single name. If two highlights each cover only part of the same name, list one of them in `partial_ids` and add `-1` here, so the name counts as one error and not two. |
+   | `public_ids` | Numbers of yellow highlights that are the name of a public figure, as `PREREGISTRATION.md` defines one. Leave empty if there is none. |
    | `missed` | Person-name mentions with no yellow highlight on them at all. |
    | `missed_other_label` | How many of those misses sit fully inside a grey highlight. |
    | `err_ordinary_word`, `err_proclitic`, `err_both`, `err_other` | Each missed or partial mention goes in exactly one. They must add up to `missed` plus the number of `partial_ids`. |
+   | `found_adjust_public` | The part of `found_adjust` that concerns public figures. Usually `0`. |
+   | `missed_public` | How many of the `missed` mentions are names of public figures. |
 
-   A blank cell means "not counted yet" and stops the report. Write `0` for zero.
+   A blank cell means "not counted yet" and stops the report. Write `0` for zero. The three
+   id-list columns may stay empty.
 4. Print the result:
 
    ```bash

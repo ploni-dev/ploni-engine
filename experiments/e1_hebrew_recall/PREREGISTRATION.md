@@ -15,6 +15,46 @@ Quoted from `build-plan.md` section 11, lines 1031 to 1033:
 > proclitic forms.
 > Threshold: below 80 percent, the architecture needs rethinking before anything else is built.
 
+## The corpus, as Achia set it on 2026-11-12
+
+Achia assembles the ten documents. The plan's mix (court decisions, contracts, a medical
+summary) is replaced, for two reasons Achia gave. Real signed contracts and real medical
+records with names are not published, so the honest source for both is court decisions that
+quote them. And Supreme Court public-law rulings name judges, senior lawyers and public
+figures, who are common in the model's training text, so recall on them would be optimistic
+and would not describe a lawyer's document about a private client.
+
+The ten documents are decisions that name private individuals:
+
+- 4 or 5 civil judgments of magistrate or district courts (`ת"א`, `תא"מ`): contract
+  disputes, landlord and tenant, road accidents.
+- 3 labour court rulings (`סע"ש`, `ד"מ`), which quote employment contracts at length.
+- 2 medical malpractice judgments of district courts, which name the plaintiff, the doctors
+  and the hospital and describe treatment.
+
+Nothing from family court, minors or sexual offences, and no case captioned `פלוני` or
+`אלמוני`. The findings note lists what was actually run, by type and count, not by name.
+
+## Public figures and private parties, an addition to E1
+
+Achia added this on 2026-11-12. It is not in the plan. Recall is counted twice, once for
+names of public figures and once for names of private parties, and both are reported beside
+the pooled number.
+
+- The plan's prediction and threshold stay on the pooled number. That is the E1 verdict.
+- A public figure is a person named in a public role: a judge or registrar, an elected or
+  appointed public official, and a lawyer or expert the annotator would expect a reader of
+  the news to recognise. Everyone else is a private party, including the parties, witnesses,
+  doctors, and the lawyers of record in an ordinary case. **The line between a known lawyer
+  and a lawyer of record is Claude's reading of "judges, known lawyers, public officials".**
+- No prediction exists for the gap. Achia expects recall on public figures to be higher.
+- **Claude's readings, for Achia to amend:** a difference of 10 percentage points or more
+  between the two recalls, in either direction, is a finding in itself. It is only read if
+  each group has at least 30 mentions, because a judge is named a handful of times per
+  decision and a smaller group moves by several points per mention.
+- If the private-party recall is below 80 percent while the pooled number is not, the
+  findings note says so in its first line. The decision is Achia's.
+
 ## What the plan leaves open, and the reading fixed here
 
 The plan gives the numbers but not the unit, the matching rule or the input handling. Each
@@ -61,8 +101,10 @@ Every missed or partial mention gets exactly one:
 
 ## Model and input handling, frozen
 
-- Model: `dicta-il/dictabert-joint` at commit `7b1256fc0846e22d1af431eae299e2dcecee2778`,
-  loaded from `models/dictabert-joint/<commit>/`, from `model.safetensors`, offline.
+- Model: `dicta-il/dictabert-joint` at commit `7b1256fc0846e22d1af431eae299e2dcecee2778`.
+  Weights from `models/dictabert-joint/<commit>/model.safetensors`, offline. The model's
+  Python is the copy vendored in `vendored/dictabert_joint/`, byte for byte the files of that
+  commit; nothing is fetched or executed from the hub, and `trust_remote_code` is not used.
 - The syntax head is switched off, which skips the dependency-tree decoding E1 has no use for.
   The heads read the same encoder output and do not feed the NER classifier
   (`BertForJointParsing.py:163-169` at the pinned commit), and tokenization is the same either
@@ -98,6 +140,11 @@ fraction `found / (found + partial + missed)`.
 No number is rounded before it is compared.
 
 ## Amended on 2026-11-11, before any real document was run
+
+On 2026-11-12, also before any real document was run: the corpus section and the public and
+private section above were added at Achia's instruction, the model's Python was vendored,
+and each document now also gets a list of its PERSON spans with offsets. The prediction, the
+threshold, the counting rules and the decision rule on the pooled number are unchanged.
 
 The Ponytail review of the harness found three ways the number could be wrong for a reason
 that is not the model. The two input-handling bullets above about characters and counts were

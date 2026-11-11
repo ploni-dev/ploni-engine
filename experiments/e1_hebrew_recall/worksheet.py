@@ -39,6 +39,8 @@ sup {{ font-size: 0.6em; font-family: monospace; padding: 0 0.2em; direction: lt
 Counting rules: PREREGISTRATION.md.</p>
 """
 PAGE_TAIL = "</body>\n</html>\n"
+# Header of the per-document span file; the rows come from person_span_rows.
+SPAN_COLUMNS = ("highlight", "paragraph", "start", "end", "text")
 
 
 class Entity(NamedTuple):
@@ -131,3 +133,24 @@ def render_document(doc_id: str, paragraphs: list[str], entities: list[Entity]) 
         parts.append(f"<p>{''.join(pieces)}</p>\n")
     parts.append(PAGE_TAIL)
     return "".join(parts)
+
+
+def person_span_rows(paragraphs: list[str], entities: list[Entity]) -> list[tuple[int, int, int, int, str]]:
+    """List every PERSON span the model found, as rows a person can check.
+
+    Why: the worksheet shows where each highlight is; this gives the same
+    highlights as a list with offsets, to compare against the original
+    document one by one.
+
+    Contract: one row per `PER` entity, in the columns of SPAN_COLUMNS:
+    the number printed on the worksheet, the paragraph index from 0, the start
+    and end offsets in characters of that paragraph with the end exclusive,
+    and the text of the span. Raises ValueError as
+    `_checked_paragraph_entities` does.
+    """
+    rows = []
+    for index, group in enumerate(_checked_paragraph_entities(paragraphs, entities)):
+        for entity in group:
+            if entity.label == PERSON_LABEL:
+                rows.append((len(rows) + 1, index, entity.start, entity.end, paragraphs[index][entity.start : entity.end]))
+    return rows

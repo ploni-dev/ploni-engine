@@ -6,6 +6,8 @@ Equivalence classes:
   EC3  PER beside a non-PER entity           -> PER numbered, the other shows its label
   EC4  PER entities in several paragraphs    -> numbering runs through the document
   EC5  entities given out of order           -> numbered in reading order
+  EC6  person_span_rows: one row per PER entity with the worksheet's number,
+       the paragraph index, the offsets and the text; other labels left out
 
 Boundaries:
   B1  entity at the very start and at the very end of a paragraph
@@ -27,7 +29,7 @@ from __future__ import annotations
 
 import pytest
 
-from worksheet import Entity, count_person_highlights, render_document
+from worksheet import Entity, count_person_highlights, person_span_rows, render_document
 
 
 def test_ec1_no_entity():
@@ -106,3 +108,19 @@ def test_count_person_highlights_ignores_other_labels():
     entities = [Entity(0, 0, 3, "PER"), Entity(0, 4, 7, "ORG"), Entity(1, 0, 3, "PER")]
     assert count_person_highlights(entities) == 2
     assert count_person_highlights([]) == 0
+
+
+def test_ec6_span_rows_carry_worksheet_numbers_offsets_and_text():
+    paragraphs = ["אתמול הגיע משה כהן", "בנק לאומי ודוד לוי"]
+    second = paragraphs[1].index("ודוד לוי")
+    entities = [
+        Entity(1, second, second + 8, "PER"),
+        Entity(1, 0, 9, "ORG"),
+        Entity(0, 11, 18, "PER"),
+    ]
+    assert person_span_rows(paragraphs, entities) == [
+        (1, 0, 11, 18, "משה כהן"),
+        (2, 1, second, second + 8, "ודוד לוי"),
+    ]
+    page = render_document("doc01", paragraphs, entities)
+    assert "<sup>1</sup>משה כהן" in page and "<sup>2</sup>ודוד לוי" in page

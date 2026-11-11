@@ -6,12 +6,14 @@ enforced: both directories must be outside the repository, the process is
 offline, and stdout carries document ids and counts, never text or file names.
 
 Contract: `python -I run_model.py --corpus-dir D --out-dir O --model-dir M`.
-Reads every `.txt` and `.docx` in D. Writes into O one `docNN.html` worksheet
-per document, `index.csv` (document id to file name), `tally.csv` (blank hand
-count) and `run_meta.json` (versions and per-document counts). Refuses to start
-if O already holds a `tally.csv`.
+Reads every `.txt` and `.docx` in D. Writes into O, per document, a
+`docNN.html` worksheet and `docNN_spans.csv` (every PERSON span with its
+offsets and text); and once, `index.csv` (document id to file name),
+`tally.csv` (blank hand count) and `run_meta.json` (versions and per-document
+counts). Refuses to start if O already holds a `tally.csv`.
 
-Known limits: the worksheets and `index.csv` hold document text and file names.
+Known limits: the worksheets, the span files and `index.csv` hold document text
+and file names.
 They are deliberate output in a directory the user chose, not logs, and
 `ploni/safety/` does not exist yet to write them through. One window per
 forward pass, so a long document is slow on a small machine.
@@ -41,12 +43,13 @@ sys.path.insert(0, str(HERE))
 
 import torch
 import transformers
-from transformers import AutoModel, AutoTokenizer
+from transformers import AutoTokenizer
 
 from chunking import MAX_WORDPIECES, split_into_windows
 from corpus import document_id, is_inside, list_documents, read_checked, unread_characters
 from tally import write_template
-from worksheet import Entity, count_person_highlights, render_document
+from vendored.dictabert_joint.BertForJointParsing import BertForJointParsing
+from worksheet import SPAN_COLUMNS, Entity, count_person_highlights, person_span_rows, render_document
 
 REPO_ROOT = HERE.parent.parent
 MAX_POSITIONS = MAX_WORDPIECES + 2  # [CLS] and [SEP]
@@ -93,9 +96,10 @@ class DocumentResult(NamedTuple):
 def load_ner_model(model_dir: Path, *, all_heads: bool = False):
     """Load the pinned model and tokenizer from a local directory, offline.
 
-    Why: the model ships Python that `trust_remote_code` executes, so it is
-    loaded only from the reviewed, commit-pinned copy on disk, and from
-    `model.safetensors`, never from the pickle beside it.
+    Why: the model's own Python is needed to run it. The class comes from the
+    copy vendored in `vendored/dictabert_joint/`, read and hash-pinned, so no
+    code is fetched from the hub or trusted from the download folder; the
+    weights come from `model.safetensors`, never from a pickle.
 
     Contract: returns `(model, tokenizer)` with the model in eval mode. With
     `all_heads` False the syntax head is left out, which skips the dependency
@@ -105,9 +109,8 @@ def load_ner_model(model_dir: Path, *, all_heads: bool = False):
     """
     head_switches = {} if all_heads else dict.fromkeys(SWITCHED_OFF_HEADS, False)
     tokenizer = AutoTokenizer.from_pretrained(model_dir, local_files_only=True)
-    model = AutoModel.from_pretrained(
+    model = BertForJointParsing.from_pretrained(
         model_dir,
-        trust_remote_code=True,
         local_files_only=True,
         use_safetensors=True,
         **head_switches,
@@ -230,6 +233,8 @@ def run(corpus_dir: Path, out_dir: Path, model_dir: Path) -> None:
         (out_dir / f"{doc_id}.html").write_text(
             render_document(doc_id, paragraphs, result.entities), encoding="utf-8"
         )
+        with (out_dir / f"{doc_id}_spans.csv").open("w", encoding="utf-8-sig", newline="") as handle:
+            csv.writer(handle).writerows([SPAN_COLUMNS, *person_span_rows(paragraphs, result.entities)])
         per_document[doc_id] = {
             "paragraphs": len(paragraphs),
             "windows": result.windows,
