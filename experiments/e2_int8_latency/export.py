@@ -6,7 +6,8 @@ Phase 13 name for when the joint export is hard; PREREGISTRATION.md says what
 that leaves out.
 
 Contract: `python -I export.py --model-dir M --out-dir O`, offline. Writes
-`O/ner_fp32.onnx` and `O/ner_int8.onnx`. O must not be the model directory.
+`O/ner_fp32.onnx` and `O/ner_int8.onnx`. Raises ValueError if O is the model
+directory or inside it, so the pinned snapshot stays as downloaded.
 
 Known limits: the prefix, morphology and lemma heads are not in the exported
 graph, so the files are not the product's model.
@@ -23,6 +24,7 @@ HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE), str(HERE.parent / "e1_hebrew_recall")]
 
 import torch
+from corpus import is_inside
 from onnxruntime.quantization import QuantType, quantize_dynamic
 from run_model import load_ner_model
 
@@ -53,8 +55,8 @@ class NerOnly(torch.nn.Module):
 
 def export(model_dir: Path, out_dir: Path) -> None:
     """Write the FP32 graph, then its dynamic INT8 quantization."""
-    if out_dir.resolve() == model_dir.resolve():
-        raise ValueError("the output directory must not be the downloaded model directory")
+    if is_inside(out_dir, model_dir):
+        raise ValueError("the output directory must not be inside the downloaded model directory")
     out_dir.mkdir(parents=True, exist_ok=True)
     model, tokenizer = load_ner_model(model_dir)
     example = tokenizer(["משפט קצר לדוגמה.", "משפט שני, ארוך מעט יותר, לדוגמה."], padding=True, return_tensors="pt")

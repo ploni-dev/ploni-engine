@@ -48,3 +48,9 @@ Committed before the first timing was taken. The ONNX files were built before th
 - One page, one text, one machine, one thread count. No sweep.
 - 13 short inputs padded to the longest is cheaper than a page that is one long paragraph, which would be one or two full windows. A wall of text is not measured here.
 - Nothing here says what INT8 costs in recall.
+
+## Amendment after run 1, before run 2
+
+Run 1 was taken at `2b48fe7`. The Ponytail review of the harness then found that two invented identifiers on `page.txt`, an ID number and a company number, passed the Israeli check digit, so each could be a real identifier (`build-plan.md` Phase 7). The last digit of each was changed so the check fails. Nothing else on the page changed: 13 paragraphs, 407 words.
+
+Because the input changed, the timing is taken again as run 2 with the same rule, readings and thresholds. Both runs are reported. Run 2 is the result; run 1 is kept as the record of what was measured first.

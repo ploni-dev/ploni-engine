@@ -14,9 +14,12 @@ read_page(path)
   EC1  the shipped page.txt: 400 to 500 words, the pre-registered size of "one A4 page"
   EC2  blank lines are dropped, one paragraph per line
   E1   a page outside 400 to 500 words -> ValueError
+  Adversarial: no nine-digit number on the shipped page passes the Israeli ID
+  check digit (build-plan.md Phase 7: such a value may be a real identifier)
 """
 
 import random
+import re
 from pathlib import Path
 
 import pytest
@@ -71,3 +74,15 @@ def test_e1_read_page_rejects_a_page_of_the_wrong_size(tmp_path, words):
     path.write_text("מילה " * words, encoding="utf-8")
     with pytest.raises(ValueError):
         latency.read_page(path)
+
+
+def passes_id_check_digit(digits: str) -> bool:
+    # build-plan.md Phase 1, israeli_id_checksum_ok.
+    doubled = (int(ch) * (1 + i % 2) for i, ch in enumerate(digits))
+    return sum(n if n < 10 else n - 9 for n in doubled) % 10 == 0
+
+
+def test_adversarial_page_holds_no_checksum_valid_identifier():
+    assert passes_id_check_digit("000000018") and not passes_id_check_digit("000000019")
+    text = Path(latency.__file__).with_name("page.txt").read_text(encoding="utf-8")
+    assert [n for n in re.findall(r"\d{9}", text) if passes_id_check_digit(n)] == []
