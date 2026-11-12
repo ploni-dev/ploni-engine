@@ -361,21 +361,28 @@ def format_report(counts: list[DocumentCount]) -> str:
     return "\n".join(lines)
 
 
-def write_template(path: Path, per_highlights: dict[str, int]) -> None:
+def write_template(
+    path: Path, per_highlights: dict[str, int], placeholder_ids: dict[str, list[int]]
+) -> None:
     """Write an unannotated tally file, one row per document.
 
-    Why: the highlight count comes from the model run and must not be retyped;
-    everything else is left blank so an unannotated row cannot pass for zeros.
+    Why: the highlight count comes from the model run and must not be retyped,
+    and neither must the highlights the run already knows are placeholders;
+    every count is left blank so an unannotated row cannot pass for zeros.
 
     Contract: `per_highlights` maps document id to its number of `PER`
-    highlights; rows are written in the mapping's order. Raises
-    FileExistsError if `path` exists, so a re-run never wipes a hand count.
+    highlights; rows are written in the mapping's order. `placeholder_ids`
+    maps each of those ids to the highlight numbers that go into
+    `not_person_ids`. Raises FileExistsError if `path` exists, so a re-run
+    never wipes a hand count, and KeyError for a document with no entry in
+    `placeholder_ids`.
     """
     with path.open("x", encoding="utf-8", newline="") as handle:
         writer = csv.DictWriter(handle, fieldnames=FIELDS, restval="")
         writer.writeheader()
         for doc_id, highlights in per_highlights.items():
-            writer.writerow({"doc_id": doc_id, "per_highlights": highlights})
+            not_person = " ".join(map(str, placeholder_ids[doc_id]))
+            writer.writerow({"doc_id": doc_id, "per_highlights": highlights, "not_person_ids": not_person})
 
 
 def read_tally(path: Path) -> list[DocumentCount]:

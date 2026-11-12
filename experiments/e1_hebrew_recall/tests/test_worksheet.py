@@ -23,13 +23,36 @@ Adversarial:
 
 Hebrew axes:
   H1  proclitic form and gershayim inside a highlight survive unchanged (ולעו"ד כהן)
+
+count_placeholders  (issue #4: פלוני and אלמוני are counted apart, never as missed names)
+  EC7  each bare form: פלוני, אלמוני, פלונית, אלמונית, פלונים, אלמונים -> 1
+  EC8  text with names and no placeholder     -> 0
+  EC9  פלוני אלמוני, with a space, a hyphen or a maqaf -> one mention, one unnamed person
+  EC10 two unnamed people (פלוני ופלונית, פלוני נ' אלמוני) -> 2
+  B3   at the start and the end of a paragraph, against punctuation and brackets
+  B4   no paragraphs, and an empty paragraph  -> 0
+  H2   attached prefixes, one letter to four (לפלוני, ופלונית, שהאלמוני, ולכשפלוני)
+  A2   words that only contain the letters: פלונסקי, אלמוג, אלמוניות (anonymity) -> 0
+
+placeholder_highlights
+  EC11 a PER highlight that is only a placeholder, bare or prefixed -> its number
+  EC12 a PER highlight holding a placeholder beside a name -> left to the hand count
+  EC13 a non-PER highlight on a placeholder -> not listed, it has no number
+  B5   a PER highlight on a placeholder with punctuation inside the span -> its number
 """
 
 from __future__ import annotations
 
 import pytest
 
-from worksheet import Entity, count_person_highlights, person_span_rows, render_document
+from worksheet import (
+    Entity,
+    count_person_highlights,
+    count_placeholders,
+    person_span_rows,
+    placeholder_highlights,
+    render_document,
+)
 
 
 def test_ec1_no_entity():
@@ -124,3 +147,57 @@ def test_ec6_span_rows_carry_worksheet_numbers_offsets_and_text():
     ]
     page = render_document("doc01", paragraphs, entities)
     assert "<sup>1</sup>משה כהן" in page and "<sup>2</sup>ודוד לוי" in page
+
+
+# Placeholders, issue #4
+
+
+@pytest.mark.parametrize("word", ["פלוני", "אלמוני", "פלונית", "אלמונית", "פלונים", "אלמונים"])
+def test_ec7_each_bare_form_is_one_placeholder(word: str):
+    assert count_placeholders([f"התובע הוא {word} שהגיש תביעה"]) == 1
+
+
+def test_ec8_names_without_a_placeholder():
+    assert count_placeholders(["משה כהן נגד דוד לוי", "בפני השופטת רות אבן"]) == 0
+
+
+@pytest.mark.parametrize("pair", ["פלוני אלמוני", "פלוני-אלמוני", "פלוני־אלמוני"])
+def test_ec9_adjacent_placeholder_words_are_one_mention(pair: str):
+    assert count_placeholders([f"הודעה נמסרה לידי {pair} אתמול"]) == 1
+
+
+@pytest.mark.parametrize("text", ["פלוני ופלונית הגישו ערעור", "פלוני נ' אלמוני"])
+def test_ec10_two_unnamed_people_are_two_mentions(text: str):
+    assert count_placeholders([text]) == 2
+
+
+def test_b3_paragraph_edges_punctuation_and_brackets():
+    assert count_placeholders(["פלוני, המערער (להלן: פלונית). כך טען אלמוני"]) == 3
+
+
+def test_b4_no_text():
+    assert (count_placeholders([]), count_placeholders([""])) == (0, 0)
+
+
+@pytest.mark.parametrize("word", ["לפלוני", "ופלונית", "שהאלמוני", "ולכשפלוני"])
+def test_h2_attached_prefixes(word: str):
+    assert count_placeholders([f"נמסר {word} מכתב"]) == 1
+
+
+@pytest.mark.parametrize("word", ["פלונסקי", "אלמוג", "אלמוניות"])
+def test_a2_words_that_only_contain_the_letters(word: str):
+    assert count_placeholders([f"על {word} נכתב רבות"]) == 0
+
+
+def test_placeholder_highlights_lists_only_whole_placeholder_person_spans():
+    paragraphs = ["משה כהן תבע את פלוני", "לפלוני, ולמשה בן פלוני", "בית חולים נ' אלמונית"]
+    first, third = paragraphs[0].index("פלוני"), paragraphs[2].index("אלמונית")
+    entities = [
+        Entity(0, 0, 7, "PER"),  # 1: a name
+        Entity(0, first, first + 5, "PER"),  # 2: EC11 bare
+        Entity(1, 0, 7, "PER"),  # 3: EC11 prefixed, B5 comma inside the span
+        Entity(1, 8, len(paragraphs[1]), "PER"),  # 4: EC12 a name beside a placeholder
+        Entity(2, third, third + 7, "MISC"),  # EC13 no number
+    ]
+    assert paragraphs[1][0:7] == "לפלוני,"
+    assert placeholder_highlights(paragraphs, entities) == [2, 3]

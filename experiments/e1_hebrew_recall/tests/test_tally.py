@@ -51,6 +51,8 @@ pool, format_report, template round trip
   EC7  a document with no person mention prints n/a and does not break the pool
   EC8  template written, filled in, read back
   E11  template never overwrites an existing tally -> FileExistsError
+  EC12 template lists the placeholder highlights the run found in not_person_ids,
+       and leaves that cell empty for a document with none
 """
 
 from __future__ import annotations
@@ -269,7 +271,7 @@ def test_ec7_document_without_person_mentions():
 
 def test_ec8_template_round_trip(tmp_path: Path):
     path = tmp_path / "tally.csv"
-    write_template(path, {"doc01": 20, "doc02": 0})
+    write_template(path, {"doc01": 20, "doc02": 0}, {"doc01": [], "doc02": []})
     with path.open(encoding="utf-8", newline="") as handle:
         rows = list(csv.DictReader(handle))
     assert [r["doc_id"] for r in rows] == ["doc01", "doc02"]
@@ -291,7 +293,7 @@ def test_e11_template_never_overwrites(tmp_path: Path):
     path = tmp_path / "tally.csv"
     path.write_text("annotated by hand", encoding="utf-8")
     with pytest.raises(FileExistsError):
-        write_template(path, {"doc01": 1})
+        write_template(path, {"doc01": 1}, {"doc01": []})
     assert path.read_text(encoding="utf-8") == "annotated by hand"
 
 
@@ -351,3 +353,12 @@ def test_report_carries_both_groups_and_the_gap():
     assert "public figures: 2/4" in report
     assert "private parties: 15/18" in report
     assert "too_few_mentions" in report
+
+
+def test_ec12_template_lists_placeholder_highlights_as_not_person(tmp_path: Path):
+    path = tmp_path / "tally.csv"
+    write_template(path, {"doc01": 20, "doc02": 3}, {"doc01": [2, 7, 19], "doc02": []})
+    with path.open(encoding="utf-8", newline="") as handle:
+        rows = list(csv.DictReader(handle))
+    assert [r["not_person_ids"] for r in rows] == ["2 7 19", ""]
+    assert rows[0]["missed"] == ""

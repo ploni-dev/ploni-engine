@@ -52,6 +52,10 @@ cd experiments/e1_hebrew_recall && ../.venv/Scripts/python.exe -m pytest -q
    - `unknown_pieces` above 0: the text holds characters the model cannot read, and each
      one hides a word from it. Report the count in the findings note.
 
+   `placeholders` is how many times the document says `פלוני` or `אלמוני` in place of a name,
+   and `placeholder_highlights` is how many of those the model highlighted as a person. They
+   are not names and not misses. Both go in the findings note.
+
    If a document cannot be read, the error names it as `docNN`; `index.csv` in the output
    folder says which file that is.
 3. `e1_out/doc01_spans.csv` lists every PERSON span the model found in that document: its
@@ -63,7 +67,7 @@ cd experiments/e1_hebrew_recall && ../.venv/Scripts/python.exe -m pytest -q
 
    | Column | What goes in it |
    |---|---|
-   | `not_person_ids` | Numbers of yellow highlights that are not a counted mention under "What counts as a person name" in `PREREGISTRATION.md`: not a person, a placeholder, or a name inside an organisation, street, statute or cited precedent. Space-separated. |
+   | `not_person_ids` | Numbers of yellow highlights that are not a counted mention under "What counts as a person name" in `PREREGISTRATION.md`: not a person, a placeholder, or a name inside an organisation, street, statute or cited precedent. Space-separated. The run has already listed the highlights that hold only `פלוני` or `אלמוני`; keep those and add the rest. |
    | `partial_ids` | Numbers of yellow highlights that cover only part of a name. |
    | `found_adjust` | Usually `0`. `+1` for each extra person inside one highlight that holds two names; `-1` for each surplus highlight when two adjacent ones cover a single name. If two highlights each cover only part of the same name, list one of them in `partial_ids` and add `-1` here, so the name counts as one error and not two. |
    | `public_ids` | Numbers of yellow highlights that are the name of a public figure, as `PREREGISTRATION.md` defines one. Leave empty if there is none. |

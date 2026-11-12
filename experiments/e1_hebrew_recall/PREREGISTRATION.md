@@ -127,6 +127,12 @@ Every missed or partial mention gets exactly one:
   the `[UNK]` pieces left after that rewriting, and `unread_chars`, the characters of `.docx`
   body text the extraction did not return (tracked insertions, content controls, fields,
   text boxes). A document with `unread_chars` above 0 is fixed in Word and run again.
+- Placeholders: every mention of `פלוני` or `אלמוני` (feminine or plural, with attached
+  prefix letters, adjacent ones such as `פלוני אלמוני` as one mention) is counted per document
+  and printed as `placeholders`. A `PER` highlight that holds only such a word is counted as
+  `placeholder_highlights`, and its number is written into `not_person_ids` before the hand
+  count starts. A placeholder is neither a found name nor a missed one, as "What counts as a
+  person name" says. Bare initials and blanks are not detected and stay with the hand count.
 
 ## Decision rule
 
@@ -145,6 +151,15 @@ On 2026-11-12, also before any real document was run: the corpus section and the
 private section above were added at Achia's instruction, the model's Python was vendored,
 and each document now also gets a list of its PERSON spans with offsets. The prediction, the
 threshold, the counting rules and the decision rule on the pooled number are unchanged.
+
+Also on 2026-11-12, before any real document was run, after the brief in issue #4: the
+placeholder bullet above was added. The rule is unchanged, placeholders were already not
+counted; what changed is that the run counts them and lists their highlights, so they are
+reported apart and not typed by hand. The issue reports that the Supreme Court's medical
+malpractice decisions are mostly captioned `פלוני`, and leaves the source of the corpus to
+Achia. "No case captioned `פלוני` or `אלמוני`" in the corpus section stands until Achia
+changes it; if such a document is run, the findings note gives its `placeholders` count and
+says which party is unnamed.
 
 The Ponytail review of the harness found three ways the number could be wrong for a reason
 that is not the model. The two input-handling bullets above about characters and counts were

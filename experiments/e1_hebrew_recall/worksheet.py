@@ -12,9 +12,17 @@ the private output directory, never into the repository and never to stdout.
 from __future__ import annotations
 
 import html
+import re
 from typing import NamedTuple
 
 PERSON_LABEL = "PER"  # config.json id2label at the pinned commit: B-PER, I-PER
+# The word Israeli courts put in place of a name: פלוני or אלמוני, feminine or plural.
+_PLACEHOLDER_STEM = "(?:פלוני|אלמוני)[תם]?"
+# One unnamed person. Up to four attached prefix letters (ולכש is the longest chain),
+# and adjacent stems (פלוני אלמוני) read as one mention.
+PLACEHOLDER = re.compile(
+    rf"(?<![א-ת])[ושהבלמכ]{{0,4}}{_PLACEHOLDER_STEM}(?:[ \-־]{_PLACEHOLDER_STEM})*(?![א-ת])"
+)
 
 PAGE_HEAD = """<!doctype html>
 <html lang="he" dir="rtl">
@@ -154,3 +162,38 @@ def person_span_rows(paragraphs: list[str], entities: list[Entity]) -> list[tupl
             if entity.label == PERSON_LABEL:
                 rows.append((len(rows) + 1, index, entity.start, entity.end, paragraphs[index][entity.start : entity.end]))
     return rows
+
+
+def count_placeholders(paragraphs: list[str]) -> int:
+    """Count the mentions of an unnamed person written as `פלוני` or `אלמוני`.
+
+    Why: a published decision often has a party's name already replaced. Such
+    a word is not a person name the model could miss, and the findings note
+    reports how many there were (issue #4; build-plan.md Phase 5 warns that
+    published decisions are part-anonymized).
+
+    Contract: returns the number of matches of PLACEHOLDER over all paragraphs.
+
+    Known limits: bare initials (`א.ב.`) and blanks (`___`) are not counted;
+    they stay with the hand count. A real person surnamed אלמוני, or
+    `החייל האלמוני`, is counted here as a placeholder.
+    """
+    return sum(len(PLACEHOLDER.findall(paragraph)) for paragraph in paragraphs)
+
+
+def placeholder_highlights(paragraphs: list[str], entities: list[Entity]) -> list[int]:
+    """List the numbers of the `PER` highlights that hold only a placeholder.
+
+    Why: these highlights are not person names, so the tally starts with them
+    already listed in `not_person_ids` instead of leaving dozens of identical
+    exceptions to be typed by hand.
+
+    Contract: returns worksheet numbers in reading order. A highlight is
+    listed when it holds a placeholder and no other letter or digit. Raises
+    ValueError as `person_span_rows` does.
+    """
+    return [
+        number
+        for number, _, _, _, text in person_span_rows(paragraphs, entities)
+        if PLACEHOLDER.search(text) and not re.search(r"\w", PLACEHOLDER.sub("", text))
+    ]

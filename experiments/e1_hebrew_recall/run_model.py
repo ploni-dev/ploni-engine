@@ -9,7 +9,7 @@ Contract: `python -I run_model.py --corpus-dir D --out-dir O --model-dir M`.
 Reads every `.txt` and `.docx` in D. Writes into O, per document, a
 `docNN.html` worksheet and `docNN_spans.csv` (every PERSON span with its
 offsets and text); and once, `index.csv` (document id to file name),
-`tally.csv` (blank hand count) and `run_meta.json` (versions and per-document
+`tally.csv` (blank hand count, with the placeholder highlights already listed) and `run_meta.json` (versions and per-document
 counts). Refuses to start if O already holds a `tally.csv`.
 
 Known limits: the worksheets, the span files and `index.csv` hold document text
@@ -49,7 +49,15 @@ from chunking import MAX_WORDPIECES, split_into_windows
 from corpus import document_id, is_inside, list_documents, read_checked, unread_characters
 from tally import write_template
 from vendored.dictabert_joint.BertForJointParsing import BertForJointParsing
-from worksheet import SPAN_COLUMNS, Entity, count_person_highlights, person_span_rows, render_document
+from worksheet import (
+    SPAN_COLUMNS,
+    Entity,
+    count_person_highlights,
+    count_placeholders,
+    person_span_rows,
+    placeholder_highlights,
+    render_document,
+)
 
 REPO_ROOT = HERE.parent.parent
 MAX_POSITIONS = MAX_WORDPIECES + 2  # [CLS] and [SEP]
@@ -225,6 +233,7 @@ def run(corpus_dir: Path, out_dir: Path, model_dir: Path) -> None:
     model, tokenizer = load_ner_model(model_dir)
 
     per_document = {}
+    placeholder_ids = {}
     for position, path in enumerate(documents, start=1):
         doc_id = document_id(position)
         started = time.perf_counter()
@@ -235,6 +244,7 @@ def run(corpus_dir: Path, out_dir: Path, model_dir: Path) -> None:
         )
         with (out_dir / f"{doc_id}_spans.csv").open("w", encoding="utf-8-sig", newline="") as handle:
             csv.writer(handle).writerows([SPAN_COLUMNS, *person_span_rows(paragraphs, result.entities)])
+        placeholder_ids[doc_id] = placeholder_highlights(paragraphs, result.entities)
         per_document[doc_id] = {
             "paragraphs": len(paragraphs),
             "windows": result.windows,
@@ -243,6 +253,8 @@ def run(corpus_dir: Path, out_dir: Path, model_dir: Path) -> None:
             "unknown_pieces": result.unknown_pieces,
             "unread_chars": unread_characters(path),
             "per_highlights": count_person_highlights(result.entities),
+            "placeholders": count_placeholders(paragraphs),
+            "placeholder_highlights": len(placeholder_ids[doc_id]),
             "all_entities": len(result.entities),
             "seconds": round(time.perf_counter() - started, 1),
         }
@@ -251,6 +263,7 @@ def run(corpus_dir: Path, out_dir: Path, model_dir: Path) -> None:
     write_template(
         out_dir / "tally.csv",
         {doc_id: counts["per_highlights"] for doc_id, counts in per_document.items()},
+        placeholder_ids,
     )
     meta = {
         "model_dir": model_dir.name,
