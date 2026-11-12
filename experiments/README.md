@@ -19,4 +19,4 @@ product code:
 |---|---|---|
 | E1 baseline Hebrew NER recall | `e1_hebrew_recall/` | harness ready, run pending |
 | E2 CPU latency after INT8 | not started | |
-| E3 prefix-preserving replacement | `e3_prefix_replacement/` | harness and pre-registration committed; `python -I run.py --model-dir <model dir>` |
+| E3 prefix-preserving replacement | `e3_prefix_replacement/` | harness and pre-registration committed; `python -I run.py --model-dir <model dir>`, in the environment of `e1_hebrew_recall/requirements.txt` |

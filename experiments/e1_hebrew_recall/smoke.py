@@ -26,6 +26,7 @@ HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))  # see run_model.py: `python -I` drops the script folder
 
 from run_model import load_ner_model, window_entities
+from worksheet import PERSON_LABEL
 
 # Invented for this check. Chosen to exercise a plain name, a title, attached
 # prefixes, ordinary-word names, a geresh name, an organisation and a place.
@@ -60,6 +61,19 @@ def entities_on_token_boundaries(text: str, entities: list[tuple[int, int, str]]
     )
 
 
+def finds_people_only_where_named(per_sentence: list[list[tuple[int, int, str]]]) -> bool:
+    """Say whether the model names a person in the first sentence and none in the last.
+
+    Why: the other two checks are true for empty output, so a wrong label map
+    or a head that labels everything `O` would pass them.
+
+    Contract: `per_sentence` is in SENTENCES order. The first sentence names
+    two people; the last was written to name nobody.
+    """
+    labels = [{label for _, _, label in entities} for entities in per_sentence]
+    return PERSON_LABEL in labels[0] and PERSON_LABEL not in labels[-1]
+
+
 def predictions(model_dir: Path, *, all_heads: bool) -> list[list[tuple[int, int, str]]]:
     """Return the entities for every smoke sentence under one head configuration.
 
@@ -88,6 +102,8 @@ if __name__ == "__main__":
             print(f"    {label:<6} {start:>3}:{end:<3} {sentence[start:end]}")
     aligned = all(entities_on_token_boundaries(s, e) for s, e in zip(SENTENCES, ner_only))
     same = ner_only == predictions(model_dir, all_heads=True)
+    finds = finds_people_only_where_named(ner_only)
     print(f"offsets on token boundaries: {aligned}")
     print(f"syntax-off output equals all-heads output: {same}")
-    sys.exit(0 if aligned and same else 1)
+    print(f"a person is found where one is named, and none where none is: {finds}")
+    sys.exit(0 if aligned and same and finds else 1)
