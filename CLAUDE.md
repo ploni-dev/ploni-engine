@@ -45,6 +45,9 @@
 - Ponytail is used here as a skill. Invoke it at the start of any session that writes
   code, before writing any, so its rules are in context while the code is written.
 - Invoke it again on the diff before every PR. Paste the output into the PR body.
+- Ponytail runs before merge. No branch merges until the Ponytail review has run on
+  its final diff. A commit added after the review makes that review stale: run it
+  again and replace the output in the PR body before the merge.
 - Every finding accepted, or rejected with an ADR number from
   docs/adr/APPROVED_ABSTRACTIONS.md.
 - Ponytail never removes error handling, validation, safety/, a test, a fixture, or a
