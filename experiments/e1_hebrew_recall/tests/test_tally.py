@@ -426,7 +426,9 @@ CLEAN = {"not_person_ids": "", "partial_ids": "", **NO_ERRORS}
 
 def test_ec13_private_parties_below_the_threshold_alone():
     public = " ".join(str(number) for number in range(1, 41))
-    counted = parse_row(row(**CLEAN, per_highlights="100", public_ids=public, missed="18", err_other="18"))
+    counted = parse_row(
+        row(**{**CLEAN, "per_highlights": "100", "public_ids": public, "missed": "18", "err_other": "18"})
+    )
     assert (counted.private_found, counted.private_total, counted.found, counted.total) == (60, 78, 100, 118)
     assert private_below_threshold_alone(counted)
     assert "private-party recall below 80 percent while pooled recall is not: yes" in format_report([counted])

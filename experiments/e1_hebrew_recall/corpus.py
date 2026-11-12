@@ -16,6 +16,7 @@ is over the extracted text, so these are outside the E1 number by definition;
 
 from __future__ import annotations
 
+import re
 import unicodedata
 from collections import Counter
 from collections.abc import Iterator
@@ -28,6 +29,8 @@ from docx.table import Table
 SUPPORTED_SUFFIXES = frozenset({".txt", ".docx"})
 # Word writes "~$name.docx" beside an open document; dotfiles are OS litter.
 IGNORED_NAME_PREFIXES = (".", "~$")
+# What a file extension looks like. Anything else after the last dot is part of the name.
+PRINTABLE_SUFFIX = re.compile(r"\.[a-z0-9]{1,5}")
 
 
 class UnsupportedDocumentError(ValueError):
@@ -81,8 +84,10 @@ def list_documents(corpus_dir: Path) -> list[Path]:
         for entry in sorted(corpus_dir.iterdir(), key=lambda entry: entry.name)
         if entry.is_file() and not entry.name.startswith(IGNORED_NAME_PREFIXES)
     ]
+    # A name with no extension and a dot in it (`A v. B`) has the rest of the
+    # name as its "suffix", so only a suffix that looks like an extension is printed.
     unsupported = Counter(
-        entry.suffix.lower() or "(none)"
+        entry.suffix.lower() if PRINTABLE_SUFFIX.fullmatch(entry.suffix.lower()) else "(other)"
         for entry in files
         if entry.suffix.lower() not in SUPPORTED_SUFFIXES
     )
@@ -223,3 +228,19 @@ def read_checked(doc_id: str, path: Path) -> list[str]:
     if not paragraphs:
         raise DocumentReadError(f"{doc_id}: no text was read")
     return paragraphs
+
+
+def unread_checked(doc_id: str, path: Path) -> int:
+    """Count the unread body text of one document, failing under its id.
+
+    Why: `unread_characters` opens the file a second time, and python-docx
+    puts the path in its error.
+
+    Contract: returns what `unread_characters` returns. Raises
+    DocumentReadError naming `doc_id` and the kind of the original error, with
+    the original error suppressed.
+    """
+    try:
+        return unread_characters(path)
+    except Exception as error:
+        raise DocumentReadError(f"{doc_id}: cannot be read ({type(error).__name__})") from None

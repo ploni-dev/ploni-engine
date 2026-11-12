@@ -9,8 +9,8 @@ Contract: `python -I run_model.py --corpus-dir D --out-dir O --model-dir M`.
 Reads every `.txt` and `.docx` in D. Writes into O, per document, a
 `docNN.html` worksheet and `docNN_spans.csv` (every PERSON span with its
 offsets and text); and once, `index.csv` (document id to file name),
-`tally.csv` (blank hand count, with the placeholder highlights already listed) and `run_meta.json` (versions and per-document
-counts). Refuses to start if O already holds a `tally.csv`.
+`tally.csv` (blank hand count, with the placeholder highlights already listed) and `run_meta.json` (versions, the SHA-256 of the
+model files and per-document counts). Refuses to start if O already holds a `tally.csv`.
 
 Known limits: the worksheets, the span files and `index.csv` hold document text
 and file names.
@@ -29,6 +29,7 @@ os.environ["TRANSFORMERS_OFFLINE"] = "1"
 
 import argparse
 import csv
+import hashlib
 import json
 import subprocess
 import sys
@@ -46,7 +47,7 @@ import transformers
 from transformers import AutoTokenizer
 
 from chunking import MAX_WORDPIECES, split_into_windows
-from corpus import document_id, is_inside, list_documents, read_checked, unread_characters
+from corpus import document_id, is_inside, list_documents, read_checked, unread_checked
 from tally import write_template
 from vendored.dictabert_joint.BertForJointParsing import BertForJointParsing
 from worksheet import (
@@ -70,6 +71,8 @@ TORCH_THREADS = 4
 # morph and prefix all off, forward raises UnboundLocalError at line 192,
 # because only those three heads assign `loss`.
 SWITCHED_OFF_HEADS = ("do_syntax",)
+# The weights, the label map and head switches, and the tokenizer.
+HASHED_MODEL_FILES = ("model.safetensors", "config.json", "tokenizer.json")
 
 
 class WindowTooLongError(ValueError):
@@ -175,19 +178,58 @@ def document_entities(model, tokenizer, paragraphs: list[str]) -> DocumentResult
     return DocumentResult(entities, window_count, cut_paragraphs, hard_cuts, unknown_pieces)
 
 
+def in_git_work_tree(directory: Path) -> bool:
+    """Say whether a directory lies in a checkout of any git repository.
+
+    Why: REPO_ROOT is this script's own checkout. Run from a second checkout
+    of the same repository (a git worktree), a folder in the first one would
+    pass a check against REPO_ROOT alone and sit one `git add` from a commit.
+
+    Contract: `directory` need not exist; its nearest existing parent is
+    asked. False when git says it is not in a work tree. Raises
+    FileNotFoundError if git is not installed.
+    """
+    resolved = directory.resolve()
+    existing = next(parent for parent in (resolved, *resolved.parents) if parent.is_dir())
+    answer = subprocess.run(
+        ["git", "-C", str(existing), "rev-parse", "--is-inside-work-tree"],
+        capture_output=True,
+        text=True,
+    )
+    return answer.returncode == 0 and answer.stdout.strip() == "true"
+
+
+def model_file_hashes(model_dir: Path) -> dict[str, str]:
+    """Return the SHA-256 of the model files that decide what the model computes.
+
+    Why: the folder name is only a name. The hashes in `run_meta.json` are what
+    ties a measured number to the weights it was measured with.
+
+    Contract: maps each name in HASHED_MODEL_FILES to its hex digest. Raises
+    FileNotFoundError if one is missing.
+    """
+    hashes = {}
+    for name in HASHED_MODEL_FILES:
+        with (model_dir / name).open("rb") as handle:
+            hashes[name] = hashlib.file_digest(handle, "sha256").hexdigest()
+    return hashes
+
+
 def check_private_directories(corpus_dir: Path, out_dir: Path) -> None:
     """Refuse directories that would put real document text in the repository.
 
     Why: CLAUDE.md, hard constraints: no real client documents in the repo, in
     any form. A worksheet is the document in another form.
 
-    Contract: raises ValueError if either directory is inside REPO_ROOT, and
-    FileExistsError if `out_dir` already holds a tally, so a hand count is
-    never overwritten and never mixed with a different run's highlights.
+    Contract: raises ValueError if either directory is inside REPO_ROOT or
+    inside any git work tree, which covers a second checkout of this
+    repository; and FileExistsError if `out_dir` already holds a tally, so a
+    hand count is never overwritten and never mixed with a different run's
+    highlights. A directory need not exist yet.
     """
     for name, directory in (("corpus", corpus_dir), ("output", out_dir)):
-        if is_inside(directory, REPO_ROOT):
-            raise ValueError(f"the {name} directory is inside the repository; move it outside")
+        if is_inside(directory, REPO_ROOT) or in_git_work_tree(directory):
+            raise ValueError(f"the {name} directory is inside a repository; move it outside")
     if (out_dir / "tally.csv").exists():
         raise FileExistsError("the output directory already holds tally.csv; use a new directory")
 
@@ -223,6 +265,7 @@ def run(corpus_dir: Path, out_dir: Path, model_dir: Path) -> None:
     documents = list_documents(corpus_dir)
     # Asked first: a git failure after the model has run would cost a whole re-run.
     code = code_revision()
+    model_hashes = model_file_hashes(model_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     # Written first, so a document that fails under its id can be looked up.
     with (out_dir / "index.csv").open("w", encoding="utf-8-sig", newline="") as handle:
@@ -251,7 +294,7 @@ def run(corpus_dir: Path, out_dir: Path, model_dir: Path) -> None:
             "cut_paragraphs": result.cut_paragraphs,
             "hard_cuts": result.hard_cuts,
             "unknown_pieces": result.unknown_pieces,
-            "unread_chars": unread_characters(path),
+            "unread_chars": unread_checked(doc_id, path),
             "per_highlights": count_person_highlights(result.entities),
             "placeholders": count_placeholders(paragraphs),
             "placeholder_highlights": len(placeholder_ids[doc_id]),
@@ -267,6 +310,7 @@ def run(corpus_dir: Path, out_dir: Path, model_dir: Path) -> None:
     )
     meta = {
         "model_dir": model_dir.name,
+        "model_sha256": model_hashes,
         "torch": torch.__version__,
         "transformers": transformers.__version__,
         "torch_threads": TORCH_THREADS,

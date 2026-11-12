@@ -15,6 +15,7 @@ can tell a careful count from a careless one.
 from __future__ import annotations
 
 import csv
+import re
 import sys
 from dataclasses import dataclass
 from pathlib import Path
@@ -41,6 +42,8 @@ FIELDS = ("doc_id", "per_highlights", *ID_LIST_FIELDS, "found_adjust", *COUNT_FI
 # many percentage points is a finding, if each group has this many mentions.
 GAP_POINTS = 10
 MIN_GROUP_MENTIONS = 30
+# The id the run gives a document: corpus.document_id.
+DOC_ID = re.compile(r"doc\d{2}")
 
 
 class TallyError(ValueError):
@@ -300,6 +303,22 @@ def gap_verdict(public_found: int, public_total: int, private_found: int, privat
     return "large_gap" if difference >= GAP_POINTS * public_total * private_total else "small_gap"
 
 
+def private_below_threshold_alone(count: DocumentCount) -> bool:
+    """Say whether private-party recall is below the threshold while pooled recall is not.
+
+    Why: PREREGISTRATION.md, "Public figures and private parties": in that
+    case the findings note says so in its first line. The comparison is made
+    here so nobody makes it by eye from a rounded percentage.
+
+    Contract: the same integer test as `verdict`, on the private-party
+    fraction and on the pooled one. False when no private-party mention was
+    counted.
+    """
+    private_below = count.private_found * 100 < THRESHOLD_RECALL_PERCENT * count.private_total
+    pooled_below = count.found * 100 < THRESHOLD_RECALL_PERCENT * count.total
+    return private_below and not pooled_below
+
+
 def _ratio(numerator: int, denominator: int) -> str:
     """Format a fraction as `n/d = p%`, or `n/a` when the denominator is zero.
 
@@ -321,7 +340,8 @@ def format_report(counts: list[DocumentCount]) -> str:
     Contract: `counts` holds one checked DocumentCount per document. Returns
     the pooled strict recall with its verdict, the lenient and any-label
     figures, recall for public figures and for private parties with the gap
-    verdict, `PER` precision, the error breakdown, the macro mean, and one line
+    verdict and whether the private parties alone are below the threshold,
+    `PER` precision, the error breakdown, the macro mean, and one line
     per document. Raises TallyError when no mention was counted at all.
     """
     pooled = pool(counts)
@@ -343,6 +363,8 @@ def format_report(counts: list[DocumentCount]) -> str:
         f"gap between the two: "
         f"{gap_verdict(pooled.public_found, pooled.public_total, pooled.private_found, pooled.private_total)} "
         f"(large is {GAP_POINTS} points or more, with at least {MIN_GROUP_MENTIONS} mentions in each group)",
+        f"private-party recall below {THRESHOLD_RECALL_PERCENT} percent while pooled recall is not: "
+        f"{'yes' if private_below_threshold_alone(pooled) else 'no'}",
         f"macro mean of per-document strict recall: {100 * macro:.2f}% "
         f"over {len(with_mentions)} documents with at least one mention",
         f"PER highlight precision: "
@@ -391,10 +413,29 @@ def read_tally(path: Path) -> list[DocumentCount]:
     Why: the report must refuse a half-finished count as a whole.
 
     Contract: accepts UTF-8 with or without a byte order mark, which Excel
-    adds on save. Raises TallyError on the first bad row.
+    adds on save. Raises TallyError on the first bad row, and before any row
+    is counted if the header is not FIELDS, a row has more cells than the
+    header, a `doc_id` is not the run's form, or a `doc_id` appears twice: a
+    row pasted twice would be pooled twice, and an added column or a rewritten
+    id could carry a name into the report.
     """
     with path.open(encoding="utf-8-sig", newline="") as handle:
-        return [parse_row(row) for row in csv.DictReader(handle)]
+        reader = csv.DictReader(handle)
+        if tuple(reader.fieldnames or ()) != FIELDS:
+            raise TallyError(f"the header row must be exactly: {','.join(FIELDS)}")
+        rows = list(reader)
+    seen = set()
+    # Line 1 is the header. The cell is never repeated: a stray note can hold a name.
+    for line, row in enumerate(rows, start=2):
+        doc_id = row["doc_id"] or ""
+        if None in row:
+            raise TallyError(f"line {line}: more cells than columns")
+        if not DOC_ID.fullmatch(doc_id):
+            raise TallyError(f"line {line}: doc_id must be 'doc' and two digits, as the run wrote it")
+        if doc_id in seen:
+            raise TallyError(f"line {line}: {doc_id} appears twice")
+        seen.add(doc_id)
+    return [parse_row(row) for row in rows]
 
 
 if __name__ == "__main__":

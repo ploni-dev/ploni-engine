@@ -1,8 +1,10 @@
 """Test matrix for the vendored model code (vendored/dictabert_joint/).
 
-  EC1  every vendored file has the SHA-256 that scripts/download_e1_model.py
-       printed for the pinned commit, so the code that runs is the code that
-       was read
+  EC1  every vendored file has the SHA-256 it had when it was copied from the
+       pinned commit, so the code that runs is the code that was read. The
+       hashes were printed by scripts/download_e1_model.py at the time; that
+       script no longer fetches `*.py`, and NOTICE.md says how to re-check
+       the files against the hub.
   EC2  the model class run_model loads is defined in the vendored folder, not
        fetched from the hub and not read from the downloaded model folder
   A1   the vendored folder holds no Python file outside the pinned list

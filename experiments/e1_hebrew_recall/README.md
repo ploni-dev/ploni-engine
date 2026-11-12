@@ -21,7 +21,7 @@ M=models/dictabert-joint/7b1256fc0846e22d1af431eae299e2dcecee2778
 experiments/.venv/Scripts/python.exe -I -X utf8 experiments/e1_hebrew_recall/smoke.py --model-dir $M
 ```
 
-It must end with two `True` lines. The tests for the harness logic:
+It must end with three `True` lines. The tests for the harness logic:
 
 ```bash
 cd experiments/e1_hebrew_recall && ../.venv/Scripts/python.exe -m pytest -q
@@ -53,8 +53,9 @@ cd experiments/e1_hebrew_recall && ../.venv/Scripts/python.exe -m pytest -q
      one hides a word from it. Report the count in the findings note.
 
    `placeholders` is how many times the document says `פלוני` or `אלמוני` in place of a name,
-   and `placeholder_highlights` is how many of those the model highlighted as a person. They
-   are not names and not misses. Both go in the findings note.
+   and `placeholder_highlights` is how many yellow highlights hold only such a word. The second
+   counts highlights, so it can be larger than the first when the model put two highlights on
+   one `פלוני אלמוני`. They are not names and not misses. Both go in the findings note.
 
    If a document cannot be read, the error names it as `docNN`; `index.csv` in the output
    folder says which file that is.
@@ -67,7 +68,7 @@ cd experiments/e1_hebrew_recall && ../.venv/Scripts/python.exe -m pytest -q
 
    | Column | What goes in it |
    |---|---|
-   | `not_person_ids` | Numbers of yellow highlights that are not a counted mention under "What counts as a person name" in `PREREGISTRATION.md`: not a person, a placeholder, or a name inside an organisation, street, statute or cited precedent. Space-separated. The run has already listed the highlights that hold only `פלוני` or `אלמוני`; keep those and add the rest. |
+   | `not_person_ids` | Numbers of yellow highlights that are not a counted mention under "What counts as a person name" in `PREREGISTRATION.md`: not a person, a placeholder, or a name inside an organisation, street, statute or cited precedent. Space-separated. The run has already listed the highlights that hold only `פלוני` or `אלמוני`. Check each one: if the word is a real person's surname there (`מר אלמוני העיד`), remove its number so the name is counted. Then add the rest. |
    | `partial_ids` | Numbers of yellow highlights that cover only part of a name. |
    | `found_adjust` | Usually `0`. `+1` for each extra person inside one highlight that holds two names; `-1` for each surplus highlight when two adjacent ones cover a single name. If two highlights each cover only part of the same name, list one of them in `partial_ids` and add `-1` here, so the name counts as one error and not two. |
    | `public_ids` | Numbers of yellow highlights that are the name of a public figure, as `PREREGISTRATION.md` defines one. Leave empty if there is none. |
