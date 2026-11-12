@@ -26,10 +26,14 @@ Within threshold: yes / no
 
 Equivalence classes and axes covered:
 Sample size:
+Surviving mutants, for a PR that changes code under ploni/:
 
 ## Ponytail review
-<!-- Skill output on this diff, pasted. -->
+<!-- Skill output on the final diff, pasted. Run by a session or subagent that did not write the code. -->
 
+Commit reviewed:
+Reviewed by:
+Docstrings still describe the code: yes / no
 Findings accepted:
 Findings rejected, with the ADR number justifying each:
 

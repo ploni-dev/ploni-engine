@@ -101,7 +101,7 @@ Required status checks on the PR. Under five minutes. **Enforced by GitHub Actio
 | T3 golden | unintended output changes |
 | T8 privacy: network, eval isolation, log canary, temp canary | leak paths |
 | Secret scan | credentials |
-| Docstring presence and `Why:` section | undocumented public surface |
+| Docstring presence, a `Why:` section, and a `Contract:` section on public functions | undocumented public surface |
 | Ratchet checks (section 6) | weakened tests or fixtures |
 | PR-body structure check (section 5.3) | missing evidence sections |
 | Size limits | oversized PRs |
@@ -138,9 +138,10 @@ Not every PR. Once per milestone.
 | Metric gates at or above baseline | CI comparing the committed results file to `baselines.json` |
 | Results file SHA matches the phase-close commit | CI |
 | Ponytail pass over the whole module, findings triaged | you, from the pasted output |
+| Mutation testing over the whole of `ploni/`, survivors triaged | you, from the pasted output |
 | Carried debt reviewed, each item with a reason and an issue | you |
 | Exit demo shown | you, watching it |
-| `docs/STATUS.md` row appended | CI checks the file grew |
+| `docs/STATUS.md` phase row appended | CI checks the Phases table gained a row |
 | New ADRs merged | you |
 
 ### Level 5: release
@@ -159,7 +160,7 @@ Not every PR. Once per milestone.
 
 ## 5. How each rule is actually enforced
 
-Every rule in `CLAUDE.md` falls into one of three classes. Knowing which class a rule is in tells you how much to trust it.
+Every rule in `CLAUDE.md` falls into one of three classes. Knowing which class a rule is in tells you how much to trust it. The rules added on 2026-11-12 (the branch limit, the hard function limit, the test commit of its own, mutation testing, the independent Ponytail reviewer and the status sections) are Class C until the checks in item 8 of `PROCESS.md` section 12 are built.
 
 ### 5.1 Class A: machine-enforced, cannot be bypassed silently
 
@@ -169,7 +170,7 @@ Every rule in `CLAUDE.md` falls into one of three classes. Knowing which class a
 | `ploni/` never imports `eval/` | AST test |
 | Layering boundaries | AST test, fails with `file:line` |
 | No document text in logs or temp files | canary test through the full pipeline |
-| Docstring present with a `Why:` section | AST test |
+| Docstring present with a `Why:` section, and a `Contract:` section on public functions | AST test |
 | No secrets committed | secret scan |
 | Every dependency pinned | requirements parse test |
 | Every model in `models/` listed in `THIRD_PARTY.md` | manifest test |
@@ -188,7 +189,7 @@ These cannot be blocked up front but cannot be hidden either.
 
 | Rule | How it is detected |
 |---|---|
-| **Test written before implementation** | CI inspects commit order within the PR: the first commit touching `tests/.../test_X.py` must precede the first commit touching the module `X` implements. Squash merge preserves the branch's commit list for this check. |
+| **Test written before implementation** | CI inspects commit order within the PR: the first commit touching `tests/.../test_X.py` must precede the first commit touching the module `X` implements. Squash merge preserves the branch's commit list for this check. The failing tests are a commit of their own, with no implementation in it. This covers every PR that changes code under `ploni/`, `eval/` or `scripts/`. |
 | Declared sample size matches reality | CI parses the test-matrix block at the top of the test file and counts the test functions, then compares to the declared minimum for that kind of code |
 | Ponytail actually run | CI asserts the `## Ponytail review` section exists and is non-empty. Substance is Level 2. |
 | Orientation step performed | CI asserts the PR body contains the goal, deliverable, gate and downstream-risk lines |
@@ -344,7 +345,7 @@ In this order. Nothing in Class A exists until it is built, so build it before t
 4. `build-plan.md`, `PROCESS.md`, `PROMOTION.md` committed.
 5. Fast CI workflow with every Class A check wired up.
 6. Full CI workflow behind the `run-full` label.
-7. Pre-commit hooks.
+7. Pre-commit hooks, and the further checks listed under item 8 of `PROCESS.md` section 12.
 8. `.ratchet.json`, `docs/WAIVERS.md` (empty), `docs/STATUS.md`, `docs/findings/` (empty), `docs/adr/` with ADR-0001 onward and `APPROVED_ABSTRACTIONS.md`.
 9. `eval/baselines.json` skeleton, `eval/results/` (empty).
 10. PR template containing every required section, so the structure check has something to match.

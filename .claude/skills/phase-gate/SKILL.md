@@ -32,7 +32,7 @@ Then **invoke the ponytail skill**, before writing any code, so its rules are in
 
 ## 3. Write the failing test first
 
-For every gate condition, the test exists and fails before the implementation lands. Run it and keep the failing output: it goes in the PR body as evidence that the test actually tests something.
+For every gate condition, the test exists and fails before the implementation lands. Commit the failing test on its own, before the implementation, with the failing output in the commit message (`CLAUDE.md`, Tests). Paste the same output in the PR body as evidence that the test actually tests something.
 
 Put tests in the right tier directory:
 
@@ -69,52 +69,9 @@ Instead write `docs/findings/<YYYY-MM-DD>-<slug>.md` with: what was measured, th
 
 ## 7. Open the PR
 
-Use this body. A PR without pasted gate evidence will be closed unreviewed.
+A PR without pasted gate evidence will be closed unreviewed.
 
-```markdown
-## Orientation
-Goal:
-Deliverable:
-Gate:
-Downstream risk if wrong:
-
-## Phase, issue, branch
-Phase N, issue #NN, feat/N-slug
-
-## What this does
-
-## Gate evidence
-(paste the actual command and its actual output; results file SHA if applicable)
-
-## Prediction vs measurement
-Predicted:
-Measured:
-Within threshold: yes / no
-
-## Test evidence
-Failing-first output, then passing output.
-Equivalence classes and axes covered.
-Sample size:
-
-## Ponytail review
-(skill output on this diff)
-Accepted:
-Rejected, with ADR:
-
-## Golden file changes
-None, or: changed because ...
-
-## Checklist
-- [ ] One concern, one branch
-- [ ] Failing test written before implementation
-- [ ] Docstring with Why on every public function touched
-- [ ] Edge cases from equivalence classes covered
-- [ ] Ponytail review run and findings addressed
-- [ ] No test, threshold or baseline weakened
-- [ ] No baseline or gate change in this PR
-- [ ] Fast suite green locally
-- [ ] Layering test green
-```
+Use the body in `.github/pull_request_template.md`. It is not printed here: a copy falls behind the file.
 
 CI checks that the orientation block and the Ponytail section are present and non-empty, so a PR built from an older template is rejected before review.
 

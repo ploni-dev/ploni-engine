@@ -14,7 +14,7 @@ description: Run the merge-to-main gate for a branch: the Ponytail skill pass wi
 Ponytail is installed here **as a skill**, invoked by name. If the installed copy also exposes mode or review commands, use them; the obligations are the same either way.
 
 1. **It should already have been invoked at the start of this session, before any code was written**, at the middle intensity level if the skill offers levels. Its rules have to be in context while code is written. Retrofitting minimalism afterwards produces a rewrite, not a review. If it was not invoked at the start, say so plainly in the PR body rather than pretending otherwise.
-2. **Invoke it again now on the final diff** as a review pass.
+2. **A session or subagent that did not write the code invokes it on the final diff** as a review pass (`CLAUDE.md`, Ponytail). Its output names the commit it reviewed.
 3. Paste its output into the PR body under `## Ponytail review`.
 4. Resolve **every** finding as one of:
    - **Accepted**: change the code.
@@ -82,38 +82,7 @@ Every row needs evidence, not assertion. CI enforces some of these and will reje
 
 ## 5. PR body
 
-```markdown
-## Orientation
-Goal:
-Deliverable:
-Gate:
-Downstream risk if wrong:
-
-## Phase, issue, branch
-
-## What this does
-
-## Gate evidence
-(the actual command and its actual output; results file SHA if applicable)
-
-## Prediction vs measurement
-Predicted:  Measured:  Within threshold: yes / no
-
-## Test evidence
-Failing-first output, then passing output.
-Equivalence classes and axes covered.
-Sample size:
-
-## Ponytail review
-(skill output on this diff)
-Accepted:
-Rejected, with ADR:
-
-## Golden file changes
-
-## Checklist
-(the rows in section 4)
-```
+Use the body in `.github/pull_request_template.md`. It is not printed here: a copy falls behind the file.
 
 A PR missing the gate evidence, the orientation block or the Ponytail section is closed unreviewed.
 
@@ -132,6 +101,7 @@ In addition to everything above:
 - Full suite green: T4 integration, T5 system journeys, T6 metrics, T7 performance
 - Metric gates at or above baseline, with the results file committed and its SHA matching the phase-close commit (see the `eval-baseline` skill)
 - Ponytail pass over the whole module or repo, findings triaged
+- Mutation testing over the whole of `ploni/`, survivors triaged
 - Carried debt reviewed; each item has a named reason and an issue
 - Open waivers listed, expired ones closed
 - Exit demo shown: a thing you can watch, not just a green suite
