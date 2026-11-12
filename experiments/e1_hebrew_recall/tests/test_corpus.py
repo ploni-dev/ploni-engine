@@ -16,6 +16,8 @@ list_documents
   B1   empty directory                       -> empty list
   E1   any other suffix                      -> UnsupportedDocumentError
   A3   the error text never contains a file name (names can identify a client)
+  A6   a file with no extension and a dot in its name (INVENTED v. NAME): the
+       text after the dot is part of the name and is not printed either
 
 read_paragraphs
   EC7  .txt                                  -> one paragraph per non-blank line
@@ -39,6 +41,11 @@ read_checked
        never the file name
   B5   a document with no text               -> DocumentReadError
 
+unread_checked
+  EC11 a readable document                   -> the count unread_characters gives
+  E4   a file that is not a Word package     -> DocumentReadError naming the id,
+       never the file name
+
 document_id
   B4   1 -> doc01, 10 -> doc10
 """
@@ -60,6 +67,7 @@ from corpus import (
     is_inside,
     list_documents,
     read_checked,
+    unread_checked,
     read_paragraphs,
     unread_characters,
 )
@@ -246,3 +254,27 @@ def test_b5_document_with_no_text_is_refused(tmp_path: Path):
     path.write_text("\n  \n", encoding="utf-8")
     with pytest.raises(DocumentReadError, match="doc03"):
         read_checked("doc03", path)
+
+
+def test_a6_text_after_a_dot_in_an_extensionless_name_is_not_printed(tmp_path: Path):
+    (tmp_path / "INVENTED v. SURNAME").write_bytes(b"")
+    (tmp_path / "scan.pdf").write_bytes(b"")
+    with pytest.raises(UnsupportedDocumentError) as raised:
+        list_documents(tmp_path)
+    assert "surname" not in str(raised.value).lower()
+    assert "1 x .pdf" in str(raised.value) and "1 x (other)" in str(raised.value)
+
+
+def test_ec11_unread_checked_counts_like_unread_characters(tmp_path: Path):
+    path = tmp_path / "a.txt"
+    path.write_text("משה כהן", encoding="utf-8")
+    assert unread_checked("doc01", path) == 0
+
+
+def test_e4_unread_checked_error_has_the_id_and_no_file_name(tmp_path: Path):
+    path = tmp_path / "CLIENT-NAME.docx"
+    path.write_bytes(b"not a Word package")
+    with pytest.raises(DocumentReadError) as caught:
+        unread_checked("doc07", path)
+    assert "doc07" in str(caught.value) and "CLIENT" not in str(caught.value)
+    assert caught.value.__suppress_context__
