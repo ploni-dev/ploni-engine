@@ -17,14 +17,44 @@ Two licensing traps, recorded here because they are easy to walk into:
 
 | Tool | Source | Version | License | Status |
 |---|---|---|---|---|
-| Ponytail | not recorded | not recorded | MIT per its own docs, unverified | **Unresolved. See below.** |
+| Ponytail | GitHub `DietrichGebert/ponytail`, four skills vendored under `.claude/skills/` | 5.3.3, commit `7801d061243d7b753bad0e0b3c057cd250b11755` (tag `v5.3.3`) | MIT, `.claude/skills/ponytail/LICENSE`, copied from that commit | **Vendored and pinned. See below.** |
 
-### Ponytail, unresolved as of 2026-11-11
+### Ponytail, vendored at a pinned commit as of 2026-11-11
 
-`CLAUDE.md` requires every session that writes code to invoke the ponytail skill before writing any, and `PROCESS.md` section 7.1 makes it a merge condition. As of today that requirement cannot be met in a cloud session:
+`CLAUDE.md` requires every session that writes code to invoke the ponytail skill before writing any, and `PROCESS.md` section 7.1 makes it a merge condition. It is used as a skill invoked by name, which is what the vendored copy is.
 
-- It is not among the account's enabled skills.
-- Nothing matching it is in the plugin catalog.
-- Achia has a copy he uses locally. Its exact source, version and whether it exposes intensity modes are not recorded, which `PROCESS.md` section 13 items 2 and 3 already list as open.
+What is in the repository, each file identical to upstream at the commit above (git blob id, the same on both sides):
 
-Until that is resolved, a session that cannot invoke it says so in the PR body rather than skipping it silently or claiming it ran. Resolving it means one of: publishing the local copy as an account-level skill so cloud sessions get it, vendoring it into this repo with its license and commit, or a PR against `CLAUDE.md` and `PROCESS.md` dropping the requirement. The third is a real option; what is not an option is leaving a rule in place that sessions cannot follow.
+| File | Blob id |
+|---|---|
+| `.claude/skills/ponytail/SKILL.md` | `d64edd32265ba21cbf5270158f04e97d96925f27` |
+| `.claude/skills/ponytail-review/SKILL.md` | `a50e3ac6ded6fccc9edae34ce37877bbce11e3fa` |
+| `.claude/skills/ponytail-audit/SKILL.md` | `ff9a95480700600fe2664d2d0906a4d750b2da0b` |
+| `.claude/skills/ponytail-debt/SKILL.md` | `3124f520a65d2a4fa75a2f5db6225c38ebdb8620` |
+| `.claude/skills/ponytail/LICENSE` | `715d483338cea4365f0d91a27799cf61226d6bcf` |
+
+To check a file, compare `git rev-parse HEAD:<file>` here with `git rev-parse 7801d061:skills/<name>/SKILL.md` in a clone of the source.
+
+The `ponytail` skill takes a level as its argument: `lite`, `full` (its default) or `ultra`. That answers `PROCESS.md` section 13 item 2; which level this project uses is still Achia's to write into `CLAUDE.md`.
+
+Why vendored files and not the Claude Code plugin the same repository offers:
+
+- A plugin marketplace declared in `.claude/settings.json` can be pinned to a branch or a tag, not to a commit (`ref` is "Branch or tag", https://code.claude.com/docs/en/plugins/marketplace-reference.md#marketplace-sources). A tag can be moved, so it does not meet the pin-by-commit rule.
+- A cloud session does not install plugins a repository declares, and does load `.claude/skills/` because it is part of the clone (https://code.claude.com/docs/en/cloud-environments.md#what-carries-over-from-your-setup).
+
+What was left out, on purpose:
+
+- `ponytail-help` and `ponytail-gain`: a reference card for the plugin's own commands and a benchmark scoreboard. Neither is used by `PROCESS.md` section 7.1.
+- Every hook. At 5.3.3 the plugin's hooks switch the mode on at session start, inject the rules into subagents, and run a "band" that after every turn writes a row per task to `~/.config/ponytail/band/<project>.csv`, including the session title or the first 60 characters of the first prompt, and can post that row to a webhook (`hooks/band/register.tsx` lines 155 to 181 and 245 to 249 at that commit). None of that is installed here.
+
+What follows from having no hooks:
+
+- Nothing activates on its own. A session invokes the skill by name, as section 7.1 already says.
+- A subagent does not get the rules unless the session that spawns it passes them on.
+
+Known limits:
+
+- A cloud thread inside a Claude project does not load a repository's `.claude/skills/` (https://code.claude.com/docs/en/skills.md). A session there still says so in the PR body rather than skipping the review silently or claiming it ran.
+- Until 2026-11-11 Achia's laptop had the plugin at 4.7.0 (commit `45f7d2f83fb430a65fd512a98ad7b14d79e06636`), enabled for another project and briefly for this one. It is disabled for this project so that one version applies.
+
+Updating is a PR of its own: replace the files from a newer commit, read the diff of the rules, and update the commit and blob ids here.
