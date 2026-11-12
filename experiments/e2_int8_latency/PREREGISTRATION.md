@@ -107,3 +107,23 @@ The third review pass of the harness (PR #10) found what that line does not show
 Change to the harness, made before any further run: the power line now prints the energy saver flag, the mode in effect and the mode set, and it is read twice, before and after the timed passes, so a run that crosses the 30 percent level shows it.
 
 No further run has been registered. The next one needs its own prediction here first.
+
+## Amendment before run 6, the controlled run
+
+Run 6 is the controlled run the findings note asks for, taken on 2026-11-12 after the laptop was plugged in. Nothing in the harness or on `page.txt` changes. The files are the ones of runs 1 to 5, checked by the hashes the run prints.
+
+The state it is taken in, as far as it can be controlled from the working session:
+
+- On mains power. The run prints the power source, the charge, the energy saver flag, the power mode in effect and the power mode set, before and after the timed passes.
+- After at least ten minutes in which the session ran nothing heavier than file edits and git commands. No test suite, no model run and no export in that time.
+- Other programs on the laptop are not closed: the session cannot close them. Processor use and free memory are read by hand just before the run and written in the note as hand readings.
+
+Prediction: the INT8 median is within 15 percent of the 1.066 seconds of run 2, that is 0.906 to 1.226 seconds. This is the reading that the fast runs 1 and 2 were the laptop in an ordinary state and the slow runs 3 to 5 were the laptop on battery.
+
+How the result is read, fixed here:
+
+- 0.906 to 1.226 seconds: the state of runs 1 and 2 is reproduced in a recorded state. Run 6 becomes the result, because it is the first run whose code, files and power state are all in its own output. E2 is then inside the plan's prediction at its low end, for the encoder and NER head alone.
+- Above 1.226 and up to 3 seconds: inside the plan's prediction, but runs 1 and 2 are not reproduced. Run 6 becomes the result and the note says the fast runs remain unexplained.
+- Above 3 seconds, or above the 10 second threshold: mains power does not explain the slow runs. Which run is the result is not changed, and the finding goes to Achia as it stands.
+
+One run. If the power line shows battery before or after the timed passes, the run is not the controlled run and is reported as a seventh uncontrolled run, not as the result.
