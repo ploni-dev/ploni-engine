@@ -12,8 +12,8 @@
 ## Branching
 - One feature, one branch, one concern. feat/<phase>-<slug>, fix/, test/, docs/, chore/.
 - A branch that grows a second concern is split, not extended.
-- At most three open branches: pushed, not merged, not closed. At three, cut no new
-  branch until one merges. A waiver request does not count.
+- At most three open branches: not merged, not closed. At three, cut no new branch
+  until one merges. A waiver request, a findings note or the status PR does not count.
 - Cut every work branch (feat, fix, test, docs, chore) from main. One cut from another
   open branch says why in its PR body.
 - Create the branch explicitly with git before any work. Do not rely on an auto-generated
@@ -90,8 +90,10 @@
 
 ## Status
 - docs/STATUS.md opens with three sections: Done, In flight, Waiting on Achia. Bring it
-  up to date in a docs PR of its own at the end of a working day that merged anything.
-- End a working session by printing those three sections as they now stand.
+  up to date in a docs PR of its own at the end of a working day that merged anything
+  other than a status PR.
+- End a working session by printing the three lists as they are now, and say where
+  the file is behind.
 
 ## Exceptions (PROMOTION.md section 8)
 - You have no authority to waive any rule, test, threshold or gate. No flag, comment or

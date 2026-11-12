@@ -98,7 +98,7 @@ All source, tests, fixtures, the eval harness, `build-plan.md`, `PROCESS.md`, `C
 
 One branch does one thing. A branch that grows a second concern is split before review, not after. Deleted on merge. Never reused.
 
-At most three branches are open at once, where open means pushed, not merged and not closed. At three, no new branch is cut until one merges; a waiver request does not count toward the three. Every work branch (`feat`, `fix`, `test`, `docs`, `chore`) is cut from `main`; release and hotfix branches follow `PROMOTION.md` section 2. A work branch cut from another open branch has to say why in its PR body, because a stack turns one merge into several: when the branch below is squash-merged, every branch above it must take `main` in before it can merge. On 2026-11-12 seven branches were open at once, six of them in one stack, and two of those had to be merged with `main` by hand before they could go in.
+At most three branches are open at once, where open means not merged and not closed, pushed or not. At three, no new branch is cut until one merges; a waiver request, a findings note and the status PR do not count toward the three. Every work branch (`feat`, `fix`, `test`, `docs`, `chore`) is cut from `main`; release and hotfix branches follow `PROMOTION.md` section 2. A work branch cut from another open branch has to say why in its PR body, because a stack turns one merge into several: when the branch below is squash-merged, every branch above it must take `main` in before it can merge. On 2026-11-12 seven branches were open at once, six of them in one stack, and two of those had to be merged with `main` by hand before they could go in.
 
 ### 2.5 Commits
 
@@ -282,42 +282,7 @@ Over a hard limit, split before review. No exception for "it is all related".
 
 ### 6.4 PR body template
 
-```markdown
-## Phase, issue, branch
-Phase N, issue #NN, feat/N-slug
-
-## What this does
-Two or three sentences.
-
-## Gate evidence
-(the actual command and its actual output, numbers not claims)
-
-## Prediction vs measurement
-Predicted:  Measured:  Within threshold: yes / no
-
-## Test evidence
-Failing-first output, then passing output.
-Edge cases covered, by equivalence class.
-Sample size for any generated test.
-
-## Ponytail review
-Skill output on this diff, pasted.
-Findings accepted: ...
-Findings rejected, with the ADR number justifying each: ...
-
-## Golden file changes
-None, or: changed because ...
-
-## Checklist
-- [ ] One concern, one branch
-- [ ] Failing test written before implementation
-- [ ] Docstring with Why on every public function touched
-- [ ] Edge cases from equivalence classes covered
-- [ ] Ponytail review run and findings addressed
-- [ ] No test, threshold or baseline weakened
-- [ ] No baseline or gate change in this PR
-- [ ] Fast suite green locally
-```
+The template is `.github/pull_request_template.md`. It is not printed here: a copy falls behind the file.
 
 **A PR missing pasted gate evidence or a Ponytail section is closed unreviewed.** This is the highest-leverage rule in the document, because it makes "I ran it" impossible to assert without showing output.
 
@@ -403,7 +368,7 @@ One session, one issue, one branch, one PR. A session that finds it needs to cha
 2. **Invoke the ponytail skill**, before any code is written.
 3. **Branch.** One concern.
 4. **Enumerate the test matrix.** Equivalence classes, boundaries, Hebrew axes, adversarial cases, before any implementation.
-5. **Write the failing tests.** Run them. Keep the failing output.
+5. **Write the failing tests.** Run them. Commit them on their own, with the failing output in the commit message.
 6. **Implement.** Smallest change that passes. Docstring with Why on everything public.
 7. **Measure.** Run the gate. Capture real output.
 8. **Ponytail review.** A session or subagent that did not write the code invokes the skill on the final diff. Accept or justify every finding.
@@ -463,9 +428,9 @@ Findings notes are the project's memory. Six months later, "why is this threshol
 
 ## 11. Cadence and status
 
-**Per working day:** `docs/STATUS.md` opens with three sections: Done, In flight, Waiting on Achia. At the end of a working day that merged anything, it is brought up to date in a docs PR of its own. It is not edited by every PR: two open PRs that change the same lines conflict, and a line saying "in flight" would be wrong on `main` the moment its PR merged. A status that lives only in PR bodies is nowhere when nothing has been pushed, which is how 2026-11-12 began.
+**Per working day:** `docs/STATUS.md` opens with three sections: Done, In flight, Waiting on Achia. At the end of a working day that merged anything other than a status PR, it is brought up to date in a docs PR of its own. It is not edited by every PR: two open PRs that change the same lines conflict, and a line saying "in flight" would be wrong on `main` the moment its PR merged. A status that lives only in PR bodies is nowhere when nothing has been pushed, which is how 2026-11-12 began.
 
-**Per session:** the PR body is the status report, and the session ends by printing the three sections of `docs/STATUS.md` as they now stand.
+**Per session:** the PR body is the status report, and the session ends by printing the three lists as they are now, saying where `docs/STATUS.md` is behind them.
 
 **Per phase close:** one row appended to `docs/STATUS.md`: phase, gate, measured number, date, exit demo shown. That file is the whole project status in one screen.
 
@@ -489,13 +454,13 @@ Gates passed is the only velocity metric that means anything here.
 8. Fast and full CI workflows, pre-commit, the layering test, the docstring check, the PR-body Ponytail-section check. With them, the checks the rules of 2026-11-12 need:
    - `pyproject.toml` with the ruff and mypy configuration of section 4.5, and the ceiling counter for suppressions in `.ratchet.json`.
    - Hashes in every requirements file, the ones under `experiments/` included, and installs with `--require-hashes`.
-   - Claude Code hooks committed in `.claude/settings.json`: refuse `--no-verify`, refuse a push to `main`, and refuse an edit to `docs/WAIVERS.md`, `eval/baselines.json` or `.ratchet.json`. A small set, because a hook that fires wrongly stops work. No hook runs the test suite when a session ends its turn: test-first needs a commit whose tests fail, and section 10 needs a session to be able to stop and report.
+   - Claude Code hooks committed in `.claude/settings.json`: refuse `--no-verify`, refuse a push to `main`, and refuse an edit to `docs/WAIVERS.md`, the one file only Achia writes. A small set, because a hook that fires wrongly stops work. No hook runs the test suite when a session ends its turn: test-first needs a commit whose tests fail, and section 10 needs a session to be able to stop and report.
    - A local `pre-push` git hook that runs the fast suite: the free stand-in for required status checks, which GitHub Free does not enforce on a private repository (`PROMOTION.md` section 11).
    - The commit-order check of `PROMOTION.md` section 5.2. Its row there states what it covers.
    - A check that the commit named in the PR's Ponytail section is the PR's last commit, or that every commit after it is a merge of `main` that leaves the branch's own diff unchanged.
    - A mutation testing tool that runs on Windows, chosen and pinned.
    - `pyproject.toml` and `.claude/settings.json` added to `CODEOWNERS` and to the Level 3 list of `PROMOTION.md`, so a code PR cannot loosen a limit with one line of configuration.
-   - The `CLAUDE.md` lines these checks cover shrunk to pointers, and the two rules that waited for a tool added there: hashed requirements, and no warnings from ruff and mypy.
+   - The `CLAUDE.md` lines these checks cover shrunk to pointers, and the two rules that waited for a tool added there as pointers: hashed requirements, and no warnings from ruff and mypy.
 9. `eval/baselines.json` skeleton, `docs/STATUS.md`, `docs/REFERENCE_MACHINE.md`, `tests/fixtures/MANIFEST.md`.
 10. Then the code skeleton from `build-plan.md` Phase 0.
 

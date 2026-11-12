@@ -138,6 +138,7 @@ Not every PR. Once per milestone.
 | Metric gates at or above baseline | CI comparing the committed results file to `baselines.json` |
 | Results file SHA matches the phase-close commit | CI |
 | Ponytail pass over the whole module, findings triaged | you, from the pasted output |
+| Mutation testing over the whole of `ploni/`, survivors triaged | you, from the pasted output |
 | Carried debt reviewed, each item with a reason and an issue | you |
 | Exit demo shown | you, watching it |
 | `docs/STATUS.md` phase row appended | CI checks the Phases table gained a row |
