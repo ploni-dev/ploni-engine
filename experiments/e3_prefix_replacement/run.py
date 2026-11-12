@@ -31,12 +31,9 @@ sys.path[:0] = [str(HERE), str(HERE.parent / "e1_hebrew_recall")]
 
 import torch
 import transformers
-from run_model import TORCH_THREADS, code_revision, load_ner_model, model_file_hashes
+from run_model import TORCH_THREADS, code_revision, load_ner_model, pinned_model_hashes
 
 import scoring
-
-# docs/THIRD_PARTY.md: model.safetensors at the pinned revision of dicta-il/dictabert-joint.
-PINNED_WEIGHTS_SHA256 = "c59db02c002b69fd3c072c310e3ba578d036386477248d1c8576d896cc06aa1c"
 
 
 def segment_all(model, tokenizer, sentences: list[str]) -> list[list[dict]]:
@@ -53,17 +50,16 @@ def segment_all(model, tokenizer, sentences: list[str]) -> list[list[dict]]:
 def main(model_dir: Path) -> None:
     """Score every form and print the report.
 
-    Contract: exits before the model is loaded if `model.safetensors` in
-    `model_dir` is not the pinned file, so a count is never printed for other
+    Contract: raises ValueError before the model is loaded if
+    `model.safetensors` in `model_dir` is not the pinned file
+    (`run_model.pinned_model_hashes`), so a count is never printed for other
     weights under the pinned folder name.
     """
     torch.set_num_threads(TORCH_THREADS)
     forms = scoring.load_forms(HERE / "forms.tsv")
     scoring.check_category_sizes(forms)
     code = code_revision()
-    hashes = model_file_hashes(model_dir)
-    if hashes["model.safetensors"] != PINNED_WEIGHTS_SHA256:
-        sys.exit("model.safetensors is not the pinned file (docs/THIRD_PARTY.md); nothing was run")
+    hashes = pinned_model_hashes(model_dir)
     model, tokenizer = load_ner_model(model_dir)
     token_lists = segment_all(model, tokenizer, [form.sentence for form in forms])
     strict, prefix_only, failures = scoring.tally(forms, token_lists)
