@@ -54,3 +54,23 @@ Committed before the first timing was taken. The ONNX files were built before th
 Run 1 was taken at `2b48fe7`. The Ponytail review of the harness then found that two invented identifiers on `page.txt`, an ID number and a company number, passed the Israeli check digit, so each could be a real identifier (`build-plan.md` Phase 7). The last digit of each was changed so the check fails. Nothing else on the page changed: 13 paragraphs, 407 words.
 
 Because the input changed, the timing is taken again as run 2 with the same rule, readings and thresholds. Both runs are reported. Run 2 is the result; run 1 is kept as the record of what was measured first.
+
+## Amendment after run 2, before run 3
+
+On 2026-11-12 a Ponytail review of the harness by a fresh reviewer session (PR #10) found nothing that makes runs 1 and 2 wrong as measurements of what this file defines. It led to the changes below, all made before run 3.
+
+Changes to the harness:
+
+- "If it does not, the run is a harness fault and no time is reported" was not what the code did: the times were printed first and the export check came after them. The check now comes first. In runs 1 and 2 the check passed, so no time was printed that should not have been.
+- The label comparison counted the `[CLS]` and `[SEP]` positions of each paragraph, 26 of the 542 positions. It now counts text positions only, and the page line prints both numbers.
+- The run prints the commit, the SHA-256 of the weights and of the two ONNX files, and stops if the weights are not the pinned file (`docs/THIRD_PARTY.md`). The model's Python is now the vendored copy, not the files in the download folder.
+- The ONNX files are exported again from the committed code. Runs 1 and 2 timed two files written at 22:20 on 2026-11-11, about a minute before the first commit `2b48fe7`, so from code that was not yet committed. Hashed afterwards, on 2026-11-12: `ner_int8.onnx` `b12eaf9283bbc40ae7473461a93e4b8872b44478503af9ad51e7fb0922b83b05`, `ner_fp32.onnx` `e686ac235181498b9bef5c3f660db18e42c0120dc21e0a5cead5950c4151d760`.
+- The clock (`timed`) moved into `latency.py` and has a test. What is timed did not change.
+
+Corrections to "Known limits":
+
+- "13 short inputs padded to the longest is cheaper than a page that is one long paragraph" was never measured and is withdrawn. What the runs show: the batch is 13 by 66, so 858 positions are computed for 542 real ones, and 316 are padding. Whether the same words as one long paragraph cost more or less was not measured.
+- Added: the product runs a second model on every page (`build-plan.md` Phase 4, GLiNER2, 205M parameters), and the 1 to 3 seconds of section 8.2 is the target for the whole analysis of a page. The time measured here is one of the two models, without the prefix head.
+- Added: runs 1 and 2 did not record whether the laptop was on mains power or its Windows power mode, and that cannot be recovered. Run 3 records both. The backends always run in the same order, INT8 first and a few seconds after start, so the comparison between backends is partly a comparison of when each ran.
+
+The rule, the readings and the thresholds are unchanged, and `page.txt` is unchanged. Run 3 is taken with the same rule. It is the result, because it is the only run whose code and files are identified by hash; runs 1 and 2 are kept beside it.

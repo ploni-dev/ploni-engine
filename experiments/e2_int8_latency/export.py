@@ -26,7 +26,9 @@ sys.path[:0] = [str(HERE), str(HERE.parent / "e1_hebrew_recall")]
 import torch
 from corpus import is_inside
 from onnxruntime.quantization import QuantType, quantize_dynamic
-from run_model import load_ner_model
+from run_model import code_revision, load_ner_model, model_file_hashes
+
+import latency
 
 OPSET = 17
 FP32_NAME = "ner_fp32.onnx"
@@ -54,9 +56,20 @@ class NerOnly(torch.nn.Module):
 
 
 def export(model_dir: Path, out_dir: Path) -> None:
-    """Write the FP32 graph, then its dynamic INT8 quantization."""
+    """Write the FP32 graph, then its dynamic INT8 quantization.
+
+    Contract: prints the commit, the hash of the weights, and the size and
+    SHA-256 of each file written. Exits before writing anything if the weights
+    are not the pinned file.
+    """
     if is_inside(out_dir, model_dir):
         raise ValueError("the output directory must not be inside the downloaded model directory")
+    code = code_revision()
+    weights = model_file_hashes(model_dir)["model.safetensors"]
+    if weights != latency.PINNED_WEIGHTS_SHA256:
+        sys.exit("model.safetensors is not the pinned file (docs/THIRD_PARTY.md); nothing was exported")
+    print(f"code {code['commit']}{', uncommitted changes' if code['dirty'] else ''}")
+    print(f"model.safetensors sha256 {weights}")
     out_dir.mkdir(parents=True, exist_ok=True)
     model, tokenizer = load_ner_model(model_dir)
     example = tokenizer(["משפט קצר לדוגמה.", "משפט שני, ארוך מעט יותר, לדוגמה."], padding=True, return_tensors="pt")
@@ -75,7 +88,7 @@ def export(model_dir: Path, out_dir: Path) -> None:
     # build-plan.md Phase 13: "Dynamic INT8 first, per-channel."
     quantize_dynamic(out_dir / FP32_NAME, out_dir / INT8_NAME, per_channel=True, weight_type=QuantType.QInt8)
     for name in (FP32_NAME, INT8_NAME):
-        print(f"{(out_dir / name).stat().st_size:>12}  {name}")
+        print(f"{(out_dir / name).stat().st_size:>12}  {latency.file_sha256(out_dir / name)}  {name}")
 
 
 if __name__ == "__main__":
