@@ -61,15 +61,17 @@ def main(model_dir: Path) -> None:
     forms = scoring.load_forms(HERE / "forms.tsv")
     scoring.check_category_sizes(forms)
     code = code_revision()
-    weights = model_file_hashes(model_dir)["model.safetensors"]
-    if weights != PINNED_WEIGHTS_SHA256:
+    hashes = model_file_hashes(model_dir)
+    if hashes["model.safetensors"] != PINNED_WEIGHTS_SHA256:
         sys.exit("model.safetensors is not the pinned file (docs/THIRD_PARTY.md); nothing was run")
     model, tokenizer = load_ner_model(model_dir)
     token_lists = segment_all(model, tokenizer, [form.sentence for form in forms])
     strict, prefix_only, failures = scoring.tally(forms, token_lists)
 
     print(f"E3 prefix-preserving replacement, model revision {model_dir.name}")
-    print(f"model.safetensors sha256 {weights}")
+    # The tokenizer decides how a word is split, so its file is named beside the weights.
+    for name, digest in hashes.items():
+        print(f"{name} sha256 {digest}")
     print(f"code {code['commit']}{', uncommitted changes' if code['dirty'] else ''}")
     print(f"torch {torch.__version__}, transformers {transformers.__version__}, threads {TORCH_THREADS}")
     print(f"{'category':<16} {'strict':>7} {'prefix only':>12}")
