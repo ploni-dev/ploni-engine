@@ -422,7 +422,10 @@ def read_tally(path: Path) -> list[DocumentCount]:
     with path.open(encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
         if tuple(reader.fieldnames or ()) != FIELDS:
-            raise TallyError(f"the header row must be exactly: {','.join(FIELDS)}")
+            raise TallyError(
+                f"the header row must be exactly: {','.join(FIELDS)}; "
+                "delete any extra column, including an empty one"
+            )
         rows = list(reader)
     seen = set()
     # Line 1 is the header. The cell is never repeated: a stray note can hold a name.

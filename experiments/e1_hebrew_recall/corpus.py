@@ -16,7 +16,6 @@ is over the extracted text, so these are outside the E1 number by definition;
 
 from __future__ import annotations
 
-import re
 import unicodedata
 from collections import Counter
 from collections.abc import Iterator
@@ -29,8 +28,9 @@ from docx.table import Table
 SUPPORTED_SUFFIXES = frozenset({".txt", ".docx"})
 # Word writes "~$name.docx" beside an open document; dotfiles are OS litter.
 IGNORED_NAME_PREFIXES = (".", "~$")
-# What a file extension looks like. Anything else after the last dot is part of the name.
-PRINTABLE_SUFFIX = re.compile(r"\.[a-z0-9]{1,5}")
+# The unsupported extensions worth naming in an error. Anything else after the
+# last dot may be part of a name (`Katz v.Levi`) and is printed as "(other)".
+PRINTABLE_SUFFIXES = frozenset({".pdf", ".doc", ".rtf", ".odt", ".htm", ".html"})
 
 
 class UnsupportedDocumentError(ValueError):
@@ -85,9 +85,9 @@ def list_documents(corpus_dir: Path) -> list[Path]:
         if entry.is_file() and not entry.name.startswith(IGNORED_NAME_PREFIXES)
     ]
     # A name with no extension and a dot in it (`A v. B`) has the rest of the
-    # name as its "suffix", so only a suffix that looks like an extension is printed.
+    # name as its "suffix", so only a known extension is printed.
     unsupported = Counter(
-        entry.suffix.lower() if PRINTABLE_SUFFIX.fullmatch(entry.suffix.lower()) else "(other)"
+        entry.suffix.lower() if entry.suffix.lower() in PRINTABLE_SUFFIXES else "(other)"
         for entry in files
         if entry.suffix.lower() not in SUPPORTED_SUFFIXES
     )
