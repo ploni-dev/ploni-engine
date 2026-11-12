@@ -344,7 +344,7 @@ In this order. Nothing in Class A exists until it is built, so build it before t
 4. `build-plan.md`, `PROCESS.md`, `PROMOTION.md` committed.
 5. Fast CI workflow with every Class A check wired up.
 6. Full CI workflow behind the `run-full` label.
-7. Pre-commit hooks.
+7. Pre-commit hooks, and the further checks listed under item 8 of `PROCESS.md` section 12: the lint and type configuration, hashed requirements, the Claude Code hooks, the local pre-push hook, the commit-order check, the Ponytail-commit check and the mutation testing tool.
 8. `.ratchet.json`, `docs/WAIVERS.md` (empty), `docs/STATUS.md`, `docs/findings/` (empty), `docs/adr/` with ADR-0001 onward and `APPROVED_ABSTRACTIONS.md`.
 9. `eval/baselines.json` skeleton, `eval/results/` (empty).
 10. PR template containing every required section, so the structure check has something to match.

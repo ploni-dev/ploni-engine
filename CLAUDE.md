@@ -5,6 +5,7 @@
 - eval/ may use the network. ploni/ must never import from eval/.
 - No document text in logs or temp files. Use ploni/safety/ helpers.
 - Pin every dependency version and every model revision by commit hash.
+- Every requirements file carries a hash per package. Install with --require-hashes.
 - Never use PyMuPDF. It is AGPL.
 - GLiNER v0 and v1 checkpoints are CC-BY-NC and unusable here. Only v2.1 and PII variants.
 - No real client documents in the repo, in any form, including fixtures.
@@ -12,6 +13,8 @@
 ## Branching
 - One feature, one branch, one concern. feat/<phase>-<slug>, fix/, test/, docs/, chore/.
 - A branch that grows a second concern is split, not extended.
+- At most three open branches. A branch merges or is split within two days.
+- Cut every branch from main. One cut from another open branch says why in its PR body.
 - Create the branch explicitly with git before any work. Do not rely on an auto-generated
   name: the account-level branch prefix setting is "claude" and cannot be cleared, so an
   auto-named branch lands as claude/... and loses the phase the convention carries.
@@ -21,6 +24,11 @@
   "and", it is two functions.
 - A function does not both decide and act.
 - Body over 40 lines or complexity over 8 needs a justification in the PR body or a split.
+- Over 50 statements or complexity over 10 is split. No justification lifts that.
+
+## Static checks
+- ruff and mypy pass with no warnings before every PR. PROCESS.md section 4.5.
+- A `noqa` or `type: ignore` carries its reason on the same line.
 
 ## Docstrings
 - Every module, class and public function has one.
@@ -32,7 +40,10 @@
 - Where a value comes from the plan, cite it: # build-plan.md Phase 3: stride 128
 
 ## Tests
-- Write the failing test first. Show it failing.
+- Write the failing test first, in a commit of its own before the implementation. Its
+  message carries the failing output.
+- Before a PR that changes code under ploni/, run mutation testing on the changed
+  modules. Paste the surviving mutants into the PR body.
 - Every public function and every private function with real logic gets its own test.
 - Every module gets a suite in tests/t4_integration/ over its public surface.
 - Enumerate equivalence classes, boundaries, Hebrew axes and adversarial cases in the
@@ -45,6 +56,8 @@
 - Ponytail is used here as a skill. Invoke it at the start of any session that writes
   code, before writing any, so its rules are in context while the code is written.
 - Invoke it again on the diff before every PR. Paste the output into the PR body.
+- That review is run by a session or subagent that did not write the code, and its
+  output names the commit it reviewed.
 - Ponytail runs before merge. No branch merges until the Ponytail review has run on
   its final diff. A commit that changes what the branch itself adds or removes makes
   that review stale: run it again and replace the output in the PR body before the
@@ -76,6 +89,11 @@
 ## Commits
 - Conventional commits, module-scoped. Measurements go in the commit body.
 - Attribution lines per the session reminder.
+
+## Status
+- docs/STATUS.md has three sections: Done, In flight, Waiting on Achia. Every PR
+  updates its own line there.
+- End a working session by printing those three sections.
 
 ## Exceptions (PROMOTION.md section 8)
 - You have no authority to waive any rule, test, threshold or gate. No flag, comment or
