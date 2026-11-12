@@ -13,6 +13,7 @@ from __future__ import annotations
 
 import csv
 import re
+from collections import Counter
 from pathlib import Path
 from typing import NamedTuple
 
@@ -34,6 +35,10 @@ FORMS_PER_CATEGORY = {
 }
 # build-plan.md section 11, E3: "breaking on construct state and possessive suffixes".
 PREDICTED_BREAKING = ("construct", "possessive_like")
+# build-plan.md Phase 3: the proclitic letters. A gold prefix holds nothing else.
+PREFIX_LETTERS = frozenset("והבלמכש")
+# PREREGISTRATION.md: the one category whose forms carry no prefix.
+NO_PREFIX_CATEGORY = "bare"
 
 WORD = re.compile(r"\w+")
 
@@ -78,6 +83,10 @@ def _checked(row: list[str], seen: set[str]) -> Form:
         raise FormsError("the target must be exactly one token of the sentence")
     if not form.target.startswith(form.prefix) or form.target == form.prefix:
         raise FormsError("the target must be the prefix followed by a base")
+    if not set(form.prefix) <= PREFIX_LETTERS:
+        raise FormsError("the prefix holds a letter that is not a prefix letter")
+    if (form.category == NO_PREFIX_CATEGORY) != (form.prefix == ""):
+        raise FormsError(f"only a {NO_PREFIX_CATEGORY!r} form has no prefix, and it must have none")
     if not form.surrogate:
         raise FormsError("empty surrogate")
     return form
@@ -145,8 +154,63 @@ def is_correct(form: Form, seg: tuple[str, ...], suffix: str | bool) -> bool:
     and the model reports no suffix on the token. A reported suffix fails
     because every target is a name, and a name split into base and suffix
     would have only part of itself replaced.
+
+    Known limits: the surrogate is on both sides of the comparison, so the
+    rule comes to "the model's prefix letters equal the gold prefix letters,
+    and no suffix". Nothing about the surrogate itself is measured: not its
+    gender, and not how it is spelled after a prefix.
     """
     return replace_base(seg, form.surrogate) == form.prefix + form.surrogate and not suffix
+
+
+def check_category_sizes(forms: list[Form]) -> None:
+    """Refuse a set of forms whose categories are not the pre-registered sizes.
+
+    Why: the report prints each category out of its pre-registered size, so a
+    row deleted or moved to another category would lower a score without a
+    model error behind it.
+
+    Contract: raises FormsError naming the first category whose number of
+    forms differs from FORMS_PER_CATEGORY.
+    """
+    for category, size in FORMS_PER_CATEGORY.items():
+        found = sum(form.category == category for form in forms)
+        if found != size:
+            raise FormsError(f"category {category!r} holds {found} forms, pre-registered {size}")
+
+
+def tally(
+    forms: list[Form], token_lists: list[list[dict]]
+) -> tuple[Counter[str], Counter[str], list[tuple[Form, tuple[str, ...], str | bool, str]]]:
+    """Score every form against the model's tokens for its sentence.
+
+    Why: the headline count is made here, apart from the model call, so it can
+    be tested without a model.
+
+    Contract: `token_lists[i]` is the model's token list for `forms[i]`.
+    Returns `(strict, prefix_only, failures)`: the forms right under the
+    headline rule and under the prefix-only rule, counted per category, and
+    for every form that fails the headline rule `(form, seg, suffix,
+    produced)`. Every form is in `strict` or in `failures`. Raises ValueError
+    if the two lists differ in length, and LookupError naming the form id if
+    its target is not exactly one of the model's tokens.
+    """
+    strict: Counter[str] = Counter()
+    prefix_only: Counter[str] = Counter()
+    failures = []
+    for form, tokens in zip(forms, token_lists, strict=True):
+        try:
+            seg, suffix = model_segments(tokens, form.target)
+        except LookupError as error:
+            raise LookupError(f"{form.id}: {error}") from None
+        produced = replace_base(seg, form.surrogate)
+        if produced == form.prefix + form.surrogate:
+            prefix_only[form.category] += 1
+        if is_correct(form, seg, suffix):
+            strict[form.category] += 1
+        else:
+            failures.append((form, seg, suffix, produced))
+    return strict, prefix_only, failures
 
 
 def verdict(correct: int, total: int) -> str:
