@@ -27,6 +27,11 @@ timed(label_page)
 file_sha256(path)
   EC1  the SHA-256 of the file's bytes
   E1   a missing file -> FileNotFoundError
+
+describe_power(ac_line_status, battery_percent)  (Windows GetSystemPowerStatus values)
+  EC1  on mains (1) and on battery (0), with the charge
+  B1   charge 0 and charge 100
+  E1   source unknown (255); charge unknown (255) -> said in words, never a guess
 """
 
 import hashlib
@@ -127,3 +132,18 @@ def test_ec1_file_sha256(tmp_path):
 def test_e1_file_sha256_of_a_missing_file(tmp_path):
     with pytest.raises(FileNotFoundError):
         latency.file_sha256(tmp_path / "absent.onnx")
+
+
+@pytest.mark.parametrize(
+    ("ac_line", "percent", "expected"),
+    [
+        (1, 80, "on mains, battery 80 percent"),
+        (0, 38, "on battery, battery 38 percent"),
+        (0, 0, "on battery, battery 0 percent"),
+        (1, 100, "on mains, battery 100 percent"),
+        (255, 50, "power source unknown, battery 50 percent"),
+        (1, 255, "on mains, battery charge unknown"),
+    ],
+)
+def test_describe_power(ac_line, percent, expected):
+    assert latency.describe_power(ac_line, percent) == expected
