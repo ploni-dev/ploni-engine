@@ -139,3 +139,12 @@ None. This is not a waiver request.
 
 ## Decision
 
+Written by Claude on 2026-11-12, not by Achia. Achia handed it over in the working session of that day: "Think what's best and go, bring it to me only for the real big one." Achia can overturn any line of it by editing this section.
+
+1. **Option 2.** Phase 3 uses the model's segmentation as it is. No hand-written rule layer is added above the model: the count is above the plan's threshold of 85 under every reading of the article forms (93, 94 and 96).
+2. **The failures become tests.** Phase 3's prefix tests carry the six failing forms as named cases that are expected to fail. They also carry the forms the plan names and the 100 did not hold: `שברק`, one form with `וה` and one with `ושה`. Whatever those three do is then seen on every change.
+3. **The cross-check is Phase 6 work and is untested.** When Phase 6 has entity resolution, it adds the check of the base against the entity's other mentions. The expected-to-fail cases say whether it works; nothing in this note shows that it does.
+4. **The ה on a surname.** For scoring, a prefix written `לה` is read as ל on a name that begins with ה, because Hebrew spelling allows nothing else; so `להלוי` and `ולהכהן` count as right in the Phase 3 tests. The three forms where both readings are possible (`הכהן`, `מהכהן`, `שהלוי`) keep the pre-registered reading. The product replaces what the model marks as the base in both cases. If Achia or Tomer want the ה always kept with the surname, that is a change to the replacement step, and it does not depend on this experiment.
+5. **No amended E3 run.** It would add three forms and move two. The decision in line 1 is the same under every count it could give, and line 2 puts those forms where they are run for good.
+
+Why this was not taken back to Achia: no reading crosses the threshold, nothing here changes the architecture or the plan's phases, and every line can be undone by an edit.
