@@ -5,7 +5,6 @@
 - eval/ may use the network. ploni/ must never import from eval/.
 - No document text in logs or temp files. Use ploni/safety/ helpers.
 - Pin every dependency version and every model revision by commit hash.
-- Every requirements file carries a hash per package. Install with --require-hashes.
 - Never use PyMuPDF. It is AGPL.
 - GLiNER v0 and v1 checkpoints are CC-BY-NC and unusable here. Only v2.1 and PII variants.
 - No real client documents in the repo, in any form, including fixtures.
@@ -13,8 +12,10 @@
 ## Branching
 - One feature, one branch, one concern. feat/<phase>-<slug>, fix/, test/, docs/, chore/.
 - A branch that grows a second concern is split, not extended.
-- At most three open branches. A branch merges or is split within two days.
-- Cut every branch from main. One cut from another open branch says why in its PR body.
+- At most three open branches: pushed, not merged, not closed. At three, cut no new
+  branch until one merges. A waiver request does not count.
+- Cut every work branch (feat, fix, test, docs, chore) from main. One cut from another
+  open branch says why in its PR body.
 - Create the branch explicitly with git before any work. Do not rely on an auto-generated
   name: the account-level branch prefix setting is "claude" and cannot be cleared, so an
   auto-named branch lands as claude/... and loses the phase the convention carries.
@@ -25,10 +26,7 @@
 - A function does not both decide and act.
 - Body over 40 lines or complexity over 8 needs a justification in the PR body or a split.
 - Over 50 statements or complexity over 10 is split. No justification lifts that.
-
-## Static checks
-- ruff and mypy pass with no warnings before every PR. PROCESS.md section 4.5.
-- A `noqa` or `type: ignore` carries its reason on the same line.
+  Vendored third-party code is exempt.
 
 ## Docstrings
 - Every module, class and public function has one.
@@ -91,9 +89,9 @@
 - Attribution lines per the session reminder.
 
 ## Status
-- docs/STATUS.md has three sections: Done, In flight, Waiting on Achia. Every PR
-  updates its own line there.
-- End a working session by printing those three sections.
+- docs/STATUS.md opens with three sections: Done, In flight, Waiting on Achia. Bring it
+  up to date in a docs PR of its own at the end of a working day that merged anything.
+- End a working session by printing those three sections as they now stand.
 
 ## Exceptions (PROMOTION.md section 8)
 - You have no authority to waive any rule, test, threshold or gate. No flag, comment or

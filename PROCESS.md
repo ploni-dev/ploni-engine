@@ -98,7 +98,7 @@ All source, tests, fixtures, the eval harness, `build-plan.md`, `PROCESS.md`, `C
 
 One branch does one thing. A branch that grows a second concern is split before review, not after. Deleted on merge. Never reused.
 
-At most three branches are open at once, and a branch merges or is split within two days of its first commit. Every branch is cut from `main`. A branch cut from another open branch has to say why in its PR body, because a stack turns one merge into several: when the branch below is squash-merged, every branch above it must take `main` in before it can merge. The first week of this project ended with seven open branches, five of them in one stack, and two of those had to be merged with `main` by hand before they could go in. These limits apply from Phase 0.
+At most three branches are open at once, where open means pushed, not merged and not closed. At three, no new branch is cut until one merges; a waiver request does not count toward the three. Every work branch (`feat`, `fix`, `test`, `docs`, `chore`) is cut from `main`; release and hotfix branches follow `PROMOTION.md` section 2. A work branch cut from another open branch has to say why in its PR body, because a stack turns one merge into several: when the branch below is squash-merged, every branch above it must take `main` in before it can merge. On 2026-11-12 seven branches were open at once, six of them in one stack, and two of those had to be merged with `main` by hand before they could go in.
 
 ### 2.5 Commits
 
@@ -110,7 +110,7 @@ Conventional commits, module-scoped: `feat(detect): israeli ID checksum detector
 
 This distinction matters and is easy to get wrong.
 
-**A machine holds every rule a machine can check.** A hook, the linter or CI refuses the change, and nobody has to remember the rule. A written rule is advice that a session can miss; a check is not. So a rule goes into `CLAUDE.md` only when no hook, lint rule or test can enforce it, and once a check covers a rule, its line in `CLAUDE.md` shrinks to a pointer at the check. Until Phase 0 builds the checks (section 12), every rule below is enforced by review alone, and section 11 of `PROMOTION.md` says what that is worth.
+**A machine holds every rule a machine can check.** A hook, the linter or CI refuses the change, and nobody has to remember the rule. A written rule is advice that a session can miss; a check is not. So a rule stays in `CLAUDE.md` only while no check enforces it yet: once a hook, lint rule or test covers a rule, its line in `CLAUDE.md` shrinks to a pointer at the check. Until Phase 0 builds the checks (section 12), every rule below is enforced by review alone, and section 11 of `PROMOTION.md` says what that is worth.
 
 **`CLAUDE.md` holds what is always true.** It is read every turn of every session, so it holds the rules that apply to all work and are cheap to check: no network imports, docstring contract, single responsibility, test obligation, layering, commit format. Rules that apply every turn do not belong behind an invocation.
 
@@ -131,9 +131,7 @@ A function has a single reason to change. Practical tests, applied in review:
 - It does not both decide and act. Detection decides; policy decides; the writer acts. A function that detects an entity and also replaces it violates the architecture, not just style.
 - It has one level of abstraction. Mixing byte offsets and business rules in one body is a split.
 
-Two limits. The soft one is enforced in review: a function body over 40 lines or with cyclomatic complexity over 8 needs a justification in the PR body or a split. The hard one is enforced by the linter from Phase 0 and by review until then: a function over 50 statements or with complexity over 10 is split, and no justification lifts that. The linter counts statements, not lines (ruff `PLR0915` and `C901`).
-
-The numbers are a judgment. The evidence for any exact limit is weak; what it does support is that size itself predicts trouble better than any other measure, and that a complexity of 10 is the limit with the longest record.
+Two limits. The soft one is enforced in review: a function body over 40 lines or with cyclomatic complexity over 8 needs a justification in the PR body or a split. The hard one is enforced by the linter from Phase 0 and by review until then: a function over 50 statements or with complexity over 10 is split, and no justification lifts that. The linter counts statements, not lines (ruff `PLR0915` and `C901`). Vendored third-party code is exempt: it is pinned byte for byte and cannot be split. The numbers are a judgment, not a measurement.
 
 ### 4.2 The docstring contract
 
@@ -154,20 +152,15 @@ def split_proclitic(token: str, segmentation: list[str]) -> tuple[str, str]:
     begin with those same letters (ברק, משה, שרה), so we consume the
     model's morphological segmentation instead of guessing.
 
-    Args:
-        token: the surface form as it appears in the document.
-        segmentation: morpheme list for this token from dictabert-joint,
-            in document order.
+    Contract: `token` is the surface form as it appears in the document;
+    `segmentation` is the morpheme list for this token from
+    dictabert-joint, in document order. Returns (prefix, base), where
+    prefix is "" when the token carries none. Raises
+    SegmentationMismatch if the morphemes do not reassemble into token.
 
-    Returns:
-        (prefix, base). prefix is "" when the token carries none.
-
-    Raises:
-        SegmentationMismatch: if the morphemes do not reassemble into token.
-
-    Limits:
-        Does not handle construct state or possessive suffixes; those are
-        handled one layer up in resolve_surface_form. See ADR-0007.
+    Known limits: does not handle construct state or possessive
+    suffixes; those are handled one layer up in resolve_surface_form.
+    See ADR-0007.
     """
 ```
 
@@ -190,7 +183,7 @@ Rules:
 
 **The test is written first and shown failing.** The failing tests are a commit of their own, before the commit that implements, and that commit's message carries the failing output. A commit that holds both a test and the code it tests cannot show which came first, so it counts as tests written after. That is visible in the commit order and is a blocking review comment.
 
-**A passing test can still check nothing.** Before a PR that changes code under `ploni/`, mutation testing is run on the changed modules: a tool makes small deliberate errors in the code, and a test suite that still passes has not noticed them. The surviving mutants are pasted into the PR body, each one either answered with a test or named as equivalent. This does not block a merge, because a full run is slow; at phase close it is run over the whole of `ploni/`. Phase 0 picks the tool and pins it.
+**A passing test can still check nothing.** Before a PR that changes code under `ploni/`, mutation testing is run on the changed modules: a tool makes small deliberate errors in the code, and a test suite that still passes has not noticed them. Running it and pasting the surviving mutants into the PR body is required. Answering each survivor, with a test or by naming it equivalent, is expected and does not block a merge: some survivors are equivalent, and a full run is slow. At phase close it is run over the whole of `ploni/` (section 7.4). Phase 0 picks a tool that runs on the development machine, which is Windows, and pins it.
 
 Coverage is a diagnostic, not a target. The questions in review are "is every documented error path tested" and "are the edge cases from the equivalence classes present", not "what is the percentage".
 
@@ -208,16 +201,17 @@ Coverage is a diagnostic, not a target. The questions in review are "is every do
 
 When Ponytail flags one of these, the answer is the ADR number, and the abstraction stays. When it flags anything **not** in this register, the default is to delete the abstraction. Adding a row to this file is a CODEOWNERS-protected change, so growing the register is deliberate.
 
----
-
 ### 4.5 Static checks
 
 `pyproject.toml` holds one ruff configuration and one mypy configuration, written in Phase 0. A PR passes both with no warnings.
 
-- **ruff, on `ploni/`, `eval/`, `scripts/`, `tests/` and `experiments/`:** likely bugs, errors caught and dropped, unsafe calls, the two function ceilings of section 4.1, unused and commented-out code, and `print` under `ploni/`.
+- **ruff, on `ploni/`, `eval/`, `scripts/`, `tests/` and `experiments/`:** likely bugs, errors caught and dropped, unsafe calls, the hard limit of section 4.1, unused and commented-out code, and `print` under `ploni/`.
 - **ruff's banned imports:** PyMuPDF anywhere, and networking modules under `ploni/`. Two hard constraints of `CLAUDE.md` become a lint error.
 - **mypy, strict, on `ploni/` only.** Not on `experiments/`, which is not product code.
-- **Suppressions:** a `noqa` or a `type: ignore` carries its reason on the same line, and the number of them is in `.ratchet.json`, so it cannot rise without a visible change.
+- **Vendored third-party code is outside both tools:** `experiments/*/vendored/` today, and the model's code wherever Phase 3 puts it. It is pinned byte for byte, so it cannot be changed to satisfy a linter.
+- **Suppressions:** a `noqa` or a `type: ignore` carries its reason on the same line. Phase 0 adds a ceiling counter for them to `.ratchet.json`: a number that may not rise, where the ratchet's existing counters may not fall.
+
+None of this exists yet. There is no `pyproject.toml`, and neither tool is installed or pinned.
 
 ---
 
@@ -344,7 +338,7 @@ Ponytail is used here **as a skill**, not as a marketplace plugin, so it is invo
 Required on every branch before merge:
 
 1. **Invoke the ponytail skill at the start of the session, before writing code.** Its rules have to be in context while the code is being written. Retrofitting minimalism after the fact produces a rewrite instead of a review.
-2. **Invoke it again on the final diff** as a review pass, and paste its output into the PR body. The pass is run by a session or subagent that did not write the code: in the first week, fresh reviewers found more than fifty things in five branches that the writing session had either reviewed already or thought finished. The output names the commit it reviewed. A later commit that changes what the branch itself adds or removes makes the review stale; taking `main` into the branch, with no other change, does not. The reviewer also answers one fixed question: does every docstring the change touches still describe its code.
+2. **Invoke it again on the final diff** as a review pass, and paste its output into the PR body. The pass is run by a session or subagent that did not write the code: on 2026-11-12 fresh reviewers found more than fifty things in five branches that the writing session had either reviewed already or thought finished. The output names the commit it reviewed. A later commit that changes what the branch itself adds or removes makes the review stale; taking `main` into the branch, with no other change, does not. The reviewer also answers one fixed question: does every docstring the change touches still describe its code.
 3. Every finding either **accepted** (code changed) or **rejected with an ADR number** from the approved abstractions register. A rejection with no ADR is not a rejection; either delete the abstraction or open an ADR and argue for it.
 4. At every phase close, run it over the whole module or repo rather than a single diff, and triage the findings into fix-now or carried debt.
 5. Carried debt is recorded in `docs/DEBT.md` with a named reason and an issue number. Reviewed at every phase close. If the skill tracks debt itself, use that instead and keep the file as a pointer to it.
@@ -393,7 +387,7 @@ A property test is how you get a large sample honestly. Write the invariant, let
 
 ### 7.4 Phase close, which is a higher bar than merge
 
-Additionally: full suite green, metric gates at or above baseline with the results file committed, a Ponytail pass over the whole module or repo rather than a single diff with findings triaged, carried debt reviewed, exit demo shown, `docs/STATUS.md` row appended, and any new ADRs merged.
+Additionally: full suite green, metric gates at or above baseline with the results file committed, a Ponytail pass over the whole module or repo rather than a single diff with findings triaged, mutation testing over the whole of `ploni/` with the survivors triaged, carried debt reviewed, exit demo shown, `docs/STATUS.md` row appended, and any new ADRs merged.
 
 ---
 
@@ -412,7 +406,7 @@ One session, one issue, one branch, one PR. A session that finds it needs to cha
 5. **Write the failing tests.** Run them. Keep the failing output.
 6. **Implement.** Smallest change that passes. Docstring with Why on everything public.
 7. **Measure.** Run the gate. Capture real output.
-8. **Ponytail review.** Invoke the skill again on the diff. Accept or justify every finding.
+8. **Ponytail review.** A session or subagent that did not write the code invokes the skill on the final diff. Accept or justify every finding.
 9. **PR.** Body template, all evidence pasted.
 
 ### 8.3 Never
@@ -440,7 +434,7 @@ Everything always true lives in `CLAUDE.md`, not in a skill.
 
 ## 9. CLAUDE.md
 
-`CLAUDE.md` at the repository root is the file itself. This section used to print a copy of it, and the copy fell behind the file within a week, so it is gone. Change the file, not a copy of it.
+`CLAUDE.md` at the repository root is the file itself. This section used to print a copy of it, and the copy was behind the file from the first commit, so it is gone. Change the file, not a copy of it.
 
 ---
 
@@ -469,9 +463,9 @@ Findings notes are the project's memory. Six months later, "why is this threshol
 
 ## 11. Cadence and status
 
-**Per PR:** `docs/STATUS.md` opens with three sections: Done, In flight, Waiting on Achia. Every PR updates its own line there. A status that lives only in PR bodies is nowhere when nothing has been pushed, which is how the first week went.
+**Per working day:** `docs/STATUS.md` opens with three sections: Done, In flight, Waiting on Achia. At the end of a working day that merged anything, it is brought up to date in a docs PR of its own. It is not edited by every PR: two open PRs that change the same lines conflict, and a line saying "in flight" would be wrong on `main` the moment its PR merged. A status that lives only in PR bodies is nowhere when nothing has been pushed, which is how 2026-11-12 began.
 
-**Per session:** the PR body is the status report, and the session ends by printing the three sections of `docs/STATUS.md`.
+**Per session:** the PR body is the status report, and the session ends by printing the three sections of `docs/STATUS.md` as they now stand.
 
 **Per phase close:** one row appended to `docs/STATUS.md`: phase, gate, measured number, date, exit demo shown. That file is the whole project status in one screen.
 
@@ -486,20 +480,22 @@ Gates passed is the only velocity metric that means anything here.
 `build-plan.md` Phase 0 builds the code skeleton. It also builds the process scaffolding, in this order:
 
 1. Private repo, branch protection, CODEOWNERS.
-2. `CLAUDE.md` per section 9.
+2. `CLAUDE.md` at the repository root.
 3. `build-plan.md` and `PROCESS.md` committed.
 4. Ponytail available as a skill; its invocation name and, if it has them, its mode commands recorded in `CLAUDE.md`.
 5. The five skills saved.
 6. ADR-0001 onward backfilling decisions already made, plus `docs/adr/APPROVED_ABSTRACTIONS.md`.
 7. Milestones for all 14 phases. Issues for Phase 0 and Phase 1 only.
 8. Fast and full CI workflows, pre-commit, the layering test, the docstring check, the PR-body Ponytail-section check. With them, the checks the rules of 2026-11-12 need:
-   - `pyproject.toml` with the ruff and mypy configuration of section 4.5.
+   - `pyproject.toml` with the ruff and mypy configuration of section 4.5, and the ceiling counter for suppressions in `.ratchet.json`.
    - Hashes in every requirements file, the ones under `experiments/` included, and installs with `--require-hashes`.
-   - Claude Code hooks committed in `.claude/settings.json`: refuse `--no-verify`, refuse a push to `main`, refuse an edit to a protected path, and run the fast suite before a session can end its turn. A small set, because a hook that fires wrongly stops work.
+   - Claude Code hooks committed in `.claude/settings.json`: refuse `--no-verify`, refuse a push to `main`, and refuse an edit to `docs/WAIVERS.md`, `eval/baselines.json` or `.ratchet.json`. A small set, because a hook that fires wrongly stops work. No hook runs the test suite when a session ends its turn: test-first needs a commit whose tests fail, and section 10 needs a session to be able to stop and report.
    - A local `pre-push` git hook that runs the fast suite: the free stand-in for required status checks, which GitHub Free does not enforce on a private repository (`PROMOTION.md` section 11).
-   - A commit-order check: in a PR that touches `ploni/`, the test commit comes before the implementation commit.
-   - A check that the commit named in the PR's Ponytail section is the PR's last commit, or that the commits after it only take `main` in.
-   - A mutation testing tool, chosen and pinned.
+   - The commit-order check of `PROMOTION.md` section 5.2. Its row there states what it covers.
+   - A check that the commit named in the PR's Ponytail section is the PR's last commit, or that every commit after it is a merge of `main` that leaves the branch's own diff unchanged.
+   - A mutation testing tool that runs on Windows, chosen and pinned.
+   - `pyproject.toml` and `.claude/settings.json` added to `CODEOWNERS` and to the Level 3 list of `PROMOTION.md`, so a code PR cannot loosen a limit with one line of configuration.
+   - The `CLAUDE.md` lines these checks cover shrunk to pointers, and the two rules that waited for a tool added there: hashed requirements, and no warnings from ruff and mypy.
 9. `eval/baselines.json` skeleton, `docs/STATUS.md`, `docs/REFERENCE_MACHINE.md`, `tests/fixtures/MANIFEST.md`.
 10. Then the code skeleton from `build-plan.md` Phase 0.
 

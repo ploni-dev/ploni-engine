@@ -32,7 +32,7 @@ Then **invoke the ponytail skill**, before writing any code, so its rules are in
 
 ## 3. Write the failing test first
 
-For every gate condition, the test exists and fails before the implementation lands. Run it and keep the failing output: it goes in the PR body as evidence that the test actually tests something.
+For every gate condition, the test exists and fails before the implementation lands. Commit the failing test on its own, before the implementation, with the failing output in the commit message (`CLAUDE.md`, Tests). Paste the same output in the PR body as evidence that the test actually tests something.
 
 Put tests in the right tier directory:
 

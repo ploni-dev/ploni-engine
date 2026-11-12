@@ -14,7 +14,7 @@ description: Run the merge-to-main gate for a branch: the Ponytail skill pass wi
 Ponytail is installed here **as a skill**, invoked by name. If the installed copy also exposes mode or review commands, use them; the obligations are the same either way.
 
 1. **It should already have been invoked at the start of this session, before any code was written**, at the middle intensity level if the skill offers levels. Its rules have to be in context while code is written. Retrofitting minimalism afterwards produces a rewrite, not a review. If it was not invoked at the start, say so plainly in the PR body rather than pretending otherwise.
-2. **Invoke it again now on the final diff** as a review pass.
+2. **A session or subagent that did not write the code invokes it on the final diff** as a review pass (`CLAUDE.md`, Ponytail). Its output names the commit it reviewed.
 3. Paste its output into the PR body under `## Ponytail review`.
 4. Resolve **every** finding as one of:
    - **Accepted**: change the code.
