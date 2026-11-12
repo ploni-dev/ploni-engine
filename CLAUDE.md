@@ -46,8 +46,9 @@
   code, before writing any, so its rules are in context while the code is written.
 - Invoke it again on the diff before every PR. Paste the output into the PR body.
 - Ponytail runs before merge. No branch merges until the Ponytail review has run on
-  its final diff. A commit added after the review makes that review stale: run it
-  again and replace the output in the PR body before the merge.
+  its final diff. A commit that changes what the branch itself adds or removes makes
+  that review stale: run it again and replace the output in the PR body before the
+  merge. Taking main into the branch, with no other change, does not.
 - Every finding accepted, or rejected with an ADR number from
   docs/adr/APPROVED_ABSTRACTIONS.md.
 - Ponytail never removes error handling, validation, safety/, a test, a fixture, or a
