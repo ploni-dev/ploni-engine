@@ -161,6 +161,15 @@ Achia. "No case captioned `פלוני` or `אלמוני`" in the corpus section 
 changes it; if such a document is run, the findings note gives its `placeholders` count and
 says which party is unnamed.
 
+Also on 2026-11-12, before any real document was run, a second Ponytail review of the whole
+harness (pasted in PR #11) led to these changes. A paragraph is no longer cut after two
+initials written with full stops (`י.ח. לוי`), which the cut rule had read as a sentence end.
+The tally is refused if a document appears twice in it or its columns were changed. The
+report prints whether private-party recall alone is below 80 percent, the comparison the
+public and private section above already asks for. `run_meta.json` records the SHA-256 of
+the model files. The prediction, the threshold, the counting rules and the decision rule
+are unchanged.
+
 The Ponytail review of the harness found three ways the number could be wrong for a reason
 that is not the model. The two input-handling bullets above about characters and counts were
 added in answer. The prediction, the threshold, the counting rules and the decision rule are
