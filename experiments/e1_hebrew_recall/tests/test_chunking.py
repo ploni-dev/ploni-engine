@@ -128,6 +128,12 @@ def test_h3_sentence_end_before_closing_quote():
 
 def test_a1_initial_is_never_the_cut_point():
     assert not is_sentence_final("א.")
+    # Two initials before a surname: a cut here would split the name (review finding).
+    assert not is_sentence_final("י.ח.")
+    assert not is_sentence_final("א.ב.")
+    # A dotted date or number at the end of a sentence is still a sentence end.
+    assert is_sentence_final("1.1.2020.")
+    assert is_sentence_final("12.5%.")
     text = "הופיע עו\"ד א. כהן בשם המבקש"
     windows = split_into_windows(text, one_per_word, 3)
     assert window_texts(text, windows)[0] == 'הופיע עו"ד א.'

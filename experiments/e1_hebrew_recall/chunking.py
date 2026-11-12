@@ -55,7 +55,9 @@ def is_sentence_final(word: str) -> bool:
     Contract: `word` has no whitespace. True only when it ends in `.`, `?` or
     `!` (closing quotes or brackets after the mark are ignored), has at least
     MIN_SENTENCE_FINAL_WORD_LENGTH characters before the mark, and those
-    characters are not all digits.
+    characters are not all digits and are not single letters joined by full
+    stops: two initials before a surname (`י.ח. לוי`) are not a sentence end,
+    and a dotted date (`1.1.2020.`) still is.
 
     Known limits: a two-letter abbreviation written with a full stop is read as
     a sentence end. Hebrew abbreviations normally use gershayim, not a stop.
@@ -64,7 +66,8 @@ def is_sentence_final(word: str) -> bool:
     if not core or core[-1] not in SENTENCE_FINAL_MARKS:
         return False
     body = core.rstrip(SENTENCE_FINAL_MARKS)
-    return len(body) >= MIN_SENTENCE_FINAL_WORD_LENGTH and not body.isdigit()
+    initials = all(len(part) == 1 for part in body.split("."))
+    return len(body) >= MIN_SENTENCE_FINAL_WORD_LENGTH and not body.isdigit() and not initials
 
 
 def _words_that_fit(costs: list[int], first: int, budget: int) -> int:

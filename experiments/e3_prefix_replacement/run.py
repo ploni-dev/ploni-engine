@@ -4,8 +4,10 @@ Why: build-plan.md section 11, E3. The prediction, the threshold and the
 scoring rule are in PREREGISTRATION.md and scoring.py, committed before this
 script was first run.
 
-Contract: `python -I run.py --model-dir M`, offline. Prints the per-category
-counts, the verdict and every failing form. Prints Hebrew text, which is
+Contract: `python -I run.py --model-dir M`, offline, in the environment of
+`experiments/e1_hebrew_recall/requirements.txt`. Prints the weights hash, the
+commit, the library versions, the per-category counts, the verdict and every
+failing form. Prints Hebrew text, which is
 allowed here because every sentence in forms.tsv was invented for this
 experiment. Raises LookupError if the model splits a sentence so that the
 target is not exactly one token: a harness fault, never counted as a miss.
@@ -28,9 +30,13 @@ HERE = Path(__file__).resolve().parent
 sys.path[:0] = [str(HERE), str(HERE.parent / "e1_hebrew_recall")]
 
 import torch
-from run_model import TORCH_THREADS, load_ner_model
+import transformers
+from run_model import TORCH_THREADS, code_revision, load_ner_model, model_file_hashes
 
 import scoring
+
+# docs/THIRD_PARTY.md: model.safetensors at the pinned revision of dicta-il/dictabert-joint.
+PINNED_WEIGHTS_SHA256 = "c59db02c002b69fd3c072c310e3ba578d036386477248d1c8576d896cc06aa1c"
 
 
 def segment_all(model, tokenizer, sentences: list[str]) -> list[list[dict]]:
@@ -45,27 +51,27 @@ def segment_all(model, tokenizer, sentences: list[str]) -> list[list[dict]]:
 
 
 def main(model_dir: Path) -> None:
-    """Score every form and print the report."""
+    """Score every form and print the report.
+
+    Contract: exits before the model is loaded if `model.safetensors` in
+    `model_dir` is not the pinned file, so a count is never printed for other
+    weights under the pinned folder name.
+    """
     torch.set_num_threads(TORCH_THREADS)
     forms = scoring.load_forms(HERE / "forms.tsv")
+    scoring.check_category_sizes(forms)
+    code = code_revision()
+    weights = model_file_hashes(model_dir)["model.safetensors"]
+    if weights != PINNED_WEIGHTS_SHA256:
+        sys.exit("model.safetensors is not the pinned file (docs/THIRD_PARTY.md); nothing was run")
     model, tokenizer = load_ner_model(model_dir)
     token_lists = segment_all(model, tokenizer, [form.sentence for form in forms])
-
-    strict, prefix_only, failures = Counter(), Counter(), []
-    for form, tokens in zip(forms, token_lists):
-        try:
-            seg, suffix = scoring.model_segments(tokens, form.target)
-        except LookupError as error:
-            raise LookupError(f"{form.id}: {error}") from None
-        produced = scoring.replace_base(seg, form.surrogate)
-        prefix_only[form.category] += produced == form.prefix + form.surrogate
-        if scoring.is_correct(form, seg, suffix):
-            strict[form.category] += 1
-        else:
-            failures.append((form, seg, suffix, produced))
+    strict, prefix_only, failures = scoring.tally(forms, token_lists)
 
     print(f"E3 prefix-preserving replacement, model revision {model_dir.name}")
-    print(f"torch {torch.__version__}, threads {TORCH_THREADS}")
+    print(f"model.safetensors sha256 {weights}")
+    print(f"code {code['commit']}{', uncommitted changes' if code['dirty'] else ''}")
+    print(f"torch {torch.__version__}, transformers {transformers.__version__}, threads {TORCH_THREADS}")
     print(f"{'category':<16} {'strict':>7} {'prefix only':>12}")
     for category, size in scoring.FORMS_PER_CATEGORY.items():
         print(f"{category:<16} {strict[category]:>4}/{size:<2} {prefix_only[category]:>9}/{size:<2}")
