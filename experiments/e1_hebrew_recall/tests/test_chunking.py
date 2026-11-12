@@ -131,6 +131,9 @@ def test_a1_initial_is_never_the_cut_point():
     # Two initials before a surname: a cut here would split the name (review finding).
     assert not is_sentence_final("י.ח.")
     assert not is_sentence_final("א.ב.")
+    # Initials of a transliterated name carry a geresh, in either code point.
+    assert not is_sentence_final("ג'.ק.")
+    assert not is_sentence_final("ג׳.ק.")
     # A dotted date or number at the end of a sentence is still a sentence end.
     assert is_sentence_final("1.1.2020.")
     assert is_sentence_final("12.5%.")
