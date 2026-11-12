@@ -138,8 +138,14 @@ def window_entities(model, tokenizer, text: str) -> list[tuple[int, int, str]]:
     Contract: offsets are characters of `text`, end exclusive; `label` has no
     B-/I- prefix. Labels are the model's own argmax grouping with no threshold
     or post-processing. Raises WindowTooLongError if `text` encodes to more
-    than MAX_POSITIONS positions.
+    than MAX_POSITIONS positions, or if the tokenizer is set to truncate
+    below MAX_POSITIONS: the model's `predict` truncates at the tokenizer's
+    own limit, which comes from a file in the model folder.
     """
+    if tokenizer.model_max_length < MAX_POSITIONS:
+        raise WindowTooLongError(
+            f"the tokenizer truncates at {tokenizer.model_max_length} positions, below {MAX_POSITIONS}"
+        )
     positions = len(tokenizer(text)["input_ids"])
     if positions > MAX_POSITIONS:
         raise WindowTooLongError(f"window encodes to {positions} positions, limit {MAX_POSITIONS}")
@@ -185,18 +191,14 @@ def in_git_work_tree(directory: Path) -> bool:
     of the same repository (a git worktree), a folder in the first one would
     pass a check against REPO_ROOT alone and sit one `git add` from a commit.
 
-    Contract: `directory` need not exist; its nearest existing parent is
-    asked. False when git says it is not in a work tree. Raises
-    FileNotFoundError if git is not installed.
+    Contract: `directory` need not exist. True when it or any parent holds a
+    `.git` entry: a folder in a main checkout, a file in a second one. git
+    itself is not asked, because it answers "not a repository" for a checkout
+    it refuses to read (another owner, an environment variable), and that
+    answer would let the folder through.
     """
     resolved = directory.resolve()
-    existing = next(parent for parent in (resolved, *resolved.parents) if parent.is_dir())
-    answer = subprocess.run(
-        ["git", "-C", str(existing), "rev-parse", "--is-inside-work-tree"],
-        capture_output=True,
-        text=True,
-    )
-    return answer.returncode == 0 and answer.stdout.strip() == "true"
+    return any((parent / ".git").exists() for parent in (resolved, *resolved.parents))
 
 
 def model_file_hashes(model_dir: Path) -> dict[str, str]:

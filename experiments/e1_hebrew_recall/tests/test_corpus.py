@@ -265,6 +265,13 @@ def test_a6_text_after_a_dot_in_an_extensionless_name_is_not_printed(tmp_path: P
     assert "1 x .pdf" in str(raised.value) and "1 x (other)" in str(raised.value)
 
 
+def test_a6_latin_name_tail_without_a_space_is_not_printed(tmp_path: Path):
+    (tmp_path / "Katz v.Levi").write_bytes(b"")
+    with pytest.raises(UnsupportedDocumentError) as raised:
+        list_documents(tmp_path)
+    assert "levi" not in str(raised.value).lower()
+
+
 def test_ec11_unread_checked_counts_like_unread_characters(tmp_path: Path):
     path = tmp_path / "a.txt"
     path.write_text("משה כהן", encoding="utf-8")

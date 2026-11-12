@@ -7,8 +7,9 @@ mistaken for a model result. It also verifies the claim in PREREGISTRATION.md
 that running the NER head alone gives the same entities as running every head.
 
 Contract: `python -I smoke.py --model-dir M`. Exits non-zero if an entity's
-offsets fall inside a run of letters of the input, or if the output with the
-syntax head off differs from the output with every head on. Prints the entities, which is allowed here because
+offsets fall inside a run of letters of the input, if the output with the
+syntax head off differs from the output with every head on, or if no person is
+found in the first sentence or one is found in the last. Prints the entities, which is allowed here because
 every sentence below was invented for this file and names no real person.
 
 Known limits: this is not a measurement. Seven invented sentences say nothing
