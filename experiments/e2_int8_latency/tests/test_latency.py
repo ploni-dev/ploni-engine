@@ -14,12 +14,25 @@ read_page(path)
   EC1  the shipped page.txt: 400 to 500 words, the pre-registered size of "one A4 page"
   EC2  blank lines are dropped, one paragraph per line
   E1   a page outside 400 to 500 words -> ValueError
-  Adversarial: no nine-digit number on the shipped page passes the Israeli ID
-  check digit (build-plan.md Phase 7: such a value may be a real identifier)
+  Adversarial: no number of eight or nine digits on the shipped page passes the
+  Israeli ID check digit (build-plan.md Phase 7: such a value may be a real
+  identifier; an older ID is often written with eight digits, the leading zero
+  dropped)
+
+timed(label_page)
+  EC1  the function is called once to warm up and five times on the clock:
+       six calls, five durations, and the labels of the last call returned
+  B1   every duration is positive and none includes the warm-up call
+
+file_sha256(path)
+  EC1  the SHA-256 of the file's bytes
+  E1   a missing file -> FileNotFoundError
 """
 
+import hashlib
 import random
 import re
+import time
 from pathlib import Path
 
 import pytest
@@ -85,4 +98,32 @@ def passes_id_check_digit(digits: str) -> bool:
 def test_adversarial_page_holds_no_checksum_valid_identifier():
     assert passes_id_check_digit("000000018") and not passes_id_check_digit("000000019")
     text = Path(latency.__file__).with_name("page.txt").read_text(encoding="utf-8")
-    assert [n for n in re.findall(r"\d{9}", text) if passes_id_check_digit(n)] == []
+    assert passes_id_check_digit("18".zfill(9))
+    assert [n for n in re.findall(r"\d{8,9}", text) if passes_id_check_digit(n.zfill(9))] == []
+
+
+def test_ec1_timed_warms_up_once_and_times_five_runs():
+    calls = []
+
+    def label_page():
+        calls.append(len(calls))
+        time.sleep(0.2 if len(calls) == 1 else 0.001)  # only the warm-up call is slow
+        return f"labels of call {len(calls)}"
+
+    seconds, labels = latency.timed(label_page)
+    assert (latency.WARM_UP_RUNS, latency.TIMED_RUNS) == (1, 5)  # PREREGISTRATION.md
+    assert len(calls) == 6
+    assert len(seconds) == 5
+    assert labels == "labels of call 6"
+    assert all(0 < duration < 0.1 for duration in seconds)  # B1: the slow warm-up is not among them
+
+
+def test_ec1_file_sha256(tmp_path):
+    path = tmp_path / "graph.onnx"
+    path.write_bytes(b"not a real graph")
+    assert latency.file_sha256(path) == hashlib.sha256(b"not a real graph").hexdigest()
+
+
+def test_e1_file_sha256_of_a_missing_file(tmp_path):
+    with pytest.raises(FileNotFoundError):
+        latency.file_sha256(tmp_path / "absent.onnx")
