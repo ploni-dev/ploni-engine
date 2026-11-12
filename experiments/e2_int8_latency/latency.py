@@ -119,18 +119,30 @@ def read_power_state() -> str:
     mode of Windows 11 (best efficiency, balanced, best performance) can
     differ between the two, so its identifier is printed as Windows gives it.
 
+    Windows can run a mode other than the one the user set: on this laptop, on
+    battery below 30 percent, it ran best power efficiency while the set mode
+    was balanced and the energy saver flag was off. So the mode in effect, the
+    mode set and the flag are all printed.
+
     Contract: Windows only. Returns `describe_power` of the current status,
-    then the effective power mode as a GUID. Raises OSError if either call
+    the energy saver flag (`SystemStatusFlag`, 1 when on), then the power mode
+    in effect and the power mode set, each as a GUID. Raises OSError if a call
     fails.
     """
     status = _PowerStatus()
     if not ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(status)):
         raise OSError("GetSystemPowerStatus failed")
-    mode = (ctypes.c_ubyte * 16)()
-    if ctypes.windll.powrprof.PowerGetEffectiveOverlayScheme(ctypes.byref(mode)) != 0:
-        raise OSError("PowerGetEffectiveOverlayScheme failed")
+    modes = []
+    for call in ("PowerGetEffectiveOverlayScheme", "PowerGetActualOverlayScheme"):
+        mode = (ctypes.c_ubyte * 16)()
+        if getattr(ctypes.windll.powrprof, call)(ctypes.byref(mode)) != 0:
+            raise OSError(f"{call} failed")
+        modes.append(uuid.UUID(bytes_le=bytes(mode)))
     described = describe_power(status.ac_line_status, status.battery_percent)
-    return f"{described}, power mode {uuid.UUID(bytes_le=bytes(mode))}"
+    return (
+        f"{described}, energy saver flag {status.system_status_flag}, "
+        f"power mode in effect {modes[0]}, power mode set {modes[1]}"
+    )
 
 
 def file_sha256(path: Path) -> str:

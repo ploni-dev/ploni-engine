@@ -86,6 +86,7 @@ def main(model_dir: Path, onnx_dir: Path) -> None:
         results[name] = latency.timed(onnx_labeller(onnx_dir / file, tokenizer, paragraphs))
     model, _ = load_ner_model(model_dir)
     results["torch fp32"] = latency.timed(torch_labeller(model, tokenizer, paragraphs))
+    power_after = latency.read_power_state()
     other = model.config.label2id["O"]
     reference = results["torch fp32"][1]
     # PREREGISTRATION.md: if the export is wrong, no time is reported. Every
@@ -105,6 +106,7 @@ def main(model_dir: Path, onnx_dir: Path) -> None:
         print(f"{name} sha256 {digest}")
     print(f"code {code['commit']}{', uncommitted changes' if code['dirty'] else ''}")
     print(f"power before the timed passes: {power}")
+    print(f"power after the timed passes:  {power_after}")
     print(
         f"page: {len(paragraphs)} paragraphs, {words} words, {int(computed.sum())} positions "
         f"of which {int(text.sum())} are text, batch {computed.shape}"

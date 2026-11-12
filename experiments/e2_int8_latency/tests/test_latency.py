@@ -32,11 +32,16 @@ describe_power(ac_line_status, battery_percent)  (Windows GetSystemPowerStatus v
   EC1  on mains (1) and on battery (0), with the charge
   B1   charge 0 and charge 100
   E1   source unknown (255); charge unknown (255) -> said in words, never a guess
+
+read_power_state()  (Windows only)
+  EC1  on this machine it returns the source, the charge, the energy saver
+       flag, the power mode in effect and the power mode set
 """
 
 import hashlib
 import random
 import re
+import sys
 import time
 from pathlib import Path
 
@@ -147,3 +152,14 @@ def test_e1_file_sha256_of_a_missing_file(tmp_path):
 )
 def test_describe_power(ac_line, percent, expected):
     assert latency.describe_power(ac_line, percent) == expected
+
+
+@pytest.mark.skipif(sys.platform != "win32", reason="reads the Windows power status")
+def test_read_power_state_names_the_flag_and_both_power_modes():
+    state = latency.read_power_state()
+    guid = r"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}"
+    assert re.fullmatch(
+        rf"(on mains|on battery|power source unknown), battery (\d+ percent|charge unknown), "
+        rf"energy saver flag [01], power mode in effect {guid}, power mode set {guid}",
+        state,
+    )
