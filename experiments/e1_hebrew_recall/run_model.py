@@ -73,6 +73,8 @@ TORCH_THREADS = 4
 SWITCHED_OFF_HEADS = ("do_syntax",)
 # The weights, the label map and head switches, and the tokenizer.
 HASHED_MODEL_FILES = ("model.safetensors", "config.json", "tokenizer.json")
+# docs/THIRD_PARTY.md: model.safetensors at the pinned revision, as the hub records it.
+PINNED_WEIGHTS_SHA256 = "c59db02c002b69fd3c072c310e3ba578d036386477248d1c8576d896cc06aa1c"
 
 
 class WindowTooLongError(ValueError):
@@ -217,6 +219,22 @@ def model_file_hashes(model_dir: Path) -> dict[str, str]:
     return hashes
 
 
+def pinned_model_hashes(model_dir: Path) -> dict[str, str]:
+    """Hash the model files, refusing weights that are not the pinned file.
+
+    Why: a folder named as the pinned revision can hold other weights, and a
+    number measured on them would be reported under the pinned name. The three
+    experiments call this one check, so the pin is written in one place.
+
+    Contract: returns what `model_file_hashes` returns. Raises ValueError if
+    `model.safetensors` does not have PINNED_WEIGHTS_SHA256.
+    """
+    hashes = model_file_hashes(model_dir)
+    if hashes["model.safetensors"] != PINNED_WEIGHTS_SHA256:
+        raise ValueError("model.safetensors is not the pinned file (docs/THIRD_PARTY.md)")
+    return hashes
+
+
 def check_private_directories(corpus_dir: Path, out_dir: Path) -> None:
     """Refuse directories that would put real document text in the repository.
 
@@ -259,7 +277,7 @@ def run(corpus_dir: Path, out_dir: Path, model_dir: Path) -> None:
     Why: see the module docstring.
 
     Contract: prints one line of counts per document, keyed by document id.
-    Raises as `check_private_directories`, `list_documents`, `read_checked`
+    Raises as `check_private_directories`, `pinned_model_hashes`, `list_documents`, `read_checked`
     and `window_entities` do; nothing is caught, so a failed document stops the
     run instead of shrinking it.
     """
@@ -267,7 +285,7 @@ def run(corpus_dir: Path, out_dir: Path, model_dir: Path) -> None:
     documents = list_documents(corpus_dir)
     # Asked first: a git failure after the model has run would cost a whole re-run.
     code = code_revision()
-    model_hashes = model_file_hashes(model_dir)
+    model_hashes = pinned_model_hashes(model_dir)
     out_dir.mkdir(parents=True, exist_ok=True)
     # Written first, so a document that fails under its id can be looked up.
     with (out_dir / "index.csv").open("w", encoding="utf-8-sig", newline="") as handle:
