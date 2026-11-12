@@ -129,7 +129,17 @@ Does not settle:
 
 ## Recommendation
 
-Option 2, in two steps. In Phase 3, use the segmentation as it is and add the six failing forms to the T1 prefix tests as named cases that are expected to fail, so the gap is visible and not forgotten. In Phase 6, add the cross-check and turn those cases green.
+Option 2, in two steps. In Phase 3, use the segmentation as it is and carry the failing forms in the T1 prefix tests as named cases, so the gap is visible and not forgotten. In Phase 6, add the cross-check.
+
+**Proposed decision, for Achia to confirm or change.** The Decision section below is left empty: `docs/findings/README.md` gives it to Achia, and line 4 holds a product choice.
+
+1. Option 2. No hand-written rule layer above the model in Phase 3: the count is above the plan's threshold of 85 under every reading of the article forms (93, 94 and 96).
+2. The failing forms become named tests in Phase 3. Under the scoring of line 4, four forms are expected to fail: b14, b16, b19 and d04. f03 and f04 become passing cases. The tests also carry the forms the plan names and the 100 did not hold: `שברק`, one form with `וה` and one with `ושה`. Each test marked as an expected failure carries an issue link, as `PROMOTION.md` requires of every such marker, and none of them counts toward Phase 3's gate. That gate is "prefix preservation holds over 1,000 generated forms". If generated `מש`, `וש` or `שמ` forms fail it, that is a finding of its own, and these markers do not cover it.
+3. The cross-check against the entity's other mentions is Phase 6 work and is untested. Its test cases need a second mention of the same name without a prefix: the single sentences of this experiment give it nothing to check against. This adds named tests to Phase 3, and one rule with its tests to Phase 6. `build-plan.md` is not edited here.
+4. The ה on a surname, in two halves.
+   - Scoring: a prefix written `לה` is read as ל on a name that begins with ה, because Hebrew spelling allows nothing else. `להלוי` and `ולהכהן` then count as right. `build-plan.md` Phase 3 lists `לה` among the prefix combinations; changing that list is a change to the plan and is Achia's.
+   - The product: open for Achia or Tomer. Until they say, the product replaces what the model marks as the base. That has a cost: one surname can come out two ways in one document. By the outputs above, `הכהן` becomes ה plus the surrogate and `מהכהן` becomes `מה` plus the surrogate, but `ולהכהן` becomes `ול` plus the surrogate, with no ה.
+5. No amended E3 run. It would add three forms and move two, and the count would then be 96 to 99 of 103, which is 93.2 to 96.1 percent, whatever the three new forms did; line 1 would not change. `forms.tsv` and the E3 record of 94 stay as pre-registered, and the spelling reading of line 4 applies to Phase 3's tests only. This departs from the paragraph below, which says a changed reading is a new run.
 
 For the article on surnames, Achia or Tomer should say which reading the product wants, because the three readings replace different text. That is a product decision, not a measurement. The table under "Measured result" gives the count under each reading. Choosing a reading other than the pre-registered one changes `forms.tsv`, and that, with `שברק` and the two missing combinations added, is a new run under an amended pre-registration. Under the reading where the ה is always part of the surname, `הכהן` has no prefix at all, so the category sizes in `scoring.py` and in the pre-registration change together with `forms.tsv`.
 
@@ -138,4 +148,3 @@ For the article on surnames, Achia or Tomer should say which reading the product
 None. This is not a waiver request.
 
 ## Decision
-
