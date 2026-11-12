@@ -27,6 +27,10 @@ check_private_directories  (no real document text inside a repository)
 model_file_hashes  (run_meta.json says which weights were run)
   EC4  the SHA-256 of each named file
   E5   a named file is missing              -> FileNotFoundError
+
+pinned_model_hashes  (one check of the pinned weights, shared by E1, E2 and E3)
+  EC5  the weights file has the pinned hash -> the hashes are returned
+  E8   another weights file, even in a folder named as the pinned revision -> ValueError
 """
 
 from __future__ import annotations
@@ -171,3 +175,18 @@ def test_ec4_model_file_hashes(tmp_path: Path):
 def test_e5_model_file_missing(tmp_path: Path):
     with pytest.raises(FileNotFoundError):
         run_model.model_file_hashes(tmp_path)
+
+
+def fake_hashes(weights: str):
+    return lambda model_dir: {"model.safetensors": weights, "config.json": "c", "tokenizer.json": "t"}
+
+
+def test_ec5_pinned_weights_are_accepted(monkeypatch):
+    monkeypatch.setattr(run_model, "model_file_hashes", fake_hashes(run_model.PINNED_WEIGHTS_SHA256))
+    assert run_model.pinned_model_hashes(Path("any-name"))["model.safetensors"] == run_model.PINNED_WEIGHTS_SHA256
+
+
+def test_e8_other_weights_under_the_pinned_folder_name_are_refused(monkeypatch):
+    monkeypatch.setattr(run_model, "model_file_hashes", fake_hashes("0" * 64))
+    with pytest.raises(ValueError, match="not the pinned file"):
+        run_model.pinned_model_hashes(Path("7b1256fc0846e22d1af431eae299e2dcecee2778"))
