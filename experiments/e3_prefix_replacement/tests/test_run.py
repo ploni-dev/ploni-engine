@@ -12,9 +12,10 @@ that E3's run calls it before the model is loaded.
 from pathlib import Path
 
 import pytest
-import run_model
 
-import run
+import run  # first: it puts E1's folder on the import path
+
+import run_model
 
 
 class LoaderReached(Exception):
