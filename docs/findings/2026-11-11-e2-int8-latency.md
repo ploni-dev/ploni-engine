@@ -30,11 +30,11 @@ Six runs of `measure.py`, model revision `7b1256fc0846e22d1af431eae299e2dcecee27
 | 5, a test between two causes | 2026-11-12 17:00 | `b3ec8bc` | 11.715 s | 21.218 s | 21.347 s | on battery at 28 percent, power mode best power efficiency, printed by the run |
 | **6, the result** | 2026-11-12 21:50 | `a3f7ccd` | **1.026 s** | 1.896 s | 1.968 s | on mains at 60 percent, power mode balanced, printed by the run before and after |
 
-**On mains power the time is 1.03 seconds, and the fast runs 1 and 2 are reproduced.** On battery the same two files took 2.7 to 2.8 seconds and then 11.7 seconds, the last above the plan's fail threshold of 10.
+**On mains power the time is 1.03 seconds, and the time of runs 1 and 2 is reproduced.** On battery the same two files took 2.7 to 2.8 seconds and then 11.7 seconds, the last above the plan's fail threshold of 10.
 
-**Run 6 is the result**, as `PREREGISTRATION.md` fixed before it (`a3f7ccd`). The prediction was an INT8 median of 0.906 to 1.226 seconds, within 15 percent of run 2, and it came out 1.026. It is the first run whose code, files and power state are all in its own output. Run 3 had been the result until then (second amendment, `98bfc8c`), and run 5 was a test between two causes whose reading matched neither (third amendment, `b3ec8bc`).
+**Run 6 is the result**, as `PREREGISTRATION.md` fixed before it (`a3f7ccd`). The prediction was an INT8 median of 0.906 to 1.226 seconds, within 15 percent of run 2, and it came out 1.026. It is the first run with the full power line, read before and after the timed passes. Run 3 had been the result until then (second amendment, `98bfc8c`), and run 5 was a test between two causes whose reading matched neither (third amendment, `b3ec8bc`).
 
-**What separates the fast runs from the slow ones is the laptop's power state, as far as six runs show.** Which part of the power state is not established. What is known:
+**Every run with a recorded state on battery is slow, and the one run with a recorded state on mains is fast.** Power state is the candidate this supports. It is not shown to be the cause: two of the three fast runs have no recorded power state, and rest before the run changed together with the power state in run 6, since runs 3 to 5 followed heavy work and run 6 followed ten quiet minutes. What is known:
 
 - The files are the same. For run 3 they were exported again from the committed code, and both came out byte for byte equal to the files runs 1 and 2 timed (SHA-256 `b12eaf92…` for INT8 and `e686ac23…` for FP32, in full in the outputs below and in `PREREGISTRATION.md`).
 - The page is the same in runs 2 to 6, and the timed passes are the same code in all six.
@@ -47,7 +47,7 @@ Six runs of `measure.py`, model revision `7b1256fc0846e22d1af431eae299e2dcecee27
 - Read by hand, not printed by any run: between runs 3 and 4 the machine showed about 7 percent processor use and 3.4 GB of free memory; half a minute after run 5, 3.5 GB free, the battery-saver flag off, and the processor at full speed when idle.
 - Run 6 was on mains at 60 percent charge. The power mode in effect and the power mode set were both balanced and the energy saver flag was 0, read by the run before and after the timed passes. Every run with a recorded state on battery is slow; the one run with a recorded state on mains is fast.
 - Run 6 does not separate the power source from the power mode. On mains the mode in effect was balanced. On battery it was read at 28, 24 and 23 percent only, and was best efficiency each time. No run was made on battery in balanced mode, or on mains in best efficiency.
-- For ten minutes before run 6 the session ran only file edits, git commands and three short scripts. Other programs were not closed. Read by hand ten seconds before the run: 12 to 23 percent processor use and 2.2 GB of free memory. That is more processor use and less free memory than the hand readings beside the slow runs (7 percent and 3.4 GB), so on these readings neither explains the slow runs.
+- For ten minutes before run 6 the session ran file edits, git commands (two of them checked out a second copy of the repository's files) and three short Python scripts: two that edited a Markdown file and one that checked the characters of one. The amendment registered "nothing heavier than file edits and git commands", so the scripts are a departure from its wording, and the judgment that they do not matter was made after the run. Other programs were not closed. Read by hand ten seconds before the run: 12 to 23 percent processor use and 2.2 GB of free memory. That is more processor use and less free memory than the hand readings beside the slow runs (7 percent and 3.4 GB), so on these readings neither explains runs 3 and 4. No processor reading exists near run 5, and none was taken during any run.
 
 Run 6, code at `a3f7ccd`, raw output:
 
@@ -200,19 +200,24 @@ Does not settle:
 - **The reference machine.** The laptop has more cores and half the memory of the machine section 8.1 describes.
 - **What INT8 costs in recall.** Three changed labels on the text of one page is a reason to look, not a measurement. Phase 13 requires the full eval after any quantization change, and a loss of 2 points of recall is not acceptable there.
 - **A page laid out differently.** The 13 paragraphs here pad to 66 positions each, so 858 positions are computed for 542 real ones and 316 are padding. An earlier version of this note said a page that is one long paragraph would cost more. That was never measured and is withdrawn: such a page is two windows of about 650 positions together, which could be cheaper. A page with one long paragraph among short ones pads every row to the long one and would cost more. Neither was timed.
-- Being at the low end. Run 6's median is 0.026 seconds above the low end of the prediction, and one of its five passes took 0.980 seconds. The plan says a number below the low end is a reason to suspect the model is not seeing the full text. All 542 positions were computed and no paragraph was truncated, so that suspicion does not apply to this page.
+- Being at the low end. Run 6's median is 0.026 seconds above the low end of the prediction, and one of its five passes took 0.980 seconds. The plan says a number below the low end is a reason to suspect the model is not seeing the full text. All 542 positions were computed and no paragraph was truncated, so that suspicion does not apply to this page. The band committed for run 6 reached down to 0.906 seconds, below the plan's low end of 1 second: a median between the two would have been inside the band and outside the plan's prediction, and the amendment did not say how to read that. Run 6 was 0.026 seconds clear of it.
 
 ## Options, with the cost of each
 
 0. **Make one controlled run before reading E2 at all.** Done: run 6, on mains, with the power state printed by the run. What was not controlled: other programs stayed open, and the power mode was whatever Windows had set.
 1. **Take E2 as not failing and go on.** With run 6 inside the band fixed before it, this is the reading the pre-registration gives. The cost is the one in the title: the figure holds on mains power only.
-2. **Size the missing heads before Phase 3 starts.** Time the same page through PyTorch with the prefix and morphology heads on, beside the PyTorch time measured here for the NER head alone (2.097 seconds in run 2, 6.773 in run 3), in a recorded power state. About an hour, no new dependency, its own pre-registration. It says how far the time measured here is from the real figure without waiting for the joint export.
+2. **Size the missing heads before Phase 3 starts.** Time the same page through PyTorch with the prefix and morphology heads on, beside the PyTorch time measured here for the NER head alone (1.968 seconds in run 6, the one in a recorded state on mains; 2.097 in run 2; 6.773 in run 3), in a recorded power state. About an hour, no new dependency, its own pre-registration. It says how far the time measured here is from the real figure without waiting for the joint export.
 3. **Export the joint model now.** This is Phase 13 work. The prefix head takes extra inputs built by the model's own Python, so the export is not a one-liner. One to two sessions.
 4. **Write `docs/REFERENCE_MACHINE.md`.** Either name a real 16 GB machine and re-run there, or decide that this laptop is the reference, which makes every budget in section 8.2 harder to meet on memory and is a change to the plan.
 
 ## Recommendation
 
-Take E2 as passed, for the part that was exported and on mains power (option 1). Make mains power, with the power line in the output, a condition of every later timing in this project. Do option 2 at the start of Phase 3. Option 4 stays with Achia: which machine is the reference, and in which power state it is measured. One thing for the product and not for this experiment: on this laptop, on battery, the same work took 2.6 to 11 times as long, so a user on battery may wait far longer per page than section 8.2 assumes.
+**Proposed decision, for Achia to confirm or change.** The Decision section below is left empty: a run above the fail threshold is on record, and the plan says E2 failing changes the plan, so this one is Achia's.
+
+1. Take E2 as passed, for the encoder and NER head, on mains power (option 1). Run 6 is the result: 1.026 seconds, inside the band committed before it and inside the plan's 1 to 3 seconds. Run 5, above the fail threshold at 11.715 seconds, stays in this note as what the same files did on battery on this laptop, not as a failure of quantization or batching: the files are the same by hash.
+2. Until Achia defines the reference machine, timings in this project are taken on mains power and print their power state. A run whose power line shows battery is reported and is not a result.
+3. Time the missing heads at the start of Phase 3 (option 2), with their own pre-registration, before the per-page budget is relied on. Until then 1.03 seconds is the time of one of the two models, without the prefix head.
+4. Left open for Achia whatever is decided above: which machine is the reference and in which power state it is measured (option 4), and whether the product should say anything to a user on battery. On this laptop, on battery, the same work took 2.6 to 11 times as long, so a user on battery may wait far longer per page than section 8.2 assumes.
 
 The changed labels should be the first thing the Phase 5 eval harness is pointed at once it exists.
 
@@ -221,12 +226,3 @@ The changed labels should be the first thing the Phase 5 eval harness is pointed
 None. This is not a waiver request.
 
 ## Decision
-
-Written by Claude on 2026-11-12, not by Achia. Achia handed it over in the working session of that day: "Think what's best and go, bring it to me only for the real big one." Achia can overturn any line of it by editing this section.
-
-1. **E2 is taken as passed, for the encoder and NER head, on mains power.** Run 6 is the result: 1.026 seconds, inside the band committed before it and inside the plan's 1 to 3 seconds. The run above the fail threshold (run 5, 11.715 seconds) is kept in this note as what the same files do on battery on this laptop, not as a failure of quantization or batching: the files are the same by hash.
-2. **Every later timing in this project is taken on mains power and prints its power state.** A run whose power line shows battery is reported and is not a result. `docs/REFERENCE_MACHINE.md` carries this when it is written.
-3. **The missing heads are timed at the start of Phase 3** (option 2), with their own pre-registration, before the per-page budget is relied on. Until then 1.03 seconds is the time of one of the two models, without the prefix head.
-4. **Not decided here, and left with Achia:** which machine is the reference machine (option 4), and whether the product should say anything to a user on battery.
-
-Why this was not taken back to Achia: the result is inside a prediction committed before the run, nothing here changes the architecture or the plan's phases, and every line can be undone by an edit. Had run 6 been slow, it would have gone to Achia as it stood, as the pre-registration says.
