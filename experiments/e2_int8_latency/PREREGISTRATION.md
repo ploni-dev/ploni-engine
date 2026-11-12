@@ -97,3 +97,13 @@ Run 5 is a test between the first two candidates, on battery, not a new result. 
 - Anything else: neither reading holds, and the note says so.
 
 Which run is the result is not changed here. If run 5 shows that runs 3 and 4 measured the harness, that is a finding for Achia to decide on, in the note.
+
+## Amendment after run 5, before any further run
+
+Run 5 gave 11.715 seconds, in neither band above. It printed the power mode in effect, `961cc777-2547-4f9d-8174-7d86181b8a7a`, best power efficiency, at 28 percent charge.
+
+The third review pass of the harness (PR #10) found what that line does not show. On this laptop the energy saver charge level on battery is 30 percent (`powercfg /qh`, setting `ESBATTTHRESHOLD`, read on 2026-11-12). At 24 percent the reviewer read the mode in effect as best power efficiency while the mode set was balanced and the energy saver flag was 0. Runs 3 and 4 were at 38 and 36 percent, above that level, and their mode was not recorded. So the mode may have changed between run 4 and run 5. That is a candidate, not a finding.
+
+Change to the harness, made before any further run: the power line now prints the energy saver flag, the mode in effect and the mode set, and it is read twice, before and after the timed passes, so a run that crosses the 30 percent level shows it.
+
+No further run has been registered. The next one needs its own prediction here first.
