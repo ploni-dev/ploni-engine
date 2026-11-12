@@ -66,7 +66,8 @@ def is_sentence_final(word: str) -> bool:
     if not core or core[-1] not in SENTENCE_FINAL_MARKS:
         return False
     body = core.rstrip(SENTENCE_FINAL_MARKS)
-    initials = all(len(part) == 1 for part in body.split("."))
+    # A geresh belongs to its letter: ג'.ק. is two initials too.
+    initials = "." in body and all(len(part.rstrip("'׳")) == 1 for part in body.split("."))
     return len(body) >= MIN_SENTENCE_FINAL_WORD_LENGTH and not body.isdigit() and not initials
 
 
