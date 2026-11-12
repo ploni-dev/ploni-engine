@@ -7,15 +7,15 @@ either.
 
 from __future__ import annotations
 
+import ctypes
 import hashlib
 import time
+import uuid
 from pathlib import Path
 
 # PREREGISTRATION.md, "The number": the median of 5 runs after 1 warm-up run.
 WARM_UP_RUNS = 1
 TIMED_RUNS = 5
-# docs/THIRD_PARTY.md: model.safetensors at the pinned revision of dicta-il/dictabert-joint.
-PINNED_WEIGHTS_SHA256 = "c59db02c002b69fd3c072c310e3ba578d036386477248d1c8576d896cc06aa1c"
 # build-plan.md section 11, E2: "Prediction: 1 to 3 seconds per page."
 PREDICTED_LOW_SECONDS = 1.0
 PREDICTED_HIGH_SECONDS = 3.0
@@ -80,6 +80,57 @@ def timed(label_page) -> tuple[list[float], object]:
         labels = label_page()
         seconds.append(time.perf_counter() - start)
     return seconds, labels
+
+
+def describe_power(ac_line_status: int, battery_percent: int) -> str:
+    """Put the Windows power status into words for the report.
+
+    Why: the same files took 2.6 times as long in a later run, and the power
+    state of the earlier runs had been written down nowhere. The report says it
+    itself from now on.
+
+    Contract: the arguments are `ACLineStatus` and `BatteryLifePercent` of
+    Windows `GetSystemPowerStatus`: 0 on battery, 1 on mains, 255 unknown; a
+    charge of 0 to 100, 255 unknown. An unknown value is said to be unknown.
+    """
+    source = {0: "on battery", 1: "on mains"}.get(ac_line_status, "power source unknown")
+    charge = f"{battery_percent} percent" if 0 <= battery_percent <= 100 else "charge unknown"
+    return f"{source}, battery {charge}"
+
+
+class _PowerStatus(ctypes.Structure):
+    """The SYSTEM_POWER_STATUS structure of the Windows API."""
+
+    _fields_ = [
+        ("ac_line_status", ctypes.c_ubyte),
+        ("battery_flag", ctypes.c_ubyte),
+        ("battery_percent", ctypes.c_ubyte),
+        ("system_status_flag", ctypes.c_ubyte),
+        ("battery_life_time", ctypes.c_ulong),
+        ("battery_full_life_time", ctypes.c_ulong),
+    ]
+
+
+def read_power_state() -> str:
+    """Read the laptop's power state from Windows, as one line for the report.
+
+    Why: see `describe_power`. The Windows power plan is not printed: on this
+    laptop Balanced is the only plan, on mains and on battery alike. The power
+    mode of Windows 11 (best efficiency, balanced, best performance) can
+    differ between the two, so its identifier is printed as Windows gives it.
+
+    Contract: Windows only. Returns `describe_power` of the current status,
+    then the effective power mode as a GUID. Raises OSError if either call
+    fails.
+    """
+    status = _PowerStatus()
+    if not ctypes.windll.kernel32.GetSystemPowerStatus(ctypes.byref(status)):
+        raise OSError("GetSystemPowerStatus failed")
+    mode = (ctypes.c_ubyte * 16)()
+    if ctypes.windll.powrprof.PowerGetEffectiveOverlayScheme(ctypes.byref(mode)) != 0:
+        raise OSError("PowerGetEffectiveOverlayScheme failed")
+    described = describe_power(status.ac_line_status, status.battery_percent)
+    return f"{described}, power mode {uuid.UUID(bytes_le=bytes(mode))}"
 
 
 def file_sha256(path: Path) -> str:

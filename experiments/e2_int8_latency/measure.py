@@ -5,15 +5,17 @@ timed are in PREREGISTRATION.md and latency.py, committed before the first
 timing was taken.
 
 Contract: `python -I measure.py --model-dir M --onnx-dir O`, offline, after
-export.py has written O. Prints the commit, the hashes of the weights and of
-the two graphs, the times, the verdict on the INT8 median and how far each
-graph's labels agree with PyTorch FP32. Exits non-zero, before any time is
-printed, if the weights are not the pinned file or if the FP32 graph disagrees
-with PyTorch anywhere: then the export is wrong and no time measured on it
-means anything.
+export.py has written O. Prints the hashes of the model files and of the two
+graphs, the commit, the power state, the times, the verdict on the INT8 median
+and how far each graph's labels agree with PyTorch FP32. Stops before any time
+is printed if the weights are not the pinned file or if the FP32 graph
+disagrees with PyTorch at any computed position: then the export is wrong and
+no time measured on it means anything.
 
 Known limits: see PREREGISTRATION.md. Times include tokenization and exclude
-loading the model. The backends run in a fixed order, INT8 first.
+loading the model. The backends run in a fixed order, INT8 first. Windows
+only, because of the power state. The files are hashed after the timed passes,
+so a run on other weights is timed and then refused.
 """
 
 from __future__ import annotations
@@ -31,7 +33,7 @@ sys.path[:0] = [str(HERE), str(HERE.parent / "e1_hebrew_recall")]
 import numpy
 import onnxruntime
 import torch
-from run_model import MAX_POSITIONS, TORCH_THREADS, code_revision, load_ner_model, model_file_hashes
+from run_model import MAX_POSITIONS, TORCH_THREADS, code_revision, load_ner_model, pinned_model_hashes
 from transformers import AutoTokenizer
 
 import latency
@@ -69,11 +71,7 @@ def main(model_dir: Path, onnx_dir: Path) -> None:
     """Time the three backends one after the other and print the report."""
     torch.set_num_threads(TORCH_THREADS)
     paragraphs = latency.read_page(HERE / "page.txt")
-    code = code_revision()
-    weights = model_file_hashes(model_dir)["model.safetensors"]
-    if weights != latency.PINNED_WEIGHTS_SHA256:
-        sys.exit("model.safetensors is not the pinned file (docs/THIRD_PARTY.md); nothing was timed")
-    graphs = {name: latency.file_sha256(onnx_dir / name) for name in (INT8_NAME, FP32_NAME)}
+    power = latency.read_power_state()
     tokenizer = AutoTokenizer.from_pretrained(model_dir, local_files_only=True)
     encoded = tokenizer(paragraphs, padding=True, return_tensors="np", return_special_tokens_mask=True)
     computed = encoded["attention_mask"].astype(bool)
@@ -90,16 +88,23 @@ def main(model_dir: Path, onnx_dir: Path) -> None:
     results["torch fp32"] = latency.timed(torch_labeller(model, tokenizer, paragraphs))
     other = model.config.label2id["O"]
     reference = results["torch fp32"][1]
-    # PREREGISTRATION.md: if the export is wrong, no time is reported.
-    if not (results["onnx fp32"][1] == reference)[text].all():
+    # PREREGISTRATION.md: if the export is wrong, no time is reported. Every
+    # computed position is compared, the [CLS] and [SEP] ones too.
+    if not (results["onnx fp32"][1] == reference)[computed].all():
         sys.exit("the FP32 graph disagrees with PyTorch: the export is wrong, no time is reported")
+    # Hashed after the clock has stopped and before anything is printed: reading
+    # 1.7 GB of files just before the timed passes would be work the earlier
+    # runs did not do. Weights that are not the pinned file raise here.
+    hashes = pinned_model_hashes(model_dir)
+    hashes |= {name: latency.file_sha256(onnx_dir / name) for name in (INT8_NAME, FP32_NAME)}
+    code = code_revision()
 
     words = sum(len(paragraph.split()) for paragraph in paragraphs)
     print(f"E2 CPU latency, model revision {model_dir.name}")
-    print(f"model.safetensors sha256 {weights}")
-    for name, digest in graphs.items():
+    for name, digest in hashes.items():
         print(f"{name} sha256 {digest}")
     print(f"code {code['commit']}{', uncommitted changes' if code['dirty'] else ''}")
+    print(f"power before the timed passes: {power}")
     print(
         f"page: {len(paragraphs)} paragraphs, {words} words, {int(computed.sum())} positions "
         f"of which {int(text.sum())} are text, batch {computed.shape}"

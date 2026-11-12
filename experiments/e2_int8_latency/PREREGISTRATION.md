@@ -74,3 +74,26 @@ Corrections to "Known limits":
 - Added: runs 1 and 2 did not record whether the laptop was on mains power or its Windows power mode, and that cannot be recovered. Run 3 records both. The backends always run in the same order, INT8 first and a few seconds after start, so the comparison between backends is partly a comparison of when each ran.
 
 The rule, the readings and the thresholds are unchanged, and `page.txt` is unchanged. Run 3 is taken with the same rule. It is the result, because it is the only run whose code and files are identified by hash; runs 1 and 2 are kept beside it.
+
+## Amendment after run 4, before run 5
+
+Run 3 gave 2.796 seconds and run 4, a repeat three minutes later, 2.675, against 1.066 in run 2, on the same two ONNX files. The second review pass of the harness (PR #10) pointed out that power is not the only thing that changed. Three candidates are on record:
+
+- **The harness itself.** Since the first amendment, `measure.py` hashed about 1.7 GB of files and called git twice just before the first timed pass. Runs 1 and 2 did neither.
+- **Power.** Runs 3 and 4 were on battery. The state of runs 1 and 2 is unknown.
+- **What the laptop had just done.** The re-export finished within a minute before run 3.
+
+Changes to the harness, made before run 5:
+
+- The hashing and the git calls now come after the timed passes and before anything is printed. The work before the clock is again what it was in runs 1 and 2, plus one read of the power state, which takes no measurable time. A run on weights that are not the pinned file is now timed and then refused; no time is printed for it.
+- The export check compares every computed position again, as "at every real position" above says. Since the first amendment it had compared text positions only, 26 fewer, and no amendment said so. In runs 3 and 4 the 26 marker positions were therefore not compared.
+- The report prints the power state itself: mains or battery, the charge, and the identifier of the Windows power mode. The Windows power plan is not printed, because Balanced is the only plan on this laptop.
+- The pinned weights hash and its check are in one place, `run_model.pinned_model_hashes` of E1.
+
+Run 5 is a test between the first two candidates, on battery, not a new result. It has no single prediction. The reading is fixed here:
+
+- INT8 median within 15 percent of 1.066 seconds (0.906 to 1.226): the work before the clock caused the slowdown of runs 3 and 4, and those two runs measured the harness, not the model.
+- INT8 median within 15 percent of the mean of runs 3 and 4, 2.736 seconds (2.325 to 3.146): the work before the clock was not the cause.
+- Anything else: neither reading holds, and the note says so.
+
+Which run is the result is not changed here. If run 5 shows that runs 3 and 4 measured the harness, that is a finding for Achia to decide on, in the note.
