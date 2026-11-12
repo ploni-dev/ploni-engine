@@ -11,6 +11,8 @@ document_entities
 window_entities  (the guard against silent truncation)
   E1   a window one position over the limit -> WindowTooLongError, model untouched
   B1   a window exactly at the limit        -> the model is called
+  E6   a tokenizer set to truncate below the limit -> WindowTooLongError, model
+       untouched (the model's own predict would cut the window without a sign)
 
 check_private_directories  (no real document text inside a repository)
   EC3  corpus and output folders outside any repository -> accepted
@@ -18,6 +20,9 @@ check_private_directories  (no real document text inside a repository)
   E3   an output folder inside another checkout (any git work tree), existing
        or not yet created                   -> ValueError
   E4   an output folder that already holds tally.csv -> FileExistsError
+  E7   an output folder under a `.git` file, which is how a second checkout
+       (git worktree) is marked           -> ValueError, without asking git
+  B2   an output folder whose parents do not exist yet -> accepted, no error
 
 model_file_hashes  (run_meta.json says which weights were run)
   EC4  the SHA-256 of each named file
@@ -76,8 +81,9 @@ def test_ec2_unknown_pieces_are_counted(find_moshe):
 class FixedLengthTokenizer:
     """Encodes any text to a fixed number of positions."""
 
-    def __init__(self, positions: int):
+    def __init__(self, positions: int, model_max_length: int = run_model.MAX_POSITIONS):
         self.positions = positions
+        self.model_max_length = model_max_length
 
     def __call__(self, text: str) -> dict[str, list[int]]:
         return {"input_ids": [0] * self.positions}
@@ -105,6 +111,25 @@ def test_b1_window_at_the_limit_is_run():
     model = CountingModel()
     assert run_model.window_entities(model, FixedLengthTokenizer(run_model.MAX_POSITIONS), "טקסט") == []
     assert model.calls == 1
+
+
+def test_e6_tokenizer_that_truncates_below_the_limit_never_reaches_the_model():
+    model = CountingModel()
+    with pytest.raises(run_model.WindowTooLongError):
+        run_model.window_entities(model, FixedLengthTokenizer(100, model_max_length=256), "טקסט")
+    assert model.calls == 0
+
+
+def test_e7_folder_inside_a_second_checkout_marked_by_a_git_file(tmp_path: Path):
+    worktree = tmp_path / "worktree"
+    worktree.mkdir()
+    (worktree / ".git").write_text("gitdir: elsewhere", encoding="utf-8")
+    with pytest.raises(ValueError, match="inside"):
+        run_model.check_private_directories(tmp_path, worktree / "e1_out")
+
+
+def test_b2_folder_on_a_path_with_no_existing_parent_is_accepted(tmp_path: Path):
+    run_model.check_private_directories(tmp_path, tmp_path / "not" / "created" / "yet")
 
 
 def test_ec3_folders_outside_any_repository_are_accepted(tmp_path: Path):
