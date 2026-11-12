@@ -79,7 +79,7 @@ Does not settle:
 - **The reference machine.** The laptop has more cores and half the memory of the machine section 8.1 describes.
 - **What INT8 costs in recall.** Four to eight changed labels on one page, and one entity position lost in run 2, is a reason to look, not a measurement. Phase 13 requires the full eval after any quantization change, and a loss of 2 points of recall is not acceptable there.
 - **A page that is one long paragraph.** The 13 paragraphs here pad to 66 positions. A wall of text is one or two windows of 512, and attention cost grows with the square of the length.
-- Being at the low end. All 541 positions were labelled and no paragraph was truncated, so the model saw the full text; the time is low because the inputs are short.
+- Being at the low end. All 542 positions (541 in run 1) were labelled and no paragraph was truncated, so the model saw the full text; the time is low because the inputs are short.
 
 ## Options, with the cost of each
 
