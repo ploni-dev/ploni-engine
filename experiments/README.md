@@ -18,5 +18,5 @@ product code:
 | Experiment | Directory | Status |
 |---|---|---|
 | E1 baseline Hebrew NER recall | `e1_hebrew_recall/` | harness ready, run pending |
-| E2 CPU latency after INT8 | not started | |
+| E2 CPU latency after INT8 | `e2_int8_latency/` | harness and pre-registration committed; `export.py`, then `measure.py` |
 | E3 prefix-preserving replacement | `e3_prefix_replacement/` | harness and pre-registration committed; `python -I run.py --model-dir <model dir>`, in the environment of `e1_hebrew_recall/requirements.txt` |

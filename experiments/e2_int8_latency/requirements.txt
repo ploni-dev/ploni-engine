@@ -1,0 +1,6 @@
+-r ../e1_hebrew_recall/requirements.txt
+flatbuffers==25.12.19
+ml_dtypes==0.6.0
+onnx==1.23.2
+onnxruntime==1.31.1
+protobuf==7.36.2
