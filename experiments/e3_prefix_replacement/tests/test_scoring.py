@@ -40,10 +40,24 @@ load_forms(path)
   E3   duplicate id                   E4  target absent from the sentence
   E5   target twice in the sentence   E6  target does not start with the prefix
   E7   prefix is the whole target     E8  empty surrogate
+  E9   a prefix holding a letter that is not a prefix letter (לי for ליעקב)
+  E10  a row outside `bare` with no prefix    E11  a `bare` row with a prefix
   Adversarial: target next to punctuation still counts once (יעקב, then a full stop)
+
+check_category_sizes(forms)
+  EC1  the shipped forms.tsv          -> accepted
+  E1   one form missing               -> FormsError naming the category
+
+tally(forms, token_lists)
+  EC1  one right form, one wrong prefix, one right prefix with a suffix ->
+       strict and prefix-only counts per category, both failures listed, and
+       right plus failures equals the number of forms
+  E1   fewer or more sentences than forms -> ValueError, nothing dropped silently
+  E2   a target the model split differently -> LookupError naming the form id
 """
 
 import random
+from collections import Counter
 from pathlib import Path
 
 import pytest
@@ -207,8 +221,14 @@ GOOD = "a01\tsingle\tהמכתב נשלח ליעקב.\tליעקב\tל\tנתן"
         [GOOD.replace("\tל\t", "\tמ\t")],
         [GOOD.replace("\tל\t", "\tליעקב\t")],
         [GOOD.replace("\tנתן", "\t")],
+        [GOOD.replace("\tל\t", "\tלי\t")],
+        [GOOD.replace("\tל\t", "\t\t")],
+        [GOOD.replace("single", "bare")],
     ],
-    ids=["columns", "category", "duplicate_id", "absent", "twice", "prefix", "whole_target", "surrogate"],
+    ids=[
+        "columns", "category", "duplicate_id", "absent", "twice", "prefix", "whole_target", "surrogate",
+        "prefix_letter", "missing_prefix", "bare_with_prefix",
+    ],
 )
 def test_load_forms_rejects_a_bad_row(tmp_path, rows):
     path = tmp_path / "forms.tsv"
@@ -221,3 +241,54 @@ def test_adversarial_target_next_to_punctuation_counts_once(tmp_path):
     path = tmp_path / "forms.tsv"
     path.write_text(GOOD + "\n", encoding="utf-8")
     assert scoring.load_forms(path) == [Form("a01", "single", "המכתב נשלח ליעקב.", "ליעקב", "ל", "נתן")]
+
+
+# check_category_sizes
+
+
+def test_ec1_shipped_forms_have_the_preregistered_sizes():
+    scoring.check_category_sizes(scoring.load_forms(Path(scoring.__file__).with_name("forms.tsv")))
+
+
+def test_e1_a_missing_form_is_named_by_its_category():
+    forms = scoring.load_forms(Path(scoring.__file__).with_name("forms.tsv"))
+    without_one_trap = [f for f in forms if f.id != next(f.id for f in forms if f.category == "trap")]
+    with pytest.raises(FormsError, match="trap"):
+        scoring.check_category_sizes(without_one_trap)
+
+
+# tally
+
+
+TALLY_FORMS = [
+    Form("a01", "single", "המכתב נשלח ליעקב אתמול.", "ליעקב", "ל", "נתן"),
+    Form("d01", "trap", "פגשנו בברק אתמול.", "בברק", "ב", "דוד"),
+    Form("h01", "possessive_like", "מסרנו לאבי את המכתב.", "לאבי", "ל", "יוסי"),
+]
+TALLY_TOKENS = [
+    [token("המכתב", ["ה", "מכתב"]), token("ליעקב", ["ל", "יעקב"])],
+    [token("בברק", ["בב", "רק"])],
+    [token("לאבי", ["ל", "אבי"], "PRON")],
+]
+
+
+def test_ec1_tally_counts_each_rule_and_lists_every_failure():
+    strict, prefix_only, failures = scoring.tally(TALLY_FORMS, TALLY_TOKENS)
+    assert strict == Counter(single=1)
+    assert prefix_only == Counter(single=1, possessive_like=1)
+    assert failures == [
+        (TALLY_FORMS[1], ("בב", "רק"), False, "בבדוד"),
+        (TALLY_FORMS[2], ("ל", "אבי"), "PRON", "ליוסי"),
+    ]
+    assert sum(strict.values()) + len(failures) == len(TALLY_FORMS)
+
+
+@pytest.mark.parametrize("token_lists", [TALLY_TOKENS[:2], [*TALLY_TOKENS, TALLY_TOKENS[0]]])
+def test_e1_tally_refuses_a_different_number_of_sentences(token_lists):
+    with pytest.raises(ValueError):
+        scoring.tally(TALLY_FORMS, token_lists)
+
+
+def test_e2_tally_names_the_form_whose_target_the_model_split():
+    with pytest.raises(LookupError, match="d01"):
+        scoring.tally(TALLY_FORMS, [TALLY_TOKENS[0], TALLY_TOKENS[0], TALLY_TOKENS[2]])
