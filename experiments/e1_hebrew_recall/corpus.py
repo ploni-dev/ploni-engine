@@ -176,7 +176,12 @@ def _inline_runs(element) -> Iterator:
     Contract: `element` is a `w:p` or a `w:sdtContent`. Yields `w:r`
     elements: its own, those of its hyperlinks, and those inside its content
     controls at any depth. Nothing else is entered, so a tracked insertion
-    stays unread, as it was.
+    stays unread, as it was, inside a content control too. A content control
+    with no `w:sdtContent` yields nothing.
+
+    Known limits: a content control that shows its placeholder prompt
+    (`w:showingPlcHdr`) and hidden text (`w:vanish`) are read like typed
+    text. The ten E1 files have neither.
     """
     for child in element:
         if child.tag == qn("w:r"):

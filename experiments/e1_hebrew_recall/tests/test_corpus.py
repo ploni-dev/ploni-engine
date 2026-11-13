@@ -28,6 +28,7 @@ read_paragraphs
   EC12 .docx text in a content control inside a paragraph -> read, in its place
   A7   a hyperlink in a content control, a content control in a content control
        -> read, in document order
+  B6   a content control with no content     -> read as nothing, no error
   E2   unsupported suffix                    -> UnsupportedDocumentError
   H2   characters the tokenizer cannot see (no-break and thin space, zero-width
        space, soft hyphen, inner byte order mark, direction marks) -> a plain
@@ -38,6 +39,8 @@ unread_characters
   A4   .docx text in a tracked insertion     -> its length
   A5   .docx text in a content control inside a paragraph -> 0, it is read
   A8   .docx content control around whole paragraphs      -> its length
+  A9   .docx tracked insertion inside a content control   -> its length
+  A10  .docx text box inside a run                        -> its length
 
 read_checked
   EC10 a readable document                   -> its paragraphs
@@ -257,6 +260,43 @@ def test_ec12_a5_a7_content_control_inside_a_paragraph_is_read_in_place(tmp_path
     document.save(str(path))
     assert read_paragraphs(path) == ["מר יעקב לוי העיד"]
     assert unread_characters(path) == 0
+
+
+def _saved_with_appended(tmp_path: Path, xml: str) -> Path:
+    """Save a made-up document: the paragraph `מר `, then `xml`, then a run ` העיד`."""
+    document = docx.Document()
+    paragraph = document.add_paragraph("מר ")
+    paragraph._p.append(parse_xml(xml % nsdecls("w")))
+    paragraph.add_run(" העיד")
+    path = tmp_path / "a.docx"
+    document.save(str(path))
+    return path
+
+
+def test_a9_tracked_insertion_inside_a_content_control_is_counted_not_read(tmp_path: Path):
+    xml = (
+        '<w:sdt %s><w:sdtContent><w:ins w:id="1" w:author="a"><w:r><w:t>יעקב לוי</w:t></w:r></w:ins>'
+        "</w:sdtContent></w:sdt>"
+    )
+    path = _saved_with_appended(tmp_path, xml)
+    assert read_paragraphs(path) == ["מר  העיד"]
+    assert unread_characters(path) == len("יעקב לוי")
+
+
+def test_b6_content_control_with_no_content_reads_as_nothing(tmp_path: Path):
+    path = _saved_with_appended(tmp_path, "<w:sdt %s><w:sdtPr/></w:sdt>")
+    assert read_paragraphs(path) == ["מר  העיד"]
+    assert unread_characters(path) == 0
+
+
+def test_a10_text_box_inside_a_run_is_counted_not_read(tmp_path: Path):
+    xml = (
+        '<w:r %s><w:pict><v:textbox xmlns:v="urn:schemas-microsoft-com:vml"><w:txbxContent>'
+        "<w:p><w:r><w:t>יעקב לוי</w:t></w:r></w:p></w:txbxContent></v:textbox></w:pict></w:r>"
+    )
+    path = _saved_with_appended(tmp_path, xml)
+    assert read_paragraphs(path) == ["מר  העיד"]
+    assert unread_characters(path) == len("יעקב לוי")
 
 
 def test_a8_content_control_around_whole_paragraphs_is_counted_not_read(tmp_path: Path):
