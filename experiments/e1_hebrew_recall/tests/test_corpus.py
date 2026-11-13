@@ -25,6 +25,9 @@ read_paragraphs
   B2   UTF-8 byte order mark                 -> not part of the first paragraph
   B3   blank and whitespace-only lines       -> dropped
   H1   niqqud, gershayim (both code points), geresh, final letters, Latin run -> unchanged
+  EC12 .docx text in a content control inside a paragraph -> read, in its place
+  A7   a hyperlink in a content control, a content control in a content control
+       -> read, in document order
   E2   unsupported suffix                    -> UnsupportedDocumentError
   H2   characters the tokenizer cannot see (no-break and thin space, zero-width
        space, soft hyphen, inner byte order mark, direction marks) -> a plain
@@ -33,7 +36,8 @@ read_paragraphs
 unread_characters
   EC9  .txt, plain .docx, merged table cells -> 0
   A4   .docx text in a tracked insertion     -> its length
-  A5   .docx text in a content control       -> its length
+  A5   .docx text in a content control inside a paragraph -> 0, it is read
+  A8   .docx content control around whole paragraphs      -> its length
 
 read_checked
   EC10 a readable document                   -> its paragraphs
@@ -218,16 +222,48 @@ def test_ec9_nothing_unread_in_txt_plain_docx_and_merged_cells(tmp_path: Path):
     assert (unread_characters(text), unread_characters(word)) == (0, 0)
 
 
-SKIPPED_BY_PYTHON_DOCX = {
-    "a4_tracked_insertion": '<w:ins %s w:id="1" w:author="a"><w:r><w:t>יעקב לוי</w:t></w:r></w:ins>',
-    "a5_content_control": "<w:sdt %s><w:sdtContent><w:r><w:t>יעקב לוי</w:t></w:r></w:sdtContent></w:sdt>",
+def test_a4_text_in_a_tracked_insertion_is_counted_not_read(tmp_path: Path):
+    xml = '<w:ins %s w:id="1" w:author="a"><w:r><w:t>יעקב לוי</w:t></w:r></w:ins>'
+    document = docx.Document()
+    document.add_paragraph("לפני")._p.append(parse_xml(xml % nsdecls("w")))
+    path = tmp_path / "a.docx"
+    document.save(str(path))
+    assert read_paragraphs(path) == ["לפני"]
+    assert unread_characters(path) == len("יעקב לוי")
+
+
+CONTENT_CONTROLS_IN_A_PARAGRAPH = {
+    "ec12_a5_runs": "<w:sdt %s><w:sdtContent><w:r><w:t>יעקב לוי</w:t></w:r></w:sdtContent></w:sdt>",
+    "a7_hyperlink_inside": (
+        "<w:sdt %s><w:sdtContent><w:hyperlink><w:r><w:t>יעקב לוי</w:t></w:r></w:hyperlink>"
+        "</w:sdtContent></w:sdt>"
+    ),
+    "a7_control_inside_control": (
+        "<w:sdt %s><w:sdtContent><w:r><w:t>יעקב</w:t></w:r><w:sdt><w:sdtContent><w:r><w:t> לוי</w:t></w:r>"
+        "</w:sdtContent></w:sdt></w:sdtContent></w:sdt>"
+    ),
 }
 
 
-@pytest.mark.parametrize("xml", SKIPPED_BY_PYTHON_DOCX.values(), ids=SKIPPED_BY_PYTHON_DOCX.keys())
-def test_a4_a5_text_python_docx_skips_is_counted(tmp_path: Path, xml: str):
+@pytest.mark.parametrize(
+    "xml", CONTENT_CONTROLS_IN_A_PARAGRAPH.values(), ids=CONTENT_CONTROLS_IN_A_PARAGRAPH.keys()
+)
+def test_ec12_a5_a7_content_control_inside_a_paragraph_is_read_in_place(tmp_path: Path, xml: str):
     document = docx.Document()
-    document.add_paragraph("לפני")._p.append(parse_xml(xml % nsdecls("w")))
+    paragraph = document.add_paragraph("מר ")
+    paragraph._p.append(parse_xml(xml % nsdecls("w")))
+    paragraph.add_run(" העיד")
+    path = tmp_path / "a.docx"
+    document.save(str(path))
+    assert read_paragraphs(path) == ["מר יעקב לוי העיד"]
+    assert unread_characters(path) == 0
+
+
+def test_a8_content_control_around_whole_paragraphs_is_counted_not_read(tmp_path: Path):
+    xml = "<w:sdt %s><w:sdtContent><w:p><w:r><w:t>יעקב לוי</w:t></w:r></w:p></w:sdtContent></w:sdt>"
+    document = docx.Document()
+    first = document.add_paragraph("לפני")
+    first._p.addnext(parse_xml(xml % nsdecls("w")))
     path = tmp_path / "a.docx"
     document.save(str(path))
     assert read_paragraphs(path) == ["לפני"]
