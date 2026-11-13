@@ -184,12 +184,14 @@ highlights, and that a highlight on a name that does not count is listed in
 ## Amended on 2026-11-13, before any real document was run
 
 No document had been given to the model when this was committed. The prediction, the
-threshold and the decision rule are unchanged. The counting rules are unchanged, with one
-doubtful case settled ahead of the count (judges named in citations, below).
+threshold and the decision rule are unchanged. The counting rules are unchanged, with two
+doubtful cases settled ahead of the count (names in citations, below). The input handling
+changed in one point: the reader now reads a content control inside a paragraph.
 
-Achia decided three things in the session of 2026-11-13: Claude collects the documents, they
-come from the Supreme Court's public search, and Claude does the count. Everything else
-below is Claude's choice and is marked as such.
+Achia decided five things in the session of 2026-11-13: Claude collects the documents, they
+come from the Supreme Court's public search, they are downloaded, Claude does the count, and
+five of the readings stand (listed at the end). Everything else below is Claude's choice and
+is marked as such.
 
 **Who assembles the corpus.** Achia asked Claude to collect the ten documents. Until now this
 file said Achia assembles them.
@@ -214,12 +216,24 @@ annotator reads with care.
 
 **The subject check, done before the run.** A document is dropped if the court below is a
 family or juvenile court, if a party or a victim is a minor, or if the claim is about a
-sexual offence. Checked on 2026-11-13 by searching the text of each document for the words
-for family court, minor and sexual offence, and reading each hit in its sentence. No
-document names a family or juvenile court. One document says, as background, that a party
-came to the country with a son who was then a minor; the son is not a party. Every other
-hit is the phrase `מיני רבים` before a list of citations. So none of the ten is dropped. No
-document is dropped after the run, for its subject or for anything else.
+sexual offence. Checked on 2026-11-13, with the fixed reader, by searching the text of each
+document and reading every hit in its sentence. The words searched, each also with attached
+prefix letters: `לענייני משפחה` and `בית המשפט למשפחה`; `קטין` and its forms; `ילד` and
+its forms, `תינוק`, `פעוט`, `נער`; `אפוטרופוס` and its forms, `חסוי`, `בגיר`; `מינית`,
+`מיני`, `אונס`, `עבירת מין`, `מעשה מגונה`. The result:
+
+- No document names a family or juvenile court.
+- `doc04`: 16 hits of a word for children. They are the grown children of a party. One hit
+  of the word for guardian, in the name of a public body inside a citation.
+- `doc05`: 2 hits. A minor and children are mentioned as background. None is a party or a
+  victim.
+- `doc07`: 1 hit, the same public body inside a citation.
+- 10 hits of `מיני` in four documents, each in the phrase `מיני רבים` before a list of
+  citations. No word for a sexual offence.
+
+So none of the ten is dropped. Had one failed, the next result of the search that passes
+would have taken its place before the run. No document is dropped after the run, for its
+subject or for anything else.
 
 **The files.** `.docx`, as the site's "save as Word" link gives them, not re-saved.
 Downloaded one at a time in Achia's browser, on Achia's decision after hearing what the
@@ -243,10 +257,12 @@ doc10  a25246e20d590b1871989ae46cbc8481967b62253c2fbc59da2d4eefcbf33639
 parties and the lawyers) in content controls inside paragraphs: 16 to 41 per file, 126 to
 492 characters per file, 2,227 in all. The reader skipped them. The review of this
 amendment found it, before the run. The reader now reads a content control that sits inside
-a paragraph (branch `fix/e1-read-content-controls`, tests first). A content control around
-whole paragraphs is still not read and still counted. Measured with the reader alone, no
-model: `unread_chars` is 0 in all ten, and 224,355 characters are read, 13,752 to 36,551
-per document. The headers hold 1 or 2 characters per document, and no footer, footnote or
+a paragraph: commits `6fb013e` (tests), `81edd3f` (the change) and `e571ac1` (more tests) of
+`fix/e1-read-content-controls`, merged to `main` before the run. The run is made from
+`main` after that merge, and `run_meta.json` records the commit it ran from. A content
+control around whole paragraphs is still not read and still counted. Measured at `81edd3f`
+with the reader alone, no model: `unread_chars` is 0 in all ten, and 224,355 characters are
+read, 13,752 to 36,551 per document. The headers hold 1 or 2 characters per document, and no footer, footnote or
 endnote holds text. A caption line is a name with little around it, which is where a model
 that reads context may do worst. That is a reason to count it, not to leave it out.
 
@@ -257,11 +273,16 @@ private split above exists for this, and its rules are unchanged. Appellate judg
 quote fewer contracts and medical records than trial judgments do. `build-plan.md:687` says
 published decisions are for realism, "never as ground truth".
 
-**Judges named in citations** (Claude's reading, fixed before the count). These judgments
-cite many decisions. The title of a cited decision (`כהן נ' לוי`) is the name of a
-precedent and is not counted, as "What counts as a person name" already says. A judge named
-as the author of a cited opinion (`השופט פלוני` after a citation) is a person named in a
-public role: it is counted, as a public figure.
+**Names in citations** (Claude's readings, fixed before the count). These judgments cite
+many decisions and some legal writing.
+
+- The title of a cited decision (`כהן נ' לוי`) is the name of a precedent and is not
+  counted, as "What counts as a person name" already says.
+- A judge named as the author of a cited opinion (`השופט א' לוי` after a citation) is a
+  person named in a public role: counted, as a public figure.
+- An author named inside the reference to a book or an article (authors, title, page) is
+  part of the name of a cited work, like the title of a decision: not counted. An author
+  named in the judgment's own sentences is counted like anyone else.
 
 **Who counts.** Claude reads the worksheets and fills in the tally. The plan says "count
 missed person names by hand", and until now the count was Achia's, with Claude beside. A
@@ -274,22 +295,30 @@ are added for this run. They are not in `README.md`.
   `other_label`, `yes` if a missed mention sits fully inside a grey highlight; `category`,
   the error category. Each number in the tally's error and miss columns can then be counted
   again from this file. The file holds names and never leaves the folder.
-- A mechanical cross-check. Every word the model highlighted as part of a person name
-  somewhere in a document is searched for in the rest of that document: as a whole word, and
-  with one to three of the letters ו ה ב ל מ כ ש in front of it. Each occurrence outside a
-  highlight is looked at. The script that lists them is a throwaway outside the repository.
-  It is not tested and it decides nothing: it gives places to look at. The findings note
-  says, per document, how many places it listed and how many of them were misses.
+- A mechanical cross-check, in two lists. The first: every word the model highlighted as
+  part of a person name somewhere in a document is searched for in the rest of that
+  document, as a whole word, with one to three of the letters ו ה ב ל מ כ ש in front of
+  it, and with its own leading letters of that set taken off. The second: every word that
+  comes straight after one of the titles `מר`, `גב'`, `גברת`, `עו"ד`, `ד"ר`, `פרופ'`,
+  `השופט`, `השופטת`, `הנשיא`, `הנשיאה`, `הרשם`, `הרשמת`, `כב'`. Each occurrence
+  outside a highlight is looked at. The script that lists them is a throwaway outside the
+  repository. It is not tested and it decides nothing: it gives places to look at. The
+  findings note says, per document, how many places each list held and how many of them
+  were misses.
 
 **Achia's check.** Achia checks `doc06`, the document with the least text (13,752
 characters), after Claude's count: the worksheet `doc06.html` against the `doc06` lines of
-the tally and of `misses.csv`. The findings note says whether the check was done and gives
-both counts for `doc06`. If they differ on any mention, Claude counts all ten again with
-what the difference showed, and the note gives the first tally and the second.
+the tally and of `misses.csv`, with those lines open. The findings note says whether the
+check was done and gives both counts for `doc06`. If the check changes any line, Claude
+counts all ten again with what the difference showed. The second tally is then the E1
+number, and in it `doc06` carries the count as Achia corrected it. The first tally is
+reported beside it. Until the check is done, the note says the number is unchecked.
 
 Limits this adds. The annotator is a language model. It can share a blind spot with the
 model under test: a name that neither recognises is counted by neither, which makes recall
-look higher than it is. One document checked by a person is the only human check.
+look higher than it is. One document checked by a person is the only human check. It covers
+13,752 of 224,355 characters, about 6 percent of the text. Achia checks with Claude's lines
+open, which finds a wrong line more easily than a missing one.
 
 **The readings.** Achia was shown five of Claude's readings in plain words and confirmed
 them: one mention is one unit, a name is found only if the whole name is highlighted, titles
