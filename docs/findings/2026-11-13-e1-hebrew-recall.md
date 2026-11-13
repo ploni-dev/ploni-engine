@@ -208,6 +208,13 @@ Taken one at a time, the lowest reading is 453 of 481, 94.18 percent (bare initi
 - **Achia's check of `doc06`.** Until it is done the number is unchecked, as the amendment says. If the check changes a line, all ten are counted again and the second tally is the E1 number.
 - No human has read any of the ten documents against a worksheet.
 
+**Added on 2026-11-14, after the run.** This departs from the amendment, and is said here as that.
+
+- Achia looked at the first page of `doc06` and confirmed the one miss Claude listed: "line 11 no yellow". Achia did not read the rest, and said: "i didnt read it all - u domit slowly for me. i domt want to have to read all of it - read it carefully and check urself and even better - create a method to verify it and have a ground truth so i dont need to involve like that".
+- So the check by a person that the amendment registered is not done and will not be. **The number stays unchecked by a person.**
+- What was done in its place: the session that wrote this note read `doc06` whole on 2026-11-14, every paragraph, as a third reading after the document's reader and the reviewer of this note. Same count: 24 mentions, 23 found, 1 missed, 7 public; 11 highlights not counted. All three readings are by the same model, so this does not measure what a person's check would have.
+- What comes next is a check against a ground truth: text written for the purpose, with the names planted by a script, so that the right answer is known exactly and nobody has to read to count. It gets a pre-registration of its own.
+
 ### The readers' guide, as written before the run
 
 Printed here because the count cannot be repeated or checked without it. The path to the pre-registration is shortened, and two examples are replaced by invented ones, because the guide's own examples there were names that also stand in the documents: an initial with a surname, and the authors in a book reference. Nothing else is changed. So the readers of doc01, doc02, doc04 and doc09 had a guide example that was also in their document. The rule they applied to those names is the pre-registration's either way.
