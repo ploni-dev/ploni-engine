@@ -148,3 +148,14 @@ For the article on surnames, Achia or Tomer should say which reading the product
 None. This is not a waiver request.
 
 ## Decision
+
+Achia, 2026-11-13, in the Claude Code session. Claude asked whether to go on without extra hand-written rules for now and to keep the six mistakes as tests that are watched. Achia answered:
+
+> Okay, yes, for now, but remember that we have to strive for maximum accuracy. This is extremely important for later users.
+
+What follows from it, as Claude reads it:
+
+1. Lines 1 and 2 of the proposed decision above are accepted, for now: no hand-written rule layer above the model in Phase 3, and the failing forms as named tests.
+2. "For now" means the choice is open again as soon as prefix errors show in a later measurement. Accuracy is the first goal of the product and comes before speed (see the decision of the same day in the E2 note).
+3. Lines 3 and 5 were not put to Achia: the cross-check in Phase 6, and no amended E3 run. On the same day Achia told Claude to settle method details without asking ("for these kinda decisions u dont need me, Just go on"). They stand as Claude's choices.
+4. Line 4 was not put to Achia either. Its scoring half stands as Claude's choice for the Phase 3 tests: a prefix written `לה` is ל on a name that begins with ה. Its product half, what the product replaces when a surname begins with ה, stays open. It is a design question and goes to Achia when Phase 3 reaches it. Tomer is not involved: Achia said on 2026-11-13 that Achia decides alone. Until then the product replaces what the model marks as the base.
