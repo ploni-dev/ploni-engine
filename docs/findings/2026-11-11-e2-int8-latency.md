@@ -212,7 +212,7 @@ Does not settle:
 
 ## Recommendation
 
-**Proposed decision, for Achia to confirm or change.** The Decision section below is left empty: a run above the fail threshold is on record, and the plan says E2 failing changes the plan, so this one is Achia's.
+**Proposed decision, for Achia to confirm or change.** The Decision section below was left empty when this was written: a run above the fail threshold is on record, and the plan says E2 failing changes the plan, so this one is Achia's.
 
 1. Take E2 as passed, for the encoder and NER head, on mains power (option 1). Run 6 is the result: 1.026 seconds, inside the band committed before it and inside the plan's 1 to 3 seconds. Run 5, above the fail threshold at 11.715 seconds, stays in this note as what the same files did on battery on this laptop, not as a failure of quantization or batching: the files are the same by hash.
 2. Until Achia defines the reference machine, timings in this project are taken on mains power and print their power state. A run whose power line shows battery is reported and is not a result.
@@ -226,3 +226,22 @@ The changed labels should be the first thing the Phase 5 eval harness is pointed
 None. This is not a waiver request.
 
 ## Decision
+
+Achia, 2026-11-13, in the Claude Code session. Claude asked whether the speed test counts as passed for a laptop on mains power. Achia answered:
+
+> I think for now, let's not focus on speed. Let's measure it, make analytics of it, and we will measure also every layer, every stage, so we know where is the most expensive on time place. And later, when we have something working, we will strive to make it better, but right now we just take measurements. We don't make it official tests that you have to pass.
+
+What follows from it, as Claude reads it:
+
+1. E2 is closed as a measurement. It is not read as passed or as failed. The six runs above stay as the record.
+2. For now, no timing of the pipeline's own work is a test that has to pass. A timing is measured, printed with its power state, and recorded. This is about speed only: peak memory, and the time a person needs in the persona and demo gates, are not touched.
+3. Every stage of the pipeline records its own time, so that the most expensive stage is known. This is new work: the plan has no per-stage timing. It starts with the first phase that has a stage to time.
+4. Work on speed waits until, in Achia's words, "we have something working".
+5. Not decided here: which machine is the reference, and whether the product says anything to a user on battery. Neither blocks work now.
+
+How this meets the proposed decision above. Its line 1 (take E2 as passed on mains) is replaced by line 1 here. Its line 2 is kept in a weaker form, as Claude's practice: timings are taken on mains power where that is possible, every timing prints its power state, and a timing taken on battery is recorded and marked. Its line 3 (time the missing heads at the start of Phase 3, with a pre-registration of their own) is replaced by line 3 here: the heads are timed as stages when Phase 3 builds them. Its line 4 is line 5 here.
+
+What this note does not do:
+
+- It is not a waiver, and `docs/WAIVERS.md` has no entry for it. A prediction and a threshold are still stated before each timing (`CLAUDE.md`, Measurement discipline). `PROCESS.md` section 10 still says that work stops and a findings note is written when a measurement is past its threshold. For a timing to be recorded and not stop work, as Achia's words ask, a waiver is needed, and only Achia enters one. Until then section 10 holds.
+- It does not edit the plan. A timing is a gate in more places than section 8.2: the runtime row of the T6 metric gates (`build-plan.md:451`), which arrive first, at Phase 5; T7 cold start in Phase 12; the Phase 13 gate; the release gate; and the full suite of `PROMOTION.md` at every phase close. None of them is in force today: there is no T6 or T7 test, no eval harness and no CI workflow. Until a PR changes the plan, the plan's text holds. That PR also has to give the per-stage timing of line 3 a home in the plan, and it comes before the first phase that has a stage to time.
