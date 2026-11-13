@@ -55,7 +55,7 @@ doc10 {"paragraphs": 60, "windows": 61, "cut_paragraphs": 1, "hard_cuts": 0, "un
 
 - The code commit `40981d4` is `main` after #47 (the reader change) and #50 (the amendment), as the amendment requires.
 - `unread_chars` is 0 in all ten. Three paragraphs were cut, all at a sentence end.
-- One `[UNK]` piece in `doc06`. The reviewer of this note found one unusual character there, a section sign in a book reference in paragraph 44. It is not in a name.
+- One `[UNK]` piece in `doc06`. The reviewer of this note checked with the tokenizer alone, no model: it is in paragraph 44, on a section sign with a number written against it, inside a book reference. It is not in a name.
 - `placeholders`: 13 in five documents. The reviewer of this note read all 13: each is in the title of a cited decision, and none stands for a party of these ten cases. The 5 that the model highlighted are in `not_person_ids`.
 - A first attempt, minutes earlier, was stopped by Claude Code for low memory before any document was finished. It left only `index.csv`, which was deleted. Nothing from it is used.
 - The run took 958 seconds for the ten documents, on mains power, on a laptop with 1.2 GB of free memory at the start. It is recorded here as a timing and is not read as a result (decision in the E2 note).
@@ -187,7 +187,7 @@ The guide the readers worked from was written before the run and is printed in f
 |---|---|---|
 | A surname in a group term for natural persons: "the brothers" and the surname in doc10 (14 places, 1 found), and family surnames used for a group of clients in doc08 (highlights 29 to 34, all found) | Counted: it is the surname of people, and a product has to replace it | doc10 alone: 448 of 456, 98.2%; private 273 of 280; "errors concentrated" becomes yes (7 of 8). Both: 442 of 450 |
 | A surname in the name of a decision about a party of this case (doc01) | Counted: it is not a cited precedent | 4 found and 1 missed drop out |
-| The bare initials of the writing judge or registrar in editorial brackets (doc05, doc06, doc09: 11 places, 4 of them highlighted) | Not counted: the pre-registration lists bare initials as not counted | 453 of 481, 94.2% |
+| The bare initials of the writing judge or registrar in editorial brackets (doc05, doc06, doc09: 11 places, 4 of them highlighted) | Not counted: the pre-registration lists bare initials as not counted. The guide's wording is narrower. The three readers saw the difference, wrote it down and followed the pre-registration, as the guide tells them to | 453 of 481, 94.2% |
 | An author's surname used as the short name of a cited book or article (47 highlights: doc01 19, doc02 7, doc04 2, doc07 17, doc09 2) | Not counted: the name of a cited work | all are found, so recall goes up |
 | A dead person's name in "estate of the late X" inside the title of a cited decision | Not counted: the title of a cited decision | a few more found |
 | A person's name inside the name of a company that is a party (doc02) | Not counted: a name inside an organisation | about 5 more found and at least 2 more missed, by the reviewer's count |
@@ -210,7 +210,9 @@ Taken one at a time, the lowest reading is 453 of 481, 94.18 percent (bare initi
 
 ### The readers' guide, as written before the run
 
-Printed here because the count cannot be repeated or checked without it. It holds no name from the documents; its examples are invented or are public names. The path to the pre-registration is shortened; nothing else is changed.
+Printed here because the count cannot be repeated or checked without it. The path to the pre-registration is shortened, and two examples are replaced by invented ones, because the guide's own examples there were names that also stand in the documents: an initial with a surname, and the authors in a book reference. Nothing else is changed. So the readers of doc01, doc02, doc04 and doc09 had a guide example that was also in their document. The rule they applied to those names is the pre-registration's either way.
+
+The guide differs from the pre-registration in two places. It leaves out bare initials only when they "stand for a hidden name"; the pre-registration leaves out bare initials with no such limit, and the readers followed the pre-registration (third row of the table above). And it gives a prefix on an ordinary-word name as an example of `proclitic`, where the pre-registration calls that `both`; no error in this count is of that kind.
 
 ````text
 # E1 annotation guide (written before the model was run on any document)
@@ -243,7 +245,7 @@ The first lines are the caption: the court, the panel of judges, the parties, th
 
 - A given name, a surname or a full name of a natural person. Every occurrence is one mention.
   A full name written together (`יעקב כהן`, `ד"ר יעקב בן דוד כהן`) is ONE mention, not two.
-- An initial with a surname (`א' כהן`, `י' עמית`) is one mention.
+- An initial with a surname (`א' כהן`, `ב' לוי`) is one mention.
 - Attached prefix letters (ו ה ב ל מ כ ש and combinations) do not matter for counting: `ולכהן` is a mention of `כהן`.
 - Two different people joined by "and" (`כהן ולוי`, `השופטים א' לוי וב' כהן`) are two mentions.
 - The same person named twice in a sentence is two mentions.
@@ -258,7 +260,7 @@ The first lines are the caption: the court, the panel of judges, the parties, th
 - The title of a CITED decision: the party names in a citation such as `ע"א 123/45 כהן נ' לוי, פ"ד ...`
   or `עניין כהן`, `פרשת לוי`, `הלכת כהן`. These name a precedent.
 - An author named INSIDE a reference to a book or an article (authors, title, edition, page), e.g.
-  `פרידמן וכהן, חוזים, בעמ' 495`. That names a cited work.
+  `לוי וכהן, דיני חיובים, בעמ' 100`. That names a cited work.
 
 ## What IS a mention even though it sits near a citation or a title
 
@@ -373,9 +375,9 @@ Rules out, or does not show:
 - **Nothing about a lawyer's own documents.** These are Supreme Court judgments: formal language, and names introduced with a role and a title. Achia's concern, recorded in the pre-registration, is that such text is close to what the model was trained on. A contract, a letter or a medical summary may behave differently. `build-plan.md:687` says published decisions are for realism, "never as ground truth". Above the prediction is a reason for caution, not for comfort.
 - **Nothing about trial-court judgments**, which quote contracts and testimony at length and were the corpus Achia first asked for.
 - **Not a sample.** Ten documents by one rule on one search. One document carries 14 of the 21 errors, and one surname 13 of them.
-- **The count is a model's.** A name that neither the model under test nor the reader recognises is counted by neither. Two independent readings agreed on four documents, which says the readers are consistent with each other, not that they are right. The one check by a person is still to come.
-- **Recall only.** What the product does with the 268 names in citations and references is not measured here; the counting rules leave them out.
-- **Where the errors fall depends on one reading.** Under the reading taken, 7 of 21 errors are ordinary-word or prefix cases, and the prediction did not hold. Under the other reading of the group term it holds (7 of 8). Prefix forms were not rare: by the reviewer's mechanical count at least 34 counted highlights begin with an attached prefix letter, 23 of them in `doc10`, against 1 missed.
+- **The count is a model's.** A name that neither the model under test nor the reader recognises is counted by neither. Two separate readings agreed on four documents, which says the readers are consistent with each other, not that they are right. Both had the same guide, and the second reader was told not to open the first reader's files; nothing enforced it. The one check by a person is still to come.
+- **Recall only.** What the product does with the names in citations and references, 216 of them highlighted, is not measured here; the counting rules leave them out.
+- **Where the errors fall depends on one reading.** Under the reading taken, 7 of 21 errors are ordinary-word or prefix cases, and the prediction did not hold. Under the other reading of the group term it holds (7 of 8). Prefix forms were not rare: by the reviewer's mechanical count at least 33 counted highlights begin with an attached prefix letter, 23 of them in `doc10`, against 1 missed.
 
 ## Options, with the cost of each
 
