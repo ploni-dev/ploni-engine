@@ -223,12 +223,13 @@ its forms, `תינוק`, `פעוט`, `נער`; `אפוטרופוס` and its form
 `מיני`, `אונס`, `עבירת מין`, `מעשה מגונה`. The result:
 
 - No document names a family or juvenile court.
-- `doc04`: 16 hits of a word for children. They are the grown children of a party. One hit
-  of the word for guardian, in the name of a public body inside a citation.
+- `doc04`: 18 hits of a word for child or children. They are the grown children of a
+  party, or stand in general statements of law about a parent and a child. One hit of
+  the word for guardian, in the name of a public body inside a citation.
 - `doc05`: 2 hits. A minor and children are mentioned as background. None is a party or a
   victim.
 - `doc07`: 1 hit, the same public body inside a citation.
-- 10 hits of `מיני` in four documents, each in the phrase `מיני רבים` before a list of
+- 10 hits of `מיני` in three documents, each in the phrase `מיני רבים` before a list of
   citations. No word for a sexual offence.
 
 So none of the ten is dropped. Had one failed, the next result of the search that passes
@@ -300,7 +301,8 @@ are added for this run. They are not in `README.md`.
   document, as a whole word, with one to three of the letters ו ה ב ל מ כ ש in front of
   it, and with its own leading letters of that set taken off. The second: every word that
   comes straight after one of the titles `מר`, `גב'`, `גברת`, `עו"ד`, `ד"ר`, `פרופ'`,
-  `השופט`, `השופטת`, `הנשיא`, `הנשיאה`, `הרשם`, `הרשמת`, `כב'`. Each occurrence
+  `השופט`, `השופטת`, `הנשיא`, `הנשיאה`, `הרשם`, `הרשמת`, `כב'`, each also with
+  attached prefix letters. Each occurrence
   outside a highlight is looked at. The script that lists them is a throwaway outside the
   repository. It is not tested and it decides nothing: it gives places to look at. The
   findings note says, per document, how many places each list held and how many of them
