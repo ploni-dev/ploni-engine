@@ -120,7 +120,8 @@ Every missed or partial mention gets exactly one:
   positions minus `[CLS]` and `[SEP]`) is cut after the last sentence-final punctuation that
   fits, or before the first word that does not fit when there is none. Windows do not overlap.
   The run prints how many paragraphs were cut and how many cuts were not at a sentence end.
-- Text extraction: `.txt` as UTF-8; `.docx` body paragraphs and table cells in document order.
+- Text extraction: `.txt` as UTF-8; `.docx` body paragraphs and table cells in document order,
+  each with the text of the content controls inside it (added on 2026-11-13, see below).
 - Characters the tokenizer cannot represent: every Unicode space separator becomes a plain
   space, and every format character (zero-width space, soft hyphen, byte order mark,
   direction marks) is removed, before the text reaches the model and the worksheet. Measured
@@ -128,8 +129,8 @@ Every missed or partial mention gets exactly one:
   piece, which would hide both words from the model. Phase 3 normalizes whitespace too.
 - Two counts are printed per document so that lost text is never silent: `unknown_pieces`,
   the `[UNK]` pieces left after that rewriting, and `unread_chars`, the characters of `.docx`
-  body text the extraction did not return (tracked insertions, content controls, fields,
-  text boxes). A document with `unread_chars` above 0 is fixed in Word and run again.
+  body text the extraction did not return (tracked insertions, content controls around
+  whole paragraphs, fields, text boxes). A document with `unread_chars` above 0 is fixed in Word and run again.
 - Placeholders: every mention of `פלוני` or `אלמוני` (feminine or plural, with attached
   prefix letters, adjacent ones such as `פלוני אלמוני` as one mention) is counted per document
   and printed as `placeholders`. A `PER` highlight that holds only such a word is counted as
@@ -182,9 +183,13 @@ highlights, and that a highlight on a name that does not count is listed in
 
 ## Amended on 2026-11-13, before any real document was run
 
-What changed, all on what Achia said in the session of 2026-11-13. No document had been
-given to the model when this was committed. The prediction, the threshold, the counting rules and
-the decision rule are unchanged.
+No document had been given to the model when this was committed. The prediction, the
+threshold and the decision rule are unchanged. The counting rules are unchanged, with one
+doubtful case settled ahead of the count (judges named in citations, below).
+
+Achia decided three things in the session of 2026-11-13: Claude collects the documents, they
+come from the Supreme Court's public search, and Claude does the count. Everything else
+below is Claude's choice and is marked as such.
 
 **Who assembles the corpus.** Achia asked Claude to collect the ten documents. Until now this
 file said Achia assembles them.
@@ -196,26 +201,54 @@ on Net HaMishpat, and Achia chose the Supreme Court's public search. The two exc
 stand: nothing from family court, minors or sexual offences, and no case captioned `פלוני`
 or `אלמוני`.
 
-**How the ten were chosen**, so that the choice cannot follow the model's output. One search
-on 2026-11-13 at `supremedecisions.court.gov.il`: section `אזרחי`, procedure
-`ע"א-ערעור אזרחי`, document type `פסק-דין`, substantive documents only, 8 to 25 pages,
-document date in the last year (13/11/2025 to 13/11/2026), newest first. It returned 42
-documents. Taken in the listed order: the first ten whose caption names a natural person, by
-name, as a party. Passed over on the way: three captioned `פלוני` (results 2, 4 and 9) and
-one between two companies (result 12). The ten are results 1, 3, 5, 6, 7, 8, 10, 11, 13 and
-14. Only the captions were read before the choice. If the count shows that one of the ten
-concerns family, minors or a sexual offence, it is dropped, the next result that passes
-takes its place, and the findings note says so. The page range is Claude's choice: a
+**How the ten were chosen** (Claude's rule), so that the choice cannot follow the model's
+output. One search on 2026-11-13 at `supremedecisions.court.gov.il`: section `אזרחי`,
+procedure `ע"א-ערעור אזרחי`, document type `פסק-דין`, substantive documents only, 8 to 25
+pages, document date in the last year (13/11/2025 to 13/11/2026), newest first. It returned
+42 documents. Taken in the listed order: the first ten whose caption names a natural person,
+by name, as a party. Passed over on the way: three captioned `פלוני` (results 2, 4 and 9)
+and one between two companies (result 12). The ten are results 1, 3, 5, 6, 7, 8, 10, 11, 13
+and 14. Only the captions were read before the choice. The page range is Claude's choice: a
 judgment under 8 pages holds few names, and ten judgments over 25 pages are more than one
 annotator reads with care.
 
+**The subject check, done before the run.** A document is dropped if the court below is a
+family or juvenile court, if a party or a victim is a minor, or if the claim is about a
+sexual offence. Checked on 2026-11-13 by searching the text of each document for the words
+for family court, minor and sexual offence, and reading each hit in its sentence. No
+document names a family or juvenile court. One document says, as background, that a party
+came to the country with a son who was then a minor; the son is not a party. Every other
+hit is the phrase `מיני רבים` before a list of citations. So none of the ten is dropped. No
+document is dropped after the run, for its subject or for anything else.
+
 **The files.** `.docx`, as the site's "save as Word" link gives them, not re-saved.
 Downloaded one at a time in Achia's browser, on Achia's decision after hearing what the
-site's terms of use say. A count of characters per part of each file, taken before the
-model was run, gives 13,778 to 36,604 characters of body text per document and 224,835 in
-all. The headers hold 1 or 2 characters each. No footnote or endnote holds text. Each file
-also has a glossary part of 76 to 168 characters, which Word does not show in the document.
-So the panel and the parties are in the body, which is what the harness reads.
+site's terms of use say. The run names them `doc01` to `doc10` in the order of their file
+names. SHA-256 of each, in that order:
+
+```
+doc01  af94dd559248e1bc2a5fda5c4431fd4ccf53cfe01c628d1dd505462a895347e8
+doc02  a19885b48cb0e4d2abc9e8fa6015cb3f3e1ce543dbb34df47f95415eff7efeae
+doc03  6cf959fda1a87692f604f8625ab762a65c4f348cb0ee1d18683d830fb1b53378
+doc04  adb6bf21a0a1d113fd7c983d2ed874291faec28cafdcfc901558b30fe8d5db77
+doc05  d88d88343ff7a4c4346117edab676b362719e6a7da420334beb11402b9be4de5
+doc06  e89f499d0988c8929eb2005b90e44433efd220e51824e94e1b9d4db5711eb902
+doc07  993b26324976e29421b6d6fa055b48c9d4bf1e35ab63d2eb961ae22b7ebe706f
+doc08  d736d885d336ce3cfc6178b5d97d5c19d91c7ea98a335d7f2760063a808ffdbf
+doc09  319e4d67d873c00c954956ffbd013bc1d2e6d97db71ad738b7dfc8ec2ba82ef0
+doc10  a25246e20d590b1871989ae46cbc8481967b62253c2fbc59da2d4eefcbf33639
+```
+
+**The caption, and a change to the reader.** These files keep their caption (the panel, the
+parties and the lawyers) in content controls inside paragraphs: 16 to 41 per file, 126 to
+492 characters per file, 2,227 in all. The reader skipped them. The review of this
+amendment found it, before the run. The reader now reads a content control that sits inside
+a paragraph (branch `fix/e1-read-content-controls`, tests first). A content control around
+whole paragraphs is still not read and still counted. Measured with the reader alone, no
+model: `unread_chars` is 0 in all ten, and 224,355 characters are read, 13,752 to 36,551
+per document. The headers hold 1 or 2 characters per document, and no footer, footnote or
+endnote holds text. A caption line is a name with little around it, which is where a model
+that reads context may do worst. That is a reason to count it, not to leave it out.
 
 **What this does to the number.** It describes Supreme Court civil appeals, not a lawyer's
 document about a private client. Each judgment names its judges, and Achia's concern of
@@ -224,18 +257,35 @@ private split above exists for this, and its rules are unchanged. Appellate judg
 quote fewer contracts and medical records than trial judgments do. `build-plan.md:687` says
 published decisions are for realism, "never as ground truth".
 
-**Who counts.** Claude reads the worksheets and fills in the tally. Achia checks one document
-afterwards against its worksheet. Until now the count was Achia's, with Claude beside. What
-Claude adds to the procedure in `README.md`:
+**Judges named in citations** (Claude's reading, fixed before the count). These judgments
+cite many decisions. The title of a cited decision (`כהן נ' לוי`) is the name of a
+precedent and is not counted, as "What counts as a person name" already says. A judge named
+as the author of a cited opinion (`השופט פלוני` after a citation) is a person named in a
+public role: it is counted, as a public figure.
 
-- Every missed or partial mention gets a line in `misses.csv` in the private output folder:
-  document id, paragraph number, the text of the mention, and its error category. That
-  makes the count checkable mention by mention. The file holds names and never leaves the
-  folder.
+**Who counts.** Claude reads the worksheets and fills in the tally. The plan says "count
+missed person names by hand", and until now the count was Achia's, with Claude beside. A
+count by a language model departs from the plan. Achia decided it on 2026-11-13. Two steps
+are added for this run. They are not in `README.md`.
+
+- Every missed or partial mention gets a line in `misses.csv` in the private output folder,
+  with these columns: `doc_id`; `paragraph`, counted from 0 as in `docNN_spans.csv`; `text`,
+  the mention; `kind`, `missed` or `partial`; `group`, `public` or `private`;
+  `other_label`, `yes` if a missed mention sits fully inside a grey highlight; `category`,
+  the error category. Each number in the tally's error and miss columns can then be counted
+  again from this file. The file holds names and never leaves the folder.
 - A mechanical cross-check. Every word the model highlighted as part of a person name
-  somewhere in a document is searched for in the rest of that document, and each occurrence
-  outside a highlight is looked at. The script that lists them is a throwaway outside the
-  repository. It is not tested and it decides nothing: it only gives places to look at.
+  somewhere in a document is searched for in the rest of that document: as a whole word, and
+  with one to three of the letters ו ה ב ל מ כ ש in front of it. Each occurrence outside a
+  highlight is looked at. The script that lists them is a throwaway outside the repository.
+  It is not tested and it decides nothing: it gives places to look at. The findings note
+  says, per document, how many places it listed and how many of them were misses.
+
+**Achia's check.** Achia checks `doc06`, the document with the least text (13,752
+characters), after Claude's count: the worksheet `doc06.html` against the `doc06` lines of
+the tally and of `misses.csv`. The findings note says whether the check was done and gives
+both counts for `doc06`. If they differ on any mention, Claude counts all ten again with
+what the difference showed, and the note gives the first tally and the second.
 
 Limits this adds. The annotator is a language model. It can share a blind spot with the
 model under test: a name that neither recognises is counted by neither, which makes recall
@@ -244,14 +294,17 @@ look higher than it is. One document checked by a person is the only human check
 **The readings.** Achia was shown five of Claude's readings in plain words and confirmed
 them: one mention is one unit, a name is found only if the whole name is highlighted, titles
 are not part of the name, judges are counted and also reported apart from private people,
-and below 80 percent the threshold is crossed. For the others (micro pooling, a wrong label
-as a miss, "concentrated" as more than half, the 10-point gap read only with 30 mentions in
-each group, a lawyer of record as a private party) Achia said: "for these kinda decisions u
-dont need me, Just go on". They stand as Claude's readings.
+and below 80 percent the threshold is crossed. For the others (micro pooling, attached
+prefix letters inside or outside a highlight, a wrong label as a miss, "concentrated" as
+more than half, between 80 and 85 or above 92 as outside the prediction, the 10-point gap
+read only with 30 mentions in each group, a lawyer of record as a private party) Achia
+said: "for these kinda decisions u dont need me, Just go on". They stand as Claude's
+readings.
 
 ## Known limits, stated before the run
 
-- Ten documents chosen by hand are not a sample of anything. The number describes these ten.
+- Ten documents chosen by a rule on one search are not a sample of anything. The number
+  describes these ten.
 - Mentions inside one document are not independent: one name the model cannot see, repeated
   fifty times, moves the pooled figure by fifty. The per-document table exists to show that.
 - One annotator, one pass. Since 2026-11-13 the annotator is Claude and Achia checks one
