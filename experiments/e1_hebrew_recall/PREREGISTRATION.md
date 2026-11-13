@@ -17,6 +17,9 @@ Quoted from `build-plan.md` section 11, lines 1031 to 1033:
 
 ## The corpus, as Achia set it on 2026-11-12
 
+**Changed on 2026-11-13, before the run: who assembles the corpus and which documents are
+in it. See "Amended on 2026-11-13" below. This section is kept as first written.**
+
 Achia assembles the ten documents. The plan's mix (court decisions, contracts, a medical
 summary) is replaced, for two reasons Achia gave. Real signed contracts and real medical
 records with names are not published, so the honest source for both is court decisions that
@@ -60,7 +63,7 @@ the pooled number.
 The plan gives the numbers but not the unit, the matching rule or the input handling. Each
 choice below moves the measured number, so each is fixed now. **These are Claude's readings,
 not Achia's decisions. Achia confirms or amends them before the run, in a commit that precedes
-the run.**
+the run.** What Achia said on 2026-11-13 is under "Amended on 2026-11-13" below.
 
 | Open point | Reading fixed here | Why this one |
 |---|---|---|
@@ -177,12 +180,82 @@ unchanged. `README.md` now also says how to record a name the model split into t
 highlights, and that a highlight on a name that does not count is listed in
 `not_person_ids`; both follow from the rules above and change none of them.
 
+## Amended on 2026-11-13, before any real document was run
+
+What changed, all on what Achia said in the session of 2026-11-13. No document had been
+given to the model when this was committed. The prediction, the threshold, the counting rules and
+the decision rule are unchanged.
+
+**Who assembles the corpus.** Achia asked Claude to collect the ten documents. Until now this
+file said Achia assembles them.
+
+**Which documents.** Ten judgments of the Supreme Court in civil appeals (`ע"א`), from the
+court's public search. The mix of 2026-11-12 (magistrate and district civil judgments, labour
+rulings, district medical malpractice judgments) is dropped. Issue #4 reports that those sit
+on Net HaMishpat, and Achia chose the Supreme Court's public search. The two exclusions
+stand: nothing from family court, minors or sexual offences, and no case captioned `פלוני`
+or `אלמוני`.
+
+**How the ten were chosen**, so that the choice cannot follow the model's output. One search
+on 2026-11-13 at `supremedecisions.court.gov.il`: section `אזרחי`, procedure
+`ע"א-ערעור אזרחי`, document type `פסק-דין`, substantive documents only, 8 to 25 pages,
+document date in the last year (13/11/2025 to 13/11/2026), newest first. It returned 42
+documents. Taken in the listed order: the first ten whose caption names a natural person, by
+name, as a party. Passed over on the way: three captioned `פלוני` (results 2, 4 and 9) and
+one between two companies (result 12). The ten are results 1, 3, 5, 6, 7, 8, 10, 11, 13 and
+14. Only the captions were read before the choice. If the count shows that one of the ten
+concerns family, minors or a sexual offence, it is dropped, the next result that passes
+takes its place, and the findings note says so. The page range is Claude's choice: a
+judgment under 8 pages holds few names, and ten judgments over 25 pages are more than one
+annotator reads with care.
+
+**The files.** `.docx`, as the site's "save as Word" link gives them, not re-saved.
+Downloaded one at a time in Achia's browser, on Achia's decision after hearing what the
+site's terms of use say. A count of characters per part of each file, taken before the
+model was run, gives 13,778 to 36,604 characters of body text per document and 224,835 in
+all. The headers hold 1 or 2 characters each. No footnote or endnote holds text. Each file
+also has a glossary part of 76 to 168 characters, which Word does not show in the document.
+So the panel and the parties are in the body, which is what the harness reads.
+
+**What this does to the number.** It describes Supreme Court civil appeals, not a lawyer's
+document about a private client. Each judgment names its judges, and Achia's concern of
+2026-11-12 holds: such names are common in the model's training text. The public and
+private split above exists for this, and its rules are unchanged. Appellate judgments also
+quote fewer contracts and medical records than trial judgments do. `build-plan.md:687` says
+published decisions are for realism, "never as ground truth".
+
+**Who counts.** Claude reads the worksheets and fills in the tally. Achia checks one document
+afterwards against its worksheet. Until now the count was Achia's, with Claude beside. What
+Claude adds to the procedure in `README.md`:
+
+- Every missed or partial mention gets a line in `misses.csv` in the private output folder:
+  document id, paragraph number, the text of the mention, and its error category. That
+  makes the count checkable mention by mention. The file holds names and never leaves the
+  folder.
+- A mechanical cross-check. Every word the model highlighted as part of a person name
+  somewhere in a document is searched for in the rest of that document, and each occurrence
+  outside a highlight is looked at. The script that lists them is a throwaway outside the
+  repository. It is not tested and it decides nothing: it only gives places to look at.
+
+Limits this adds. The annotator is a language model. It can share a blind spot with the
+model under test: a name that neither recognises is counted by neither, which makes recall
+look higher than it is. One document checked by a person is the only human check.
+
+**The readings.** Achia was shown five of Claude's readings in plain words and confirmed
+them: one mention is one unit, a name is found only if the whole name is highlighted, titles
+are not part of the name, judges are counted and also reported apart from private people,
+and below 80 percent the threshold is crossed. For the others (micro pooling, a wrong label
+as a miss, "concentrated" as more than half, the 10-point gap read only with 30 mentions in
+each group, a lawyer of record as a private party) Achia said: "for these kinda decisions u
+dont need me, Just go on". They stand as Claude's readings.
+
 ## Known limits, stated before the run
 
 - Ten documents chosen by hand are not a sample of anything. The number describes these ten.
 - Mentions inside one document are not independent: one name the model cannot see, repeated
   fifty times, moves the pooled figure by fifty. The per-document table exists to show that.
-- One annotator, one pass, no second reader. Annotation error is not measured.
+- One annotator, one pass. Since 2026-11-13 the annotator is Claude and Achia checks one
+  document afterwards. Annotation error is not measured beyond that check.
 - Non-overlapping windows can cut a name in two in a long paragraph. Phase 3 windowing
   (stride 128) is not implemented here; the cut counts bound how often this can have happened.
 - The number is recall only. Precision of `PER` highlights is reported because it falls out of
