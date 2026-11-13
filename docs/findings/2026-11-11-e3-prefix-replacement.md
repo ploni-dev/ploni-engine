@@ -131,7 +131,7 @@ Does not settle:
 
 Option 2, in two steps. In Phase 3, use the segmentation as it is and carry the failing forms in the T1 prefix tests as named cases, so the gap is visible and not forgotten. In Phase 6, add the cross-check.
 
-**Proposed decision, for Achia to confirm or change.** The Decision section below is left empty: `docs/findings/README.md` gives it to Achia, and line 4 holds a product choice.
+**Proposed decision, for Achia to confirm or change.** The Decision section below was left empty when this was written: `docs/findings/README.md` gives it to Achia, and line 4 holds a product choice.
 
 1. Option 2. No hand-written rule layer above the model in Phase 3: the count is above the plan's threshold of 85 under every reading of the article forms (93, 94 and 96).
 2. The failing forms become named tests in Phase 3. Under the scoring of line 4, four forms are expected to fail: b14, b16, b19 and d04. f03 and f04 become passing cases. The tests also carry the forms the plan names and the 100 did not hold: `שברק`, one form with `וה` and one with `ושה`. Each test marked as an expected failure carries an issue link, as `PROMOTION.md` requires of every such marker, and none of them counts toward Phase 3's gate. That gate is "prefix preservation holds over 1,000 generated forms". If generated `מש`, `וש` or `שמ` forms fail it, that is a finding of its own, and these markers do not cover it.
@@ -148,3 +148,25 @@ For the article on surnames, Achia or Tomer should say which reading the product
 None. This is not a waiver request.
 
 ## Decision
+
+Achia, 2026-11-13, in the Claude Code session. Claude asked whether to go on without extra hand-written rules for now and to keep the six mistakes as tests that are watched. Achia answered:
+
+> Okay, yes, for now, but remember that we have to strive for maximum accuracy. This is extremely important for later users.
+
+Decided:
+
+1. No hand-written rule layer above the model in Phase 3, for now.
+2. The six failing forms (b14, b16, b19, d04, f03, f04) are kept as tests that are watched.
+3. Achia: "we have to strive for maximum accuracy. This is extremely important for later users."
+
+As Claude reads "for now": the question of a rule layer comes back when the Phase 3 gate over 1,000 generated forms fails, or when the Phase 5 eval shows prefix errors. Each is then a findings note of its own.
+
+Not decided. These were not put to Achia, and they stay as Claude's proposal in the section above until they are:
+
+- How `לה` on a surname is scored. So f03 and f04 stay watched mistakes, as Achia was told, and do not become passing cases. The plan's list of prefix combinations still has `לה` (`build-plan.md:639`); taking it out is a change to the plan.
+- What the product replaces when a surname begins with ה. It is a design question, and it goes to Achia when Phase 3 reaches it. Until then the product replaces what the model marks as the base, which follows from line 1. The proposed decision says "Achia or Tomer". It goes to Achia first.
+- The three forms the 100 did not hold (`שברק`, one with `וה`, one with `ושה`), how a test that is expected to fail is marked, and whether such tests count toward Phase 3's gate.
+- The cross-check against an entity's other mentions in Phase 6. It adds a rule to Phase 6, so it needs a PR to `build-plan.md`.
+- Whether E3 is run again with an amended pre-registration.
+
+The first three go to Achia before Phase 3 writes its prefix tests.
