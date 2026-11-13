@@ -226,3 +226,17 @@ The changed labels should be the first thing the Phase 5 eval harness is pointed
 None. This is not a waiver request.
 
 ## Decision
+
+Achia, 2026-11-13, in the Claude Code session, in these words:
+
+> I think for now, let's not focus on speed. Let's measure it, make analytics of it, and we will measure also every layer, every stage, so we know where is the most expensive on time place. And later, when we have something working, we will strive to make it better, but right now we just take measurements. We don't make it official tests that you have to pass.
+
+What follows from it, as Claude reads it:
+
+1. E2 is closed as a measurement. It is not read as passed or as failed. The six runs above stay as the record.
+2. Until Achia says otherwise, no timing in this project is a test that has to pass. A timing is measured, printed with its power state, and recorded.
+3. Every stage of the pipeline records its own time, so that the most expensive stage is known. This is new work: the plan has no per-stage timing. It starts with the first phase that has a stage to time.
+4. Work on speed waits until the pipeline works end to end.
+5. Not decided here: which machine is the reference, and whether the product says anything to a user on battery. Neither blocks work now.
+
+This decision is about text that this PR does not edit: the fail thresholds of `build-plan.md` section 8.2, the T7 performance tier and the Phase 13 gate "budget met". None of them is in force yet: no T7 test exists and Phase 13 is the last phase. Bringing their text into line with this decision is a change to the plan and goes in a PR of its own.
