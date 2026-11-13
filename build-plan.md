@@ -518,7 +518,7 @@ Each phase states: goal, deliverable, tests added, **gate**, and what breaks dow
 
 **Goal.** A repo that installs, imports, runs a no-op CLI, and cannot leak.
 
-**Deliverable.** Pinned `requirements.txt` and `pyproject.toml`, Python 3.11. `types.py` and `errors.py` exactly as section 5. CLI stubs: `scan`, `analyze`, `review`, `export`, `verify`, `restore`, `rehydrate`, `report`, `selftest`, `usage`. `safety/logging.py`, `safety/tempfiles.py`, `safety/atomic.py`. `scripts/download_models.py` with pinned revisions, writing `docs/THIRD_PARTY.md` with name, URL, revision hash and license per model. `eval/baselines.json` skeleton. `make check` running the fast suite.
+**Deliverable.** Pinned `requirements.txt` and `pyproject.toml`, Python 3.13 (3.11 until 2026-11-13; Achia changed it because the development laptop has 3.13.5 and week-one experiments E2 and E3 had run on it; E1 ran on it the same day). `types.py` and `errors.py` exactly as section 5. CLI stubs: `scan`, `analyze`, `review`, `export`, `verify`, `restore`, `rehydrate`, `report`, `selftest`, `usage`. `safety/logging.py`, `safety/tempfiles.py`, `safety/atomic.py`. `scripts/download_models.py` with pinned revisions, writing `docs/THIRD_PARTY.md` with name, URL, revision hash and license per model. `eval/baselines.json` skeleton. `make check` running the fast suite.
 
 **Tests added.** T0 type contracts. T8 no-network AST scan, eval-isolation, log canary, temp-file canary. T1 atomic-write unit tests including simulated crash between write and rename.
 
