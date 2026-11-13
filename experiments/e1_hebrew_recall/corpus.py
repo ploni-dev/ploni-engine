@@ -7,11 +7,14 @@ where both rules are kept.
 
 Known limits: `.txt` and `.docx` only. A `.docx` yields body paragraphs and
 table cells; headers, footers, footnotes, endnotes, comments and text boxes are
-not read, and neither is text inside a tracked insertion or a content control,
-because python-docx 1.2.0 builds paragraph text from direct `w:r` and
-`w:hyperlink` children only (`docx/oxml/text/paragraph.py:60`). The hand count
-is over the extracted text, so these are outside the E1 number by definition;
-`unread_characters` says how much body text that was, so it is never silent.
+not read, and neither is text inside a tracked insertion or inside a content
+control that wraps whole paragraphs. A content control inside a paragraph is
+read (`_inline_runs`): python-docx 1.2.0 builds paragraph text from direct
+`w:r` and `w:hyperlink` children only (`docx/oxml/text/paragraph.py:60`), and
+the Supreme Court's files keep the panel, the parties and the lawyers in such
+controls. The hand count is over the extracted text, so what is not read is
+outside the E1 number by definition; `unread_characters` says how much body
+text that was, so it is never silent.
 """
 
 from __future__ import annotations
@@ -163,6 +166,29 @@ def _docx_paragraphs(container) -> Iterator:
                 yield from _docx_paragraphs(cell)
 
 
+def _inline_runs(element) -> Iterator:
+    """Yield the runs of a paragraph that a reader of the document sees, in order.
+
+    Why: Word shows the text of a content control in its place in the line,
+    and python-docx leaves it out of `Paragraph.text`. In the Supreme Court's
+    files that text is the caption: the panel, the parties and the lawyers.
+
+    Contract: `element` is a `w:p` or a `w:sdtContent`. Yields `w:r`
+    elements: its own, those of its hyperlinks, and those inside its content
+    controls at any depth. Nothing else is entered, so a tracked insertion
+    stays unread, as it was.
+    """
+    for child in element:
+        if child.tag == qn("w:r"):
+            yield child
+        elif child.tag == qn("w:hyperlink"):
+            yield from child.iterchildren(qn("w:r"))
+        elif child.tag == qn("w:sdt"):
+            content = child.find(qn("w:sdtContent"))
+            if content is not None:
+                yield from _inline_runs(content)
+
+
 def read_paragraphs(path: Path) -> list[str]:
     """Read one document into its non-empty paragraphs.
 
@@ -171,7 +197,8 @@ def read_paragraphs(path: Path) -> list[str]:
 
     Contract: `.txt` is decoded as UTF-8 with an optional byte order mark, one
     paragraph per line. `.docx` gives body paragraphs and table cells in
-    document order. Characters the tokenizer cannot represent are rewritten by
+    document order, each with the text of the content controls inside it.
+    Characters the tokenizer cannot represent are rewritten by
     `_visible`. Raises UnsupportedDocumentError for any other suffix and
     UnicodeDecodeError for a `.txt` that is not UTF-8.
 
@@ -182,17 +209,20 @@ def read_paragraphs(path: Path) -> list[str]:
     if suffix == ".txt":
         return _non_blank(iter(path.read_text(encoding="utf-8-sig").splitlines()))
     if suffix == ".docx":
-        return _non_blank(block.text for block in _docx_paragraphs(docx.Document(str(path))))
+        return _non_blank(
+            "".join(run.text for run in _inline_runs(block._p))
+            for block in _docx_paragraphs(docx.Document(str(path)))
+        )
     raise UnsupportedDocumentError(f"unsupported document suffix: {suffix or '(none)'}")
 
 
 def unread_characters(path: Path) -> int:
     """Count the body text of a `.docx` that `read_paragraphs` does not return.
 
-    Why: a name typed with Track Changes on, or sitting in a content control,
-    a field or a text box, is skipped by python-docx without a sign. A count
-    may be printed where the text may not, and a non-zero count tells the
-    annotator the worksheet is missing words.
+    Why: a name typed with Track Changes on, or sitting in a text box, a
+    field or a content control around whole paragraphs, is skipped without a
+    sign. A count may be printed where the text may not, and a non-zero count
+    tells the annotator the worksheet is missing words.
 
     Contract: characters in every `w:t` under the document body, minus those in
     the runs `read_paragraphs` reads. 0 for a `.txt`. Headers, footers and
@@ -205,7 +235,8 @@ def unread_characters(path: Path) -> int:
     read = sum(
         len(element.text or "")
         for paragraph in _docx_paragraphs(document)
-        for element in paragraph._p.xpath("./w:r/w:t | ./w:hyperlink/w:r/w:t")
+        for run in _inline_runs(paragraph._p)
+        for element in run.iterchildren(qn("w:t"))
     )
     return total - read
 
