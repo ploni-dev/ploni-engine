@@ -47,8 +47,9 @@ cd experiments/e1_hebrew_recall && ../.venv/Scripts/python.exe -m pytest -q
    Two of the counts must be looked at before any counting by hand:
 
    - `unread_chars` above 0: the `.docx` holds body text the worksheet does not show, such
-     as tracked insertions, content controls, fields or text boxes. Accept all changes in
-     Word, save, run again in a new output folder, and say so in the findings note.
+     as tracked insertions, content controls around whole paragraphs, fields or text
+     boxes. Accept all changes in Word, save, run again in a new output folder, and say so
+     in the findings note.
    - `unknown_pieces` above 0: the text holds characters the model cannot read, and each
      one hides a word from it. Report the count in the findings note.
 
