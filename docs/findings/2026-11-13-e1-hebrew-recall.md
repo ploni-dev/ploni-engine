@@ -29,7 +29,7 @@ Primary number: strict mention-level recall, pooled over the ten documents. A me
 | Public figures (judges, registrars, officials) | 175 | 176 | 99.43% |
 | Private parties | 274 | 294 | 93.20% |
 
-The errors are not where the plan predicted. 21 errors: 3 partial, 18 missed. 6 are ordinary-word names, 1 carries an attached prefix, 14 are neither. 13 of the 21 are one surname in one document.
+Under the reading taken of one doubtful case (the first row of the table of doubtful cases below), the errors are not where the plan predicted. 21 errors: 3 partial, 18 missed. 6 are ordinary-word names, 1 carries an attached prefix, 14 are neither. 13 of the 21 are one surname in one document. Under the other reading of that case, the prediction about where the errors fall holds.
 
 ### The run
 
@@ -54,13 +54,15 @@ doc10 {"paragraphs": 60, "windows": 61, "cut_paragraphs": 1, "hard_cuts": 0, "un
 ```
 
 - The code commit `40981d4` is `main` after #47 (the reader change) and #50 (the amendment), as the amendment requires.
-- `unread_chars` is 0 in all ten. Three paragraphs were cut, all at a sentence end. One `[UNK]` piece in `doc06`.
+- `unread_chars` is 0 in all ten. Three paragraphs were cut, all at a sentence end.
+- One `[UNK]` piece in `doc06`. The reviewer of this note found one unusual character there, a section sign in a book reference in paragraph 44. It is not in a name.
+- `placeholders`: 13 in five documents. The reviewer of this note read all 13: each is in the title of a cited decision, and none stands for a party of these ten cases. The 5 that the model highlighted are in `not_person_ids`.
 - A first attempt, minutes earlier, was stopped by Claude Code for low memory before any document was finished. It left only `index.csv`, which was deleted. Nothing from it is used.
 - The run took 958 seconds for the ten documents, on mains power, on a laptop with 1.2 GB of free memory at the start. It is recorded here as a timing and is not read as a result (decision in the E2 note).
 
 ### The tally
 
-`tally.csv`, as written from the readers' files. It holds highlight numbers and counts only.
+`tally.csv`, as written from the readers' files. It holds highlight numbers and counts only. SHA-256 of `tally.csv`: `49d27a6ff9b6033049bee05b08df4da3abad511f2555785fbcc5b43b4da33e57`. Of `misses.csv`: `1ba80e510bd9f823783d9361cacba956449c97e885bafd13c84efecbbeefcd8b`.
 
 ```
 doc_id,per_highlights,not_person_ids,partial_ids,public_ids,found_adjust,missed,missed_other_label,err_ordinary_word,err_proclitic,err_both,err_other,found_adjust_public,missed_public
@@ -141,11 +143,22 @@ No name is written here. `misses.csv` in the private output folder has one line 
 | A party line in the caption, only part of the name highlighted | 2 | doc01, doc03 | PER on part of the name |
 | A judge after a citation, the initial left outside the highlight | 1 | doc07 | PER on the surname |
 
-So 3 of the 21 are in a caption line, where a name stands with little around it. The amendment expected the caption to be the hard part. With 3 errors in ten captions it was not.
+So 3 of the 21 are in a caption line, where a name stands with little around it. The amendment expected the caption to be the hard part. By the count of the reviewer of this note, the captions hold 122 mentions, 119 of them found (97.5 percent), against 330 of 348 (94.8 percent) in the rest of the text. Under the other reading of the group term the rest is 329 of 334 (98.5 percent), and the caption is then the weaker part.
 
 ### The 268 highlights that are not counted mentions
 
-`PER highlight precision: 62.88%` does not mean the model is wrong in 37 of 100 highlights. Nearly all of the 268 are real person names that the counting rules leave out: party names in the titles of cited decisions, and authors inside references to books and articles. These judgments cite a great deal. The readers' notes name only a few that are not a person's name at all (a company suffix, a company name).
+`PER highlight precision: 62.88%` does not mean the model is wrong in 37 of 100 highlights. By the reasons the readers wrote in the ten `docNN_marks.csv` files, as the reviewer of this note counted them:
+
+| Why the highlight is not a counted mention | Highlights |
+|---|---|
+| A party name in the title of a cited decision | 122 |
+| An author, or an author's surname as the short name of a cited work | 94 |
+| A person's name inside the name of a company | 4 |
+| A placeholder | 5 |
+| Bare initials | 4 |
+| Not a person's name: a company or part of its name, a company suffix, an organisation, a village, an ordinary word | 39 |
+
+So 220 of the 268 are names of people that the counting rules leave out; these judgments cite a great deal. About 39 of the 722 highlights are on something that is not a person.
 
 ### The cross-check
 
@@ -168,29 +181,182 @@ As the amendment asks, per document: places listed by the throwaway script, and 
 
 ### Doubtful cases, each decided once and applied to every document
 
-The guide the readers worked from was written before the run. It settled two cases ahead of the count that the pre-registration does not name: a dead person named in "the estate of the late X" as a party of this case is counted, and a party named in the caption of this case is counted. The rest came up during the count:
+The guide the readers worked from was written before the run and is printed in full at the end of this section. It settled cases ahead of the count that the pre-registration does not name: a dead person named in "the estate of the late X" as a party of this case is counted; a party named in the caption of this case is counted; mediators, arbitrators, appraisers and lawyers of record are private; an unsure call between public and private is private. The rest came up during the count:
 
 | Case | Decision | What the other reading would do |
 |---|---|---|
-| A surname in a group term for two natural persons (doc10) | Counted: it is the surname of people, and a product has to replace it | 448 of 456, 98.2% |
+| A surname in a group term for natural persons: "the brothers" and the surname in doc10 (14 places, 1 found), and family surnames used for a group of clients in doc08 (highlights 29 to 34, all found) | Counted: it is the surname of people, and a product has to replace it | doc10 alone: 448 of 456, 98.2%; private 273 of 280; "errors concentrated" becomes yes (7 of 8). Both: 442 of 450 |
 | A surname in the name of a decision about a party of this case (doc01) | Counted: it is not a cited precedent | 4 found and 1 missed drop out |
 | The bare initials of the writing judge or registrar in editorial brackets (doc05, doc06, doc09: 11 places, 4 of them highlighted) | Not counted: the pre-registration lists bare initials as not counted | 453 of 481, 94.2% |
-| An author's surname used as the short name of a cited book or article (at least 27 highlights in doc01, doc02, doc07, doc09) | Not counted: the name of a cited work | all are found, so recall goes up |
+| An author's surname used as the short name of a cited book or article (47 highlights: doc01 19, doc02 7, doc04 2, doc07 17, doc09 2) | Not counted: the name of a cited work | all are found, so recall goes up |
 | A dead person's name in "estate of the late X" inside the title of a cited decision | Not counted: the title of a cited decision | a few more found |
-| A person's name inside the name of a company that is a party (doc02) | Not counted: a name inside an organisation | a few more found |
+| A person's name inside the name of a company that is a party (doc02) | Not counted: a name inside an organisation | about 5 more found and at least 2 more missed, by the reviewer's count |
 | A judge's initial outside the highlight on the surname (doc07) | Partial: an initial with a surname is one mention | 450 of 470 |
-| A professor or a known lawyer named in the judgment's own sentence | Counted. Public only when the person also held a public office the readers were sure of; private when unsure | moves mentions between the two groups, not the pooled number |
+| A professor or a known lawyer named in the judgment's own sentence, and a party who may be known from public life (doc06, highlight 9) | Counted. Public only when the person also held a public office the readers were sure of; private when unsure | moves mentions between the two groups, not the pooled number |
+| The category of an error. The readers marked 5 of the 6 ordinary-word calls as unsure (doc01 paragraph 43, doc03 paragraph 22, doc04 twice, doc06 paragraph 18) | Ordinary word, as the readers chose | Under the reading taken, "errors concentrated" stays no whatever the category (7 of 21 at most). Under the other reading of the group term it is yes, or no (4 of 8) if the three weakest calls go to `other` |
 
-No reading of these cases brings the pooled number under 94 percent.
+Taken one at a time, the lowest reading is 453 of 481, 94.18 percent (bare initials counted). Two readings together, bare initials and names inside company names, give 458 of 488, 93.85 percent, by the reviewer's count. Both go against the pre-registration's own list of what is not counted, so the E1 number does not move.
 
 ### What was added to the pre-registered procedure
 
-A second reading. Four documents (doc01, doc07, doc08, doc10: 120,753 of the 224,355 characters, and 17 of the 21 errors) were read again by a second Claude session that did not see the first reader's files, looking only for names with no highlight or a partial one. It listed the same errors as the first reader in all four and no new one. This step is not in the pre-registration. It could only have added misses.
+- **A second reading.** Four documents (doc01, doc07, doc08, doc10: 120,753 of the 224,355 characters, and 17 of the 21 errors) were read again by a second Claude session that was told not to open the first reader's files, looking only for names with no highlight or a partial one. It listed the same errors as the first reader in all four and no new one. This step is not in the pre-registration. It could only have added misses.
+- **Plain-text worksheets.** The readers read `docNN_compact.txt`, not the page `docNN.html` the amendment names. A throwaway script outside the repository makes the one from the other. The reviewer of this note compared them: the same text and the same highlights in all 843 paragraphs.
+- **One more column in `misses.csv`:** `highlight`, the number of the highlight for a partial.
 
 ### What is not done
 
 - **Achia's check of `doc06`.** Until it is done the number is unchecked, as the amendment says. If the check changes a line, all ten are counted again and the second tally is the E1 number.
 - No human has read any of the ten documents against a worksheet.
+
+### The readers' guide, as written before the run
+
+Printed here because the count cannot be repeated or checked without it. It holds no name from the documents; its examples are invented or are public names. The path to the pre-registration is shortened; nothing else is changed.
+
+````text
+# E1 annotation guide (written before the model was run on any document)
+
+You are the annotator for ONE document of experiment E1. E1 measures how many person-name
+mentions the Hebrew model `dictabert-joint` finds. You read the worksheet of your document and
+record, for every highlight and every person-name mention, what happened.
+
+The source of the rules is `experiments/e1_hebrew_recall/PREREGISTRATION.md`
+(sections "What counts as a person name", "What the plan leaves open", "Public figures and
+private parties", "Error categories", and "Amended on 2026-11-13": "Names in citations").
+Read those sections first. This guide restates them and settles the cases they leave open.
+Where this guide and that file disagree, that file wins and you report the disagreement.
+
+## Privacy
+
+The document is a published court judgment with real people's names. Write names only into
+the output files named below, inside the private output folder. In your final answer to the
+caller give counts and highlight numbers only: no names, no sentences from the document.
+
+## The worksheet format
+
+`docNN_compact.txt`: one line per paragraph, `¶K: text`. K counts from 0.
+- `⟦N:text⟧` is a yellow highlight: the model labelled `text` as a person (PER). N is its number.
+- `⟨LABEL:text⟩` is a grey highlight: the model gave `text` another label (for example ORG, GPE, LOC, TTL, FAC, DUC, EVE, WOA, ANG, MISC, TIMEX).
+- Everything else is text the model did not label.
+The first lines are the caption: the court, the panel of judges, the parties, the lawyers.
+
+## What is one mention
+
+- A given name, a surname or a full name of a natural person. Every occurrence is one mention.
+  A full name written together (`יעקב כהן`, `ד"ר יעקב בן דוד כהן`) is ONE mention, not two.
+- An initial with a surname (`א' כהן`, `י' עמית`) is one mention.
+- Attached prefix letters (ו ה ב ל מ כ ש and combinations) do not matter for counting: `ולכהן` is a mention of `כהן`.
+- Two different people joined by "and" (`כהן ולוי`, `השופטים א' לוי וב' כהן`) are two mentions.
+- The same person named twice in a sentence is two mentions.
+
+## What is NOT a mention (never counted, whether highlighted or not)
+
+- Placeholders: `פלוני`, `אלמוני`, bare initials that stand for a hidden name (`א.ב.`, `ר' ש'`).
+- Roles and descriptions: `המערער`, `המשיבה`, `התובע`, `המנוח`, `השופט` alone, `ב"כ המערער`, pronouns.
+- Titles are not part of the name: `עו"ד`, `ד"ר`, `פרופ'`, `השופט`, `השופטת`, `הנשיא`, `מר`, `גב'`, `כב'`.
+- A person's name inside the name of an organisation, a firm, a street, a place, a statute or a doctrine
+  (`משרד כהן ושות'`, `רחוב ז'בוטינסקי`, `הלכת אפרופים`, `קרן רוטשילד`, `בית חולים שיבא`).
+- The title of a CITED decision: the party names in a citation such as `ע"א 123/45 כהן נ' לוי, פ"ד ...`
+  or `עניין כהן`, `פרשת לוי`, `הלכת כהן`. These name a precedent.
+- An author named INSIDE a reference to a book or an article (authors, title, edition, page), e.g.
+  `פרידמן וכהן, חוזים, בעמ' 495`. That names a cited work.
+
+## What IS a mention even though it sits near a citation or a title
+
+- A judge named as the author of a cited opinion: `(פסקה 5 לפסק דינו של השופט א' לוי)`,
+  `(השופטת ב' כהן)`. Counted, public figure.
+- An author named in the judgment's own sentence (`כפי שכתב פרופ' כהן בספרו`). Counted.
+- The parties, lawyers and judges of THIS case, in the caption and in the text. Counted. The
+  caption line `X נ' Y` of this case is not a cited precedent: its natural persons are counted.
+- A dead person named in `עיזבון המנוח X` or `המנוח X ז"ל`: the name X is counted (the party is
+  an estate, the name is a natural person's).
+- A company, a kibbutz, a ministry, a bank, a court: not a person, not counted.
+
+## Found, partial, missed (the strict rule)
+
+- FOUND: yellow highlights cover every name token of the mention. Extra covered text (a title,
+  a prefix letter, a comma) does not matter.
+- PARTIAL: yellow covers only part of the name tokens (`⟦7:יעקב⟧ כהן` where the mention is `יעקב כהן`).
+- MISSED: no yellow on the mention at all. If the whole name sits inside ONE grey highlight,
+  it is still missed, with `other_label = yes`.
+- Only the title is yellow (`⟦9:עו"ד⟧ כהן`): the highlight is not a person, and the name is missed.
+
+## Verdict for every yellow highlight
+
+Give each yellow highlight N exactly one verdict:
+
+- `found`: it (alone or with the adjacent highlight(s) listed as `surplus`) fully covers one counted mention.
+- `partial`: it covers only part of a counted mention.
+- `surplus`: it is a second (third...) highlight on a mention that another highlight already
+  stands for. Example: `⟦5:יעקב⟧ ⟦6:כהן⟧` for the one mention `יעקב כהן`: 5 is `found`, 6 is `surplus`.
+  If two highlights each cover part of one name and a name token is left uncovered, one is
+  `partial` and the other `surplus`.
+- `not_person`: it is not a counted mention: a placeholder, a role, a title alone, a company or
+  place, a name inside an organisation/street/statute/doctrine, a party name in the title of a
+  cited decision, an author inside a book reference, or not a name at all.
+- For a highlight that holds MORE than one counted mention (`⟦4:כהן ולוי⟧`): verdict `found`
+  and put the number of extra persons in the `extra` column (1 for two people).
+
+`group` for found / partial / surplus: `public` or `private` (see below). For `not_person`: `-`.
+
+## Public figure or private party
+
+- `public`: a judge or a registrar (of this case or of any cited opinion); an elected or
+  appointed public official named in that role (a minister, the Attorney General, a mayor);
+  a lawyer or an expert that a reader of the news would recognise by name.
+- `private`: everyone else: the parties, witnesses, doctors, experts, appraisers, mediators,
+  arbitrators, and the lawyers of record of this case and of other cases.
+- Unsure: choose `private` and write the highlight or the miss into the doubts file.
+
+## Misses and partials
+
+For every MISSED mention and every PARTIAL mention write one line (columns below). For a
+partial, `text` is the whole name as it should have been covered.
+`category`:
+- `proclitic`: the mention carries an attached prefix letter (`ולכהן`, `שברק`... only if the prefix is attached to a name token).
+- `ordinary_word`: a name token is also an everyday Hebrew word (`ברק`, `שלום`, `אור`, `טל`, `חיים`, `שחר`, `רון`, `יונה`, `גל`, `חן`, `דקל`, `נועם`).
+- `both`: both of the above.
+- `other`: neither.
+If you are unsure whether a token is an everyday word, pick what you think and add a doubt line.
+
+## How to work
+
+1. Read the whole document once, top to bottom, slowly. For each paragraph, go through every
+   yellow highlight and give it a verdict, and look for person names with no yellow on them:
+   after titles and role words, in lists of lawyers and judges, in signatures at the end
+   (`ניתן היום ... ש ו פ ט`), inside parentheses, and names with attached prefix letters.
+   Names written with spaces between letters are not names (they are the word "judge" etc.).
+2. Read `docNN_spans.csv` to make sure you gave a verdict to EVERY highlight number from 1 to
+   the last one, each exactly once.
+3. Go through `crosscheck_docNN.csv`: each row is a place that may hold a missed name (a word
+   the model highlighted elsewhere, found outside a highlight; or the word after a title).
+   Look at each row. Most are not misses (a name inside a citation title, a common word). Any
+   that is a counted mention with no yellow on it must be in your misses.
+4. Write the three output files.
+
+## Output files (write them into the private output folder, UTF-8, comma-separated, with header)
+
+`docNN_marks.csv` — one row per yellow highlight, in order:
+`highlight,verdict,group,extra,note`
+- `highlight`: the number. `verdict`: found | partial | surplus | not_person. `group`: public | private | -.
+- `extra`: 0, or the number of extra persons inside this one highlight.
+- `note`: a few words only when the verdict is not `found` (why), else empty. No commas inside it.
+
+`docNN_misses.csv` — one row per missed or partial mention:
+`doc_id,paragraph,text,kind,group,other_label,category,highlight`
+- `kind`: missed | partial. `other_label`: yes | no (only a missed mention can be yes).
+- `highlight`: for a partial, the number of the yellow highlight listed as `partial`; empty for a miss.
+- Put `text` in double quotes if it holds a comma.
+
+`docNN_doubts.txt` — free text, one doubt per line: the paragraph number, the highlight number
+or the words, what you decided and why you were unsure. Write "none" if there is none.
+
+## Your final answer to the caller
+
+Counts only: number of highlights; how many found / partial / surplus / not_person; how many
+public and private among found; how many misses and partials, by category and by group; how
+many crosscheck rows you looked at and how many of them were misses; how many doubt lines.
+No names and no text from the document.
+````
 
 ## What this rules in and what it rules out
 
@@ -198,7 +364,8 @@ Rules in:
 
 - The threshold is not crossed, by a wide margin: 95.5 percent against 80. As far as E1 can say, the architecture stands and the plan goes on.
 - Achia's concern of 2026-11-12 is visible but small here: 99.4 percent on public figures, 93.2 percent on private parties. Both groups have far more than 30 mentions. Private-party recall alone is also far above 80.
-- The model's main failure in these documents is a wrong label, not a blind spot: 13 of 18 misses sit under ORG or LOC, and any-label recall is 98.3 percent. The 13 are one surname whose full names are highlighted elsewhere in the same document. Phase 6 links a lone surname to a full-name entity and groups a family by a shared surname. Whether that reaches a span the model labelled ORG is not in the plan; option 3 makes it a test.
+- In `doc10` the model's main failure is a wrong label, not a blind spot. 12 of the 18 misses are one surname under ORG. One more is a given name under LOC. One more place of that surname has no label. Any-label recall is 98.3 percent. Outside `doc10`, none of the 4 misses sits under another label.
+- The full names of the people who carry that surname are highlighted elsewhere in `doc10`. Phase 6 links a lone surname to a full-name entity only "when exactly one candidate exists" (`build-plan.md:707`), and groups a family by a shared surname (`build-plan.md:712`). At least three people carry the surname here, so the plan's answer is `ambiguous`, not a link. And `build-plan.md:717` has all detections of one entity share one type, so a span labelled ORG cannot join a person as the plan stands.
 - Reading the caption mattered. Before #47 the reader skipped it. It holds 3 of the 21 errors.
 
 Rules out, or does not show:
@@ -208,13 +375,13 @@ Rules out, or does not show:
 - **Not a sample.** Ten documents by one rule on one search. One document carries 14 of the 21 errors, and one surname 13 of them.
 - **The count is a model's.** A name that neither the model under test nor the reader recognises is counted by neither. Two independent readings agreed on four documents, which says the readers are consistent with each other, not that they are right. The one check by a person is still to come.
 - **Recall only.** What the product does with the 268 names in citations and references is not measured here; the counting rules leave them out.
-- **The prediction about where the errors fall did not hold.** 7 of 21 are ordinary-word or prefix cases. E1 does not show that those two are the hard cases; it shows too few of them to say.
+- **Where the errors fall depends on one reading.** Under the reading taken, 7 of 21 errors are ordinary-word or prefix cases, and the prediction did not hold. Under the other reading of the group term it holds (7 of 8). Prefix forms were not rare: by the reviewer's mechanical count at least 34 counted highlights begin with an attached prefix letter, 23 of them in `doc10`, against 1 missed.
 
 ## Options, with the cost of each
 
 1. **Take E1 as not crossing the threshold and go on to Phase 0, once Achia has checked `doc06`.** Cost: Achia's time for one document of 8 pages. The number then stands for Supreme Court civil judgments and for nothing else.
-2. **Run E1 again on the documents the product is for** (trial-court judgments that quote contracts, or real contracts and letters) before Phase 3 records its first baseline. Cost: the source has to be settled first (issue #4: the trial-court decisions sit on Net HaMishpat), then a run and a count like this one. The Phase 3 gate asks for PERSON recall "on the 10 real Hebrew documents", so this decides which ten those are.
-3. **Carry the 13 wrong-label misses into Phase 6 as a named test:** a lone surname under a non-person label, with the full name highlighted elsewhere in the document, is linked to that person. Cost: one test case in Phase 6, and a rule the plan does not have yet if the test fails.
+2. **Run E1 again on the documents the product is for** (trial-court judgments that quote contracts, or real contracts and letters) before Phase 3 records its first baseline. Cost: the source has to be settled first (issue #4: the trial-court decisions sit on Net HaMishpat), then a run and a count like this one. The Phase 3 gate asks for PERSON recall "on the 10 real Hebrew documents" (`build-plan.md:645`), so this decides which ten those are.
+3. **Carry the `doc10` surname into Phase 6 as a named test:** a surname shared by several people, standing under a wrong label (12 places) or under no label (1 place), does not stay in the output. It is raised as `ambiguous` or grouped as a family, as `build-plan.md:707` and `:712` have it. It is not linked to one person. Cost: one test case in Phase 6, and a change to the plan if the test shows that a span labelled ORG cannot reach a person (`build-plan.md:717`).
 4. **Have a person count more than one document.** Cost: several hours of careful reading per document. It measures the annotation error that this note cannot.
 
 ## Recommendation
@@ -222,8 +389,8 @@ Rules out, or does not show:
 **Proposed decision, for Achia to confirm or change.**
 
 1. Option 1. E1 does not cross the threshold. The architecture stands and Phase 0 starts. The number is recorded as 95.5 percent on ten Supreme Court civil judgments, counted by Claude.
-2. Option 3. The wrong-label surname goes into Phase 6 as a named test.
-3. Option 2, before Phase 3's baseline and not before Phase 0. Phases 0 to 2 do not use the Hebrew model, so nothing waits on it. Which documents, and from where, is Achia's to say.
+2. Option 3. The shared surname of `doc10` goes into Phase 6 as a named test, in the wording of option 3.
+3. Option 2, before Phase 3's baseline and not before Phase 0. Phases 0 to 2 do not use the Hebrew model (`build-plan.md:517` to `:620`; Hebrew NER starts at `:621`), so nothing waits on it. Which documents, and from where, is Achia's to say.
 4. Not option 4 for now. Achia's check of `doc06` is the pre-registered human check. If it finds a wrong line, the amendment already says what follows.
 
 ## Scope requested
