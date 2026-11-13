@@ -258,8 +258,8 @@ parties and the lawyers) in content controls inside paragraphs: 16 to 41 per fil
 492 characters per file, 2,227 in all. The reader skipped them. The review of this
 amendment found it, before the run. The reader now reads a content control that sits inside
 a paragraph: commits `6fb013e` (tests), `81edd3f` (the change) and `e571ac1` (more tests) of
-`fix/e1-read-content-controls`, merged to `main` before the run. The run is made from
-`main` after that merge, and `run_meta.json` records the commit it ran from. A content
+`fix/e1-read-content-controls`, merged to `main` as `d3bfae7`. The run is made from `main`
+at or after that commit, and `run_meta.json` records the commit it ran from. A content
 control around whole paragraphs is still not read and still counted. Measured at `81edd3f`
 with the reader alone, no model: `unread_chars` is 0 in all ten, and 224,355 characters are
 read, 13,752 to 36,551 per document. The headers hold 1 or 2 characters per document, and no footer, footnote or
