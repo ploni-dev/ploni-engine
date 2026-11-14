@@ -1,4 +1,4 @@
-# Finding: E1 Hebrew PERSON recall is 95.5 percent (449 of 470 mentions) on ten Supreme Court civil judgments, above the predicted 85 to 92; counted by Claude, not yet checked by Achia
+# Finding: E1 Hebrew PERSON recall is 95.5 percent (449 of 470 mentions) on ten Supreme Court civil judgments, above the predicted 85 to 92; counted by Claude, not checked by a person
 
 ## What was being measured
 
@@ -8,7 +8,7 @@ What was run, as `experiments/e1_hebrew_recall/PREREGISTRATION.md` fixes it, inc
 
 - **Corpus:** ten judgments of the Supreme Court in civil appeals (`ע"א`), 8 to 20 pages each, dated 22 July to 18 October 2026, chosen by one search and a rule on the captions. 224,355 characters in 843 paragraphs. This is not the mix the plan names (court decisions, contracts, a medical summary), and not the mix of 2026-11-12 (trial-court civil, labour and medical malpractice judgments).
 - **Model:** commit `7b1256fc0846e22d1af431eae299e2dcecee2778`, weights SHA-256 `c59db02c…06aa1c`, vendored model code, offline, one paragraph per call, no threshold and no post-processing.
-- **Count:** by Claude, not by hand. One reader per document, each a fresh Claude session working from one written guide. Achia checks `doc06` afterwards. That check is not done yet, so by the pre-registration **this number is unchecked**.
+- **Count:** by Claude, not by hand. One reader per document, each a fresh Claude session working from one written guide. Achia checks `doc06` afterwards. That check is not done yet, so by the pre-registration **this number is unchecked**. (Added on 2026-11-14: that check will not be done. See "What is not done".)
 
 ## Prediction and threshold
 
@@ -205,8 +205,15 @@ Taken one at a time, the lowest reading is 453 of 481, 94.18 percent (bare initi
 
 ### What is not done
 
-- **Achia's check of `doc06`.** Until it is done the number is unchecked, as the amendment says. If the check changes a line, all ten are counted again and the second tally is the E1 number.
+- **Achia's check of `doc06`.** Until it is done the number is unchecked, as the amendment says. If the check changes a line, all ten are counted again and the second tally is the E1 number. (Added on 2026-11-14: it will not be done. See below.)
 - No human has read any of the ten documents against a worksheet.
+
+**Added on 2026-11-14, after the run.** This departs from the amendment, and is said here as that.
+
+- Achia looked at the first page of `doc06` and confirmed the one miss Claude listed: "line 11 no yellow". Achia did not read the rest, and said: "i didnt read it all - u domit slowly for me. i domt want to have to read all of it - read it carefully and check urself and even better - create a method to verify it and have a ground truth so i dont need to involve like that".
+- So the check by a person that the amendment registered is not done and will not be. **The number stays unchecked by a person.**
+- What was done in its place: the session that wrote this note read `doc06` whole on 2026-11-14, every paragraph. It is the third full reading of `doc06`: the document's reader; then the reviewer of this note, whose reading is recorded in the body of PR #52 (it "read one document, `doc06`, against its text, with the same count as the reader (24 mentions, 23 found, 1 missed, 7 public)"); then this one. Same count: 24 mentions, 23 found, 1 missed, 7 public; 11 highlights not counted. This reading wrote no file, and the session knew the first count before it read. All three readings are by the same model, so this does not measure what a person's check would have.
+- What comes next is a check against a ground truth, experiment E4: text written for the purpose, with the names planted by a script, so that the right answer is known exactly and nobody has to read to count. Its second part compares a Claude reader's count with that ground truth. It was pre-registered on 2026-11-14 in `experiments/e4_planted_names/`, on a branch of its own when this was written.
 
 ### The readers' guide, as written before the run
 
@@ -375,13 +382,13 @@ Rules out, or does not show:
 - **Nothing about a lawyer's own documents.** These are Supreme Court judgments: formal language, and names introduced with a role and a title. Achia's concern, recorded in the pre-registration, is that such text is close to what the model was trained on. A contract, a letter or a medical summary may behave differently. `build-plan.md:687` says published decisions are for realism, "never as ground truth". Above the prediction is a reason for caution, not for comfort.
 - **Nothing about trial-court judgments**, which quote contracts and testimony at length and were the corpus Achia first asked for.
 - **Not a sample.** Ten documents by one rule on one search. One document carries 14 of the 21 errors, and one surname 13 of them.
-- **The count is a model's.** A name that neither the model under test nor the reader recognises is counted by neither. Two separate readings agreed on four documents, which says the readers are consistent with each other, not that they are right. Both had the same guide, and the second reader was told not to open the first reader's files; nothing enforced it. The one check by a person is still to come.
+- **The count is a model's.** A name that neither the model under test nor the reader recognises is counted by neither. Two separate readings agreed on four documents, which says the readers are consistent with each other, not that they are right. Both had the same guide, and the second reader was told not to open the first reader's files; nothing enforced it. The one check by a person that was registered will not be done (addition of 2026-11-14 under "What is not done").
 - **Recall only.** What the product does with the names in citations and references, 216 of them highlighted, is not measured here; the counting rules leave them out.
 - **Where the errors fall depends on one reading.** Under the reading taken, 7 of 21 errors are ordinary-word or prefix cases, and the prediction did not hold. Under the other reading of the group term it holds (7 of 8). Prefix forms were not rare: by the reviewer's mechanical count at least 33 counted highlights begin with an attached prefix letter, 23 of them in `doc10`, against 1 missed.
 
 ## Options, with the cost of each
 
-1. **Take E1 as not crossing the threshold and go on to Phase 0, once Achia has checked `doc06`.** Cost: Achia's time for one document of 8 pages. The number then stands for Supreme Court civil judgments and for nothing else.
+1. **Take E1 as not crossing the threshold and go on to Phase 0.** As first written, this waited for Achia's check of `doc06`. Since 2026-11-14 that check will not be done, so the cost is that the number is taken with no check by a person. It stands for Supreme Court civil judgments and for nothing else.
 2. **Run E1 again on the documents the product is for** (trial-court judgments that quote contracts, or real contracts and letters) before Phase 3 records its first baseline. Cost: the source has to be settled first (issue #4: the trial-court decisions sit on Net HaMishpat), then a run and a count like this one. The Phase 3 gate asks for PERSON recall "on the 10 real Hebrew documents" (`build-plan.md:645`), so this decides which ten those are.
 3. **Carry the `doc10` surname into Phase 6 as a named test:** a surname shared by several people, standing under a wrong label (12 places) or under no label (1 place), does not stay in the output. It is raised as `ambiguous` or grouped as a family, as `build-plan.md:707` and `:712` have it. It is not linked to one person. Cost: one test case in Phase 6, and a change to the plan if the test shows that a span labelled ORG cannot reach a person (`build-plan.md:717`).
 4. **Have a person count more than one document.** Cost: several hours of careful reading per document. It measures the annotation error that this note cannot.
@@ -390,10 +397,10 @@ Rules out, or does not show:
 
 **Proposed decision, for Achia to confirm or change.**
 
-1. Option 1. E1 does not cross the threshold. The architecture stands and Phase 0 starts. The number is recorded as 95.5 percent on ten Supreme Court civil judgments, counted by Claude.
+1. Option 1. E1 does not cross the threshold. The architecture stands and Phase 0 starts. The number is recorded as 95.5 percent on ten Supreme Court civil judgments, counted by Claude and not checked by a person.
 2. Option 3. The shared surname of `doc10` goes into Phase 6 as a named test, in the wording of option 3.
 3. Option 2, before Phase 3's baseline and not before Phase 0. Phases 0 to 2 do not use the Hebrew model (`build-plan.md:517` to `:620`; Hebrew NER starts at `:621`), so nothing waits on it. Which documents, and from where, is Achia's to say.
-4. Not option 4 for now. Achia's check of `doc06` is the pre-registered human check. If it finds a wrong line, the amendment already says what follows.
+4. Not option 4. As first written, this point rested on Achia's check of `doc06`. Since 2026-11-14 no person checks the count. What stands in for it is the second part of experiment E4: a Claude reader's count is compared with a ground truth on generated documents. If that check falls below its threshold, this note is amended to say that E1's count is not supported.
 
 ## Scope requested
 
