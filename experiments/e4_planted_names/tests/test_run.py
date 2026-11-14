@@ -26,6 +26,8 @@ write_worksheets
 
 main
   E1   `all_documents` without a worksheet folder -> ValueError before the model is loaded
+  EC9  with a stand-in for the model: no folder -> nothing written; a folder -> the four
+       documents and their line; a folder and `all_documents` -> all 40 and their line
 """
 
 from __future__ import annotations
@@ -177,3 +179,26 @@ def test_e1_all_documents_needs_a_worksheet_folder(tmp_path: Path, monkeypatch):
     with pytest.raises(ValueError, match="worksheet folder"):
         run.main(tmp_path, False, None, True)
 
+
+@pytest.mark.parametrize(
+    ("folder", "all_documents", "files", "last_line"),
+    [
+        (False, False, 0, None),
+        (True, False, 8, "worksheets written for doc01, doc11, doc21, doc31"),
+        (True, True, 80, "worksheets written for all 40 documents"),
+    ],
+    ids=["no_folder", "second_part", "all_documents"],
+)
+def test_ec9_main_with_a_stand_in_model(tmp_path: Path, monkeypatch, capsys, folder, all_documents, files, last_line):
+    monkeypatch.setattr(run, "code_revision", lambda: {"commit": "none", "dirty": False})
+    monkeypatch.setattr(run, "pinned_model_hashes", lambda model_dir: {})
+    monkeypatch.setattr(run, "load_ner_model", lambda model_dir: (None, None))
+    monkeypatch.setattr(
+        run, "run_model", lambda documents, model, tokenizer: ({document.doc_id: [] for document in documents}, "no model")
+    )
+    target = tmp_path / "out"
+    run.main(tmp_path, False, target if folder else None, all_documents)
+    printed = capsys.readouterr().out.splitlines()
+    assert len(list(target.iterdir())) == files if folder else not target.exists()
+    assert "strict PERSON recall, pooled: 0/1145 = 0.00%" in printed
+    assert (printed[-1] == last_line) if last_line else not printed[-1].startswith("worksheets written")

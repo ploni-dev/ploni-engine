@@ -47,6 +47,24 @@ read_spans
   EC17 the span list `run.py` writes              -> the spans
   E1   a span list of another document            -> ReaderFileError
 
+More cases, added after the review of the script and before any list of the 36 was made
+  EC20 two name words that begin at one place -> two rows, in the order they were found
+       (the throwaway's order), not by where they end
+  EC21 every title of the list, and every prefix letter before a name word
+  EC22 every punctuation mark is taken off the edge of a name word
+  EC23 a dot inside a name word is a dot, not any letter
+  EC24 a word that only begins like a title (`מרים`) is no title; a title and two spaces
+  EC25 after a title: a bare hyphen, a title with prefix letters (`ועו"ד`), a title with
+       its geresh (`גב'`) -> not listed
+  EC26 the report with a name that is not counted under a row, a partial mention, long
+       paragraphs, and only one kind missed
+  EC27 the report when every missed mention is on the list -> `none`
+  EC28 one row on two missed mentions is one row on an item
+  B11  three prefix letters are taken off a name word, a fourth is not
+  B12  a row that touches the edge of a highlight -> listed
+  B13  `ת` straight before or after a name word -> not listed
+  B14  a missed name that ends where a row starts -> not on the list
+
 list_verdict (90 percent or more predicted; below 80 crosses the threshold)
   B9   90 of 100 -> inside_prediction; 89 of 100 -> outside_prediction
   B10  80 of 100 -> outside_prediction; 79 of 100 -> threshold_crossed
@@ -132,9 +150,11 @@ OTHER_SPANS = [Span(1, 0, 3, 10, "דוד לוי")]
         ("לוי", {"לוי"}),
         ("ולדימיר", {"ולדימיר", "לדימיר", "דימיר"}),
         ("", set()),
+        ("ולשמעון", {"ולשמעון", "לשמעון", "שמעון", "מעון"}),
     ],
     ids=["ec1_two_words", "ec2_maqaf", "ec2_hyphen", "ec3_edge_punctuation", "ec3_geresh_inside", "ec4_one_letter_word",
-         "b1_three_letters_left", "b1_two_letters_left", "b2_two_prefix_letters_then_none", "b3_empty"],
+         "b1_three_letters_left", "b1_two_letters_left", "b2_two_prefix_letters_then_none", "b3_empty",
+         "b11_three_cuts_and_no_fourth"],
 )
 def test_name_variants(text: str, expected: set[str]):
     assert name_variants(text) == expected
@@ -187,8 +207,10 @@ def test_ec12_a_name_word_after_a_title_is_one_row():
 
 @pytest.mark.parametrize(
     ("word", "listed"),
-    [("לרחל", True), ("ולרחל", True), ("וכשרחל", True), ("וכשלרחל", False), ("רחלי", False), ("ארחל", False)],
-    ids=["b4_one", "b4_two", "b4_three", "b4_four", "b5_letter_after", "b5_letter_before"],
+    [("לרחל", True), ("ולרחל", True), ("וכשרחל", True), ("וכשלרחל", False), ("רחלי", False), ("ארחל", False),
+     ("רחלת", False), ("תרחל", False)],
+    ids=["b4_one", "b4_two", "b4_three", "b4_four", "b5_letter_after", "b5_letter_before", "b13_tav_after",
+         "b13_tav_before"],
 )
 def test_b4_b5_letters_around_a_name_word(word: str, listed: bool):
     assert places("רחל באה", ["רחל"], other=f"שילמו {word} היום") == ([("name_word", word)] if listed else [])
@@ -211,7 +233,7 @@ def test_b6_b7_titles(paragraph: str, expected: list):
 
 def test_ec14_coverage_of_the_document():
     result = coverage(DOCUMENT, SPANS)
-    assert (result.rows, result.rows_on_items, len(result.items)) == (8, 7, 8)
+    assert (len(result.places), result.rows_on_items, len(result.items)) == (8, 7, 8)
     assert [item.name for item in result.off_list] == ["דנה"]
 
 
@@ -227,7 +249,7 @@ def test_ec16_b8_a_row_on_one_word_of_a_missed_full_name():
                 classes=frozenset(), counted=True)
     document = Document(doc_id="doc01", template="t", kind="letter", filling=1, paragraphs=paragraphs, gold=[full])
     result = coverage(document, [Span(1, 0, 0, 7, "רחל לוי")])
-    assert (result.rows, result.rows_on_items, len(result.items), result.off_list) == (1, 1, 1, [])
+    assert (len(result.places), result.rows_on_items, len(result.items), result.off_list) == (1, 1, 1, [])
     # The row on `לוי` ends at 8. A planted span that starts at 8 touches it and shares no character.
     after = full._replace(start=8, end=13, name=" שילם", form="given")
     result = coverage(document._replace(gold=[after]), [Span(1, 0, 0, 7, "רחל לוי")])
@@ -293,3 +315,107 @@ def test_ec19_main(tmp_path: Path, monkeypatch, capsys):
     write_spans(tmp_path, "doc02", OTHER.paragraphs, OTHER_SPANS)
     list_check.main(tmp_path)
     assert capsys.readouterr().out.splitlines() == EXPECTED_REPORT
+
+
+def test_ec20_two_name_words_at_one_place_keep_the_order_found():
+    assert places('ד"ר לד באו', ['ד"ר', "לד"], other='פנו לד"ר') == [("name_word", 'לד"ר'), ("name_word", "לד")]
+
+
+@pytest.mark.parametrize("title", list_check.TITLES)
+def test_ec21_every_title(title: str):
+    assert places(f"פנו אל {title} פרץ") == [("after_title", "פרץ")]
+
+
+@pytest.mark.parametrize("letter", "והבלמכש")
+def test_ec21_every_prefix_letter(letter: str):
+    assert places("רחל באה", ["רחל"], other=f"שילמו {letter}רחל היום") == [("name_word", f"{letter}רחל")]
+    assert places(f"פנו {letter}מר פרץ") == [("after_title", "פרץ")]
+
+
+@pytest.mark.parametrize("mark", ".,:;()[]{}\"'׳״-–־!?/")
+def test_ec22_every_punctuation_mark_at_the_edge(mark: str):
+    # A hyphen and a maqaf also cut words; at the edge that leaves the same one word.
+    assert name_variants(f"{mark}פרץ{mark}") == {"פרץ"}
+
+
+def test_ec23_a_dot_inside_a_name_word():
+    assert places("י.כהן בא", ["י.כהן"], other="ראו יבכהן שם, וגם י.כהן") == [("name_word", "י.כהן")]
+
+
+def test_ec24_what_is_a_title():
+    assert places("מרים באה") == []
+    assert places("מר  פרץ בא") == [("after_title", "פרץ")]
+
+
+@pytest.mark.parametrize("paragraph", ["מר - כהן", 'מר ועו"ד כהן', "מר גב' לוי"], ids=["hyphen", "prefixed_title", "title_with_geresh"])
+def test_ec25_not_a_word_after_a_title(paragraph: str):
+    assert places(paragraph) == []
+
+
+def test_b12_a_row_at_the_edge_of_a_highlight():
+    paragraphs = ["רחל לוי", "לוי־כהן באו", "כהן־לוי באו"]
+    spans = [Span(1, 0, 0, 7, "רחל לוי"), Span(2, 1, 3, 7, "־כהן"), Span(3, 2, 0, 4, "כהן־")]
+    assert listed_places(paragraphs, spans) == [Place("name_word", 1, 0, 3), Place("name_word", 2, 4, 7)]
+
+
+FILLER = "מילה " * 20
+LONG_PARAGRAPHS = ["רחל לוי באה", f"{FILLER}דנה {FILLER}", "ראו לוי נ' פרץ", "רחל שילמה", f"יוסי {FILLER}{FILLER}"]
+LONG_GOLD = [
+    Gold(paragraph=0, start=0, end=7, name="רחל לוי", person="A", form="full", prefix="", alone=False, classes=frozenset(), counted=True),
+    Gold(paragraph=1, start=100, end=103, name="דנה", person="B", form="given", prefix="", alone=False, classes=frozenset(), counted=True),
+    Gold(paragraph=2, start=4, end=7, name="לוי", person="C", form="cited", prefix="", alone=False, classes=frozenset(), counted=False),
+    Gold(paragraph=3, start=0, end=3, name="רחל", person="A", form="given", prefix="", alone=False, classes=frozenset(), counted=True),
+    Gold(paragraph=4, start=0, end=4, name="יוסי", person="D", form="given", prefix="", alone=False, classes=frozenset(), counted=True),
+]
+LONG_DOCUMENT = Document(doc_id="doc03", template="letter_long", kind="letter", filling=1, paragraphs=LONG_PARAGRAPHS, gold=LONG_GOLD)
+LONG_SPANS = [Span(1, 0, 0, 7, "רחל לוי"), Span(2, 3, 0, 2, "רח")]
+
+
+def test_ec26_report_with_a_partial_a_name_not_counted_and_long_paragraphs():
+    assert LONG_PARAGRAPHS[1][100:103] == "דנה"
+    lines = report([LONG_DOCUMENT], {"doc03": LONG_SPANS}).splitlines()
+    assert lines == [
+        "doc03: list rows 1, on a missed mention 0; missed mentions 2, on the list 0",
+        "strict PERSON recall from the span lists: 1/4 = 25.00%",
+        "cross-check lists: 1 rows (name_word 1, after_title 0) in 1 of 1 documents; 0 of them on a missed mention",
+        "missed mentions on the list, pooled: 0/2 = 0.00%",
+        "verdict: threshold_crossed (prediction 90 percent or more, threshold below 80 percent)",
+        "by kind:",
+        "  rest  0/2 = 0.00%",
+        "missed mentions off the list:",
+        f"  doc03 letter_long ¶1 given [דנה] :: {LONG_PARAGRAPHS[1][30:173]}",
+        f"  doc03 letter_long ¶4 given [יוסי] :: {LONG_PARAGRAPHS[4][:74]}",
+    ]
+
+
+def two_on_one_row() -> tuple[Document, list[Span]]:
+    paragraphs = ["רחל לוי באה", "יעקב לוי שילם"]
+    full = Gold(paragraph=1, start=0, end=8, name="יעקב לוי", person="Z", form="full", prefix="", alone=False,
+                classes=frozenset(), counted=True)
+    surname = full._replace(start=5, name="לוי", form="surname")
+    return Document(doc_id="doc01", template="t", kind="letter", filling=1, paragraphs=paragraphs, gold=[full, surname]), [
+        Span(1, 0, 0, 7, "רחל לוי")
+    ]
+
+
+def test_ec27_ec28_every_missed_mention_on_the_list():
+    document, spans = two_on_one_row()
+    result = coverage(document, spans)
+    assert (len(result.places), result.rows_on_items, len(result.items), result.off_list) == (1, 1, 2, [])
+    lines = report([document], {"doc01": spans}).splitlines()
+    assert lines[0] == "doc01: list rows 1, on a missed mention 1; missed mentions 2, on the list 2"
+    assert lines[3:] == [
+        "missed mentions on the list, pooled: 2/2 = 100.00%",
+        "verdict: inside_prediction (prediction 90 percent or more, threshold below 80 percent)",
+        "by kind:",
+        "  rest  2/2 = 100.00%",
+        "missed mentions off the list:",
+        "  none",
+    ]
+
+
+def test_b14_a_missed_name_that_ends_where_a_row_starts():
+    document, spans = two_on_one_row()
+    before = document.gold[0]._replace(start=0, end=5, name="יעקב ")
+    result = coverage(document._replace(gold=[before]), spans)
+    assert (result.rows_on_items, [item.name for item in result.off_list]) == (0, ["יעקב "])
