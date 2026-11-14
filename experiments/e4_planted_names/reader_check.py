@@ -122,9 +122,9 @@ def _rows(path: Path, columns: tuple[str, ...]) -> list[dict[str, str]]:
     Why: a file with no header would lose its first line without a word, and a reader
     would be blamed for a mention the reader did list.
 
-    Contract: cells are stripped; a byte-order mark is allowed; other columns are
-    ignored. Raises ReaderFileError when the file is empty or its header lacks a
-    column of `columns`.
+    Contract: header names and cells are stripped; a byte-order mark is allowed; other
+    columns are ignored. Raises ReaderFileError when the file is empty, when its header
+    lacks a column of `columns`, or when a row has more cells than the header.
     """
     with path.open(encoding="utf-8-sig", newline="") as handle:
         reader = csv.DictReader(handle)
@@ -132,7 +132,11 @@ def _rows(path: Path, columns: tuple[str, ...]) -> list[dict[str, str]]:
         lacking = [name for name in columns if name not in header]
         if lacking:
             raise ReaderFileError(f"{path.name}: the header lacks the column {', '.join(lacking)}")
-        return [{(key or "").strip(): (value or "").strip() for key, value in row.items()} for row in reader]
+        rows = list(reader)
+    # The csv module files cells beyond the header under the key None: a comma with no quotes.
+    if any(None in row for row in rows):
+        raise ReaderFileError(f"{path.name}: a row has more cells than the header")
+    return [{key.strip(): (value or "").strip() for key, value in row.items()} for row in rows]
 
 
 def _whole_number(cell: str, what: str) -> int:
