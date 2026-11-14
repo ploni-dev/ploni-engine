@@ -47,7 +47,7 @@ What is in the repository, each file identical to upstream at the commit above (
 
 To check a file, compare `git rev-parse HEAD:<file>` here with `git rev-parse 7801d061:skills/<name>/SKILL.md` in a clone of the source.
 
-The `ponytail` skill takes a level as its argument: `lite`, `full` (its default) or `ultra`. That answers `PROCESS.md` section 13 item 2; which level this project uses is still Achia's to write into `CLAUDE.md`.
+The `ponytail` skill takes a level as its argument: `lite`, `full` (its default) or `ultra`. That answers `PROCESS.md` section 13 item 2; this project uses `ultra`, decided by Achia on 2026-11-15 and written in `CLAUDE.md`.
 
 Why vendored files and not the Claude Code plugin the same repository offers:
 

@@ -103,7 +103,7 @@ Required status checks on the PR. Under five minutes. **Enforced by GitHub Actio
 | Secret scan | credentials |
 | Docstring presence, a `Why:` section, and a `Contract:` section on public functions | undocumented public surface |
 | Ratchet checks (section 6) | weakened tests or fixtures |
-| PR-body structure check (section 5.3) | missing evidence sections |
+| PR-body structure check (section 5.2) | missing evidence sections |
 | Size limits | oversized PRs |
 | Skip-marker check | `skip` or `xfail` without an issue link |
 | Pinned-dependency check | unpinned or unjustified dependency changes |
@@ -152,7 +152,7 @@ Not every PR. Once per milestone.
 | Persona acceptance P1 to P5, including the ten-minute demo | you, by hand |
 | Offline journey S13 with networking disabled at the OS level | you, by hand |
 | Installer builds, installs and uninstalls on a clean Windows 11 VM | you, by hand |
-| Performance budget met on the reference machine | CI plus the committed results file |
+| Performance budget met on the reference machine. Not enforced for now: speed is measured and reported (`PROCESS.md` section 10). Before a release Achia decides whether it becomes a gate | CI plus the committed results file |
 | `THIRD_PARTY.md` complete and verified | CI manifest check plus your read |
 | Tag created, artifact hashes published | you |
 
@@ -401,16 +401,24 @@ Compensating, honestly:
 
 - Every check still runs in CI and is visible before merge.
 - One developer, one reviewer. The failure mode that branch protection exists to stop, someone else merging past a red check, has no one to perform it.
-- The agent has no authority to merge. Merging is a human act, performed by Achia, after reading the PR. An agent that pushes to `main` directly is violating `CLAUDE.md`, and that violation shows in the commit history with no PR attached.
+- The agent merges only as `CLAUDE.md`, "Merging", allows: checks green, an independent review clean, and never a PR that touches the Level 3 list or fills a `## Decision`; those wait for Achia's yes. This line said until 2026-11-15 that the agent has no authority to merge. That was not what happened: from 2026-11-12 the agent merged, at Achia's instruction, after an independent review. An agent that pushes to `main` directly is violating `CLAUDE.md`, and that violation shows in the commit history with no PR attached.
 - `git log --first-parent main` shows any commit that arrived without a PR. Check it at every phase close.
 
 Not compensating, and worth saying plainly: none of the above is a mechanism. All of it is discipline, which is exactly what section 1 said not to rely on. This section exists so that nobody reads section 4 in six months and believes the gate held when it was only ever requested.
+
+### The merge gate, decided 2026-11-15
+
+Achia asked for tests that have to pass before a merge, and chose the free form of it: a local merge gate. It is a Claude Code hook, committed in `.claude/settings.json`, that refuses `gh pr merge` unless every check of the PR's last commit is green. It is built in Phase 0 with the CI workflows.
+
+- What it is: a mechanism, for the path merges take here. The agent merges, and the agent cannot merge past a red check.
+- What it is not: branch protection. A merge by hand in the browser, or from a machine without the hook, is not stopped. `git log --first-parent main` at every phase close still shows what arrived and how.
+- Until it is built, it does not exist, and the paragraph above is the whole truth.
 
 ### When to revisit
 
 Upgrade to Team, one seat, at the first of these:
 
-1. The first PR that contains real product code rather than scaffolding, because that is the first merge where a red check actually means something.
+1. The first PR that contains real product code rather than scaffolding, because that is the first merge where a red check actually means something. On 2026-11-15 Achia chose the local merge gate for this case and not the paid plan. This trigger is answered by the gate for as long as the agent is the one who merges.
 2. Tomer, or anyone else, getting write access.
 3. The first time a red check is merged past, whatever the reason. If it happens once it will happen again, and at that point $4 is cheap.
 
