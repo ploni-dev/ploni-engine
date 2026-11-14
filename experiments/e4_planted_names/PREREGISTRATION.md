@@ -196,17 +196,23 @@ People: 250, of them 29 with Arabic names and 37 with transliterated ones.
   highlight that overlaps the name is marked partial; else found if one is marked found;
   else missed if a line of the reader's list of misses is paired with the mention. If none
   of these, the reader did not see the mention, which is a disagreement.
-- Pairing a miss line with a mention. A line can be paired with a mention of its own
-  paragraph that no highlight marked found or partial covers, if the line's text holds the
-  name or lies inside it. Each line serves one mention and each mention takes one line.
-  They are paired in reading order, lines whose text is exactly the name first. A line
-  left without a mention is a reader-only item.
+- Pairing a miss line with a mention. The reader's list of misses has lines of two kinds.
+  A line of kind `partial` belongs to the mention that its highlight overlaps, and is not
+  paired; it is a reader-only item only if its highlight overlaps no counted mention. A
+  line of kind `missed` can be paired with a mention of its own paragraph that no
+  highlight marked found or partial overlaps, if the line's text holds the name or lies
+  inside it. Each line serves one mention and each mention takes one line. Lines are
+  taken in the order of the file, mentions in reading order, and lines whose text is
+  exactly the name are paired first. A `missed` line left without a mention is a
+  reader-only item.
 - For a name that is not counted, the reader agrees if every highlight on it is marked as
   not a person. A miss line is never paired with such a name; a line the reader wrote for
   one is left over, and is a reader-only item.
 - A reader-only item is a highlight the reader marks found or partial that overlaps no
-  counted mention, or a miss line left over. Each is a disagreement and each adds one to
-  the denominator.
+  counted mention, or a miss line left over as said above, or a person the reader counts
+  through the `extra` column: a highlight marked found stands for one mention plus its
+  `extra`, and each of these beyond the counted mentions the highlight overlaps is one
+  item. Each reader-only item is a disagreement and each adds one to the denominator.
 - Agreement is the agreeing items over all gold items of the four documents plus the
   reader-only items. The script that computes it is committed, with tests, before any
   reader's file is compared.

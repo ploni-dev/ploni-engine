@@ -144,6 +144,8 @@ def test_ec7_the_worksheet_folder_is_made_before_the_model_is_loaded(tmp_path: P
     def stop(model_dir):
         raise RuntimeError("the model would be loaded now")
 
+    # No git, no hashing and no model: the test must also pass from a copy outside a checkout.
+    monkeypatch.setattr(run, "code_revision", lambda: {"commit": "none", "dirty": False})
     monkeypatch.setattr(run, "pinned_model_hashes", lambda model_dir: {})
     monkeypatch.setattr(run, "load_ner_model", stop)
     target = tmp_path / "new" / "folder"

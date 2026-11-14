@@ -30,6 +30,11 @@ The corpus as committed
        another person of the document carries
   C9   the classes in names.tsv: only known ones; prefix_initial exactly on the names
        that begin with a prefix letter; one origin at most; not both kinds of word
+  C10  the corpus is the one the pre-registration's amendment describes: its size and
+       the count of every row. A change to a template, to the bank or to the seed that
+       moves any of them must change the amendment too
+  C11  no mention of the two rows with a lower prediction, group and given_ordinary,
+       is in a row that predicts 90 percent or more
 """
 
 from __future__ import annotations
@@ -47,6 +52,7 @@ from generate import (
     Gold,
     TemplateError,
     _fill_fresh,
+    bucket_counts,
     buckets_of,
     corpus,
     fill,
@@ -231,3 +237,36 @@ def test_e7_a_filling_that_cannot_avoid_a_taken_name():
     assert paragraphs == ["יעקב כהן"]
     with pytest.raises(TemplateError, match="no filling with new people"):
         _fill_fresh(template, bank, "seed", {"יעקב כהן"})
+
+
+# PREREGISTRATION.md, "The corpus as it is now generated".
+AMENDMENT_COUNTS = {
+    "all": 1145, "full": 410, "given": 290, "surname": 120, "title_surname": 205, "initial_surname": 65, "group": 55,
+    "given_ordinary": 169, "given_also_word": 25, "given_plain": 96,
+    "prefixed": 230, "prefix_on_name": 64, "prefix_on_title": 95, "alone": 135,
+}
+AMENDMENT_CHARACTERS = 67145
+AMENDMENT_PARAGRAPHS = 1035
+AMENDMENT_NOT_COUNTED = {"cited": 30, "firm": 20, "placeholder": 5}
+ROWS_PREDICTING_90 = {"full", "surname", "title_surname", "initial_surname", "given_plain", "prefix_on_name",
+                      "prefix_on_title", "alone"}
+
+
+def test_c10_the_corpus_is_the_one_the_amendment_describes(committed):
+    assert dict(bucket_counts(committed)) == AMENDMENT_COUNTS
+    assert sum(len(paragraph) for document in committed for paragraph in document.paragraphs) == AMENDMENT_CHARACTERS
+    assert sum(len(document.paragraphs) for document in committed) == AMENDMENT_PARAGRAPHS
+    not_counted: dict[str, int] = {}
+    for document in committed:
+        for gold in document.gold:
+            if not gold.counted:
+                not_counted[gold.form] = not_counted.get(gold.form, 0) + 1
+    assert not_counted == AMENDMENT_NOT_COUNTED
+
+
+def test_c11_rows_with_a_lower_prediction_stay_out_of_the_rows_that_predict_90(committed):
+    for document in committed:
+        for gold in document.gold:
+            rows = set(buckets_of(gold)) if gold.counted else set()
+            if rows & {"group", "given_ordinary"}:
+                assert not rows & ROWS_PREDICTING_90, (document.doc_id, gold.paragraph, sorted(rows))
