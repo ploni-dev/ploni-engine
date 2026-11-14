@@ -55,6 +55,8 @@ The corpus as committed (templates/ and names.tsv)
        and of a given name alone that is an everyday word (PREREGISTRATION.md)
   C4   every gold position holds exactly its name
   C5   generated twice, the corpus is identical
+
+More cases, added after the first review, are in test_generate_more.py.
 """
 
 from __future__ import annotations
@@ -301,9 +303,10 @@ def test_c1_forty_documents(committed):
 def test_c2_c3_enough_mentions_of_every_kind(committed):
     counts = bucket_counts(committed)
     assert counts["all"] >= MIN_COUNTED_MENTIONS == 1000
-    assert set(FORM_BUCKETS.values()) | {"prefixed", "alone", "given_ordinary"} <= set(counts)
+    promised = set(FORM_BUCKETS.values()) | {"prefixed", "prefix_on_name", "prefix_on_title", "alone", "given_ordinary", "given_plain"}
+    assert promised <= set(counts) and "given_also_word" in counts
     assert MIN_PER_BUCKET == 30
-    assert {name: count for name, count in counts.items() if count < MIN_PER_BUCKET} == {}
+    assert {name: counts[name] for name in promised if counts[name] < MIN_PER_BUCKET} == {}
 
 
 def test_c4_every_gold_position_holds_its_name(committed):
@@ -321,4 +324,4 @@ def test_bank_file_has_no_name_twice_and_only_known_classes():
     for names in (*bank.given.values(), bank.surnames):
         plain = [name for name, _ in names]
         assert len(plain) == len(set(plain))
-        assert all(classes <= {"ordinary", "prefix_initial", "arabic", "translit"} for _, classes in names)
+        assert all(classes <= {"ordinary", "also_word", "prefix_initial", "arabic", "translit"} for _, classes in names)

@@ -30,6 +30,8 @@ against_e1 (more than 10 points under E1's 449 of 470)
 
 format_report
   EC12 the pooled line, the verdict, each bucket with its fraction, any-label recall
+  EC13 every line of the report of a small case, in order
+  EC14 a partial is an error, and the lenient line counts it as found
 """
 
 from __future__ import annotations
@@ -126,3 +128,52 @@ def test_ec12_report_lines():
     assert "full  1/1 = 100.00%" in report and "surname  0/1 = 0.00%" in report
     assert "prefixed  0/1 = 0.00%" in report
     assert "letter  1/2 = 50.00%" in report
+
+
+def test_ec13_the_whole_report_of_a_small_case():
+    documents = [document([NAME, NAME._replace(paragraph=1, form="surname", prefix="ל")])]
+    outcomes = {"doc01": score_document(documents[0], [Span(0, 4, 12, "PER"), Span(1, 3, 13, "ORG")])}
+    assert format_report(documents, outcomes).splitlines() == [
+        "documents: 1",
+        "strict PERSON recall, pooled: 1/2 = 50.00%",
+        "verdict: threshold_crossed (prediction 90 to 96 percent, threshold below 80 percent)",
+        "against E1 (449/470): more_than_10_points_under_e1",
+        "lenient recall (partial counted as found): 1/2 = 50.00%",
+        "any-label recall: 2/2 = 100.00%",
+        "errors: 1 (partial 0, missed 1, of them under another label 1)",
+        "by form:",
+        "  full  1/1 = 100.00%",
+        "  given  0/0",
+        "  surname  0/1 = 0.00%",
+        "  title_surname  0/0",
+        "  initial_surname  0/0",
+        "  group  0/0",
+        "by trait:",
+        "  given_ordinary  0/0",
+        "  given_also_word  0/0",
+        "  given_plain  0/0",
+        "  prefixed  0/1 = 0.00%",
+        "  prefix_on_name  0/1 = 0.00%",
+        "  prefix_on_title  0/0",
+        "  alone  0/0",
+        "by name class:",
+        "  also_word  0/0",
+        "  arabic  0/0",
+        "  ordinary  0/0",
+        "  prefix_initial  0/0",
+        "  translit  0/0",
+        "  no_class  1/2 = 50.00%",
+        "by kind of document:",
+        "  letter  1/2 = 50.00%",
+        "by template:",
+        "  t  1/2 = 50.00%",
+    ]
+
+
+def test_ec14_a_partial_is_an_error_and_lenient_counts_it():
+    documents = [document([NAME, NAME._replace(paragraph=1)])]
+    outcomes = {"doc01": score_document(documents[0], [Span(0, 4, 12, "PER"), Span(1, 4, 8, "PER")])}
+    report = format_report(documents, outcomes)
+    assert "lenient recall (partial counted as found): 2/2 = 100.00%" in report
+    assert "errors: 1 (partial 1, missed 0, of them under another label 0)" in report
+    assert "any-label recall: 1/2 = 50.00%" in report
