@@ -46,6 +46,28 @@ read_reader_files, a file that does not follow the guide
 compare, a span list that is not of this document
   E7   a highlight whose text is not what the document holds at its position -> ReaderFileError
 
+More cases, added after the review of the script and before any reader's file was opened
+  EC15 every reader-only item has a line in the list of disagreements
+  EC16 two partial lines that name one highlight, which covers part of two names -> accepted
+  EC17 two names under one highlight: `extra` 1 -> no reader-only item; `extra` 0 -> still
+       agrees (a known limit: people short of the gold are not counted)
+  EC18 a name that is not counted under a highlight marked surplus or partial -> disagrees
+  EC19 a partial highlight on plain text is one reader-only item plus its `extra`; `extra`
+       on a partial highlight that overlaps a mention adds nothing; a surplus highlight
+       on plain text adds nothing
+  EC20 a highlight marked partial and another marked found on one name -> the reader says partial
+  B9   exact text first, with two different names: mentions `כהן` then `יעקב כהן` in one
+       paragraph, lines `יעקב כהן` then `לכהן` -> both paired
+  B10  a line whose text lies inside the name (`כהן` for `יעקב כהן`) -> paired
+  B11  a highlight that ends where the name starts, or starts where it ends -> no overlap
+  E8   a highlight marked twice; an empty `extra`; a miss line with no text; a paragraph
+       that is not a number; a missed line that carries a highlight number
+  E9   a file whose header lacks a column it needs, or with no header at all
+  E10  a span list with a paragraph the document does not have -> ReaderFileError
+  B12  a highlight with a space at its edge is of this document
+  EC21 main prints the pooled line over the four documents, reader-only items in the
+       denominator, and lists them
+
 agreement_verdict (98 percent or more predicted; below 95 crosses the threshold)
   B7   98 of 100 -> inside_prediction; 97 of 100 -> outside_prediction
   B8   95 of 100 -> outside_prediction; 94 of 100 -> threshold_crossed
@@ -59,7 +81,11 @@ from pathlib import Path
 import pytest
 
 from generate import Document, Gold
+import reader_check
+from generate import corpus
 from reader_check import ReaderFileError, agreement_verdict, compare, read_reader_files
+
+HERE = Path(__file__).resolve().parent.parent
 
 PARAGRAPHS = ["מר יעקב כהן פגש את רחל לוי", "כהן שילם לרחל ולרחל", "ראו גבאי נ' פרץ"]
 
@@ -185,11 +211,15 @@ def test_b6_a_miss_line_for_a_name_that_is_not_counted(tmp_path: Path):
         {"misses": MISSES[1:]},
         {"marks": {**MARKS, 3: ("found", 0)}},
         {"misses": [*MISSES, (1, "רחל", "overlooked", None)]},
-        {"misses": [(0, "רחל לוי", "partial", 3), (0, "רחל לוי", "partial", 3), *MISSES[1:]]},
+        {"marks": {**MARKS, 1: ("found", "")}},
+        {"misses": [*MISSES, (1, "", "missed", None)]},
+        {"misses": [*MISSES, ("x", "רחל", "missed", None)]},
+        {"misses": [MISSES[0], (1, "רחל", "missed", 4), MISSES[2]]},
     ],
     ids=["e1_mark_missing", "e1_mark_for_no_highlight", "e2_unknown_verdict", "e2_extra_not_a_number", "e2_extra_negative",
          "e3_partial_line_without_number", "e3_partial_line_unknown_number", "e4_partial_mark_without_line",
-         "e4_partial_line_without_mark", "e5_unknown_kind", "e4_two_lines_for_one_partial"],
+         "e4_partial_line_without_mark", "e5_unknown_kind", "e8_empty_extra", "e8_line_without_text",
+         "e8_paragraph_not_a_number", "e8_missed_line_with_a_highlight"],
 )
 def test_e1_to_e5_files_that_do_not_follow_the_guide(tmp_path: Path, changes: dict):
     with pytest.raises(ReaderFileError):
@@ -215,3 +245,170 @@ def test_e7_a_span_list_of_another_document(tmp_path: Path):
     other = DOCUMENT._replace(paragraphs=["x" * 30, PARAGRAPHS[1], PARAGRAPHS[2]])
     with pytest.raises(ReaderFileError, match="not of this document"):
         compare(other, files)
+
+
+def test_ec15_reader_only_items_are_listed(tmp_path: Path):
+    outcome = result(tmp_path, marks={**MARKS, 5: ("found", 1)}, misses=[*MISSES, (1, "דוד", "missed", None)])
+    assert (outcome.items, outcome.agreeing, outcome.reader_only) == (7, 6, 3)
+    assert len(outcome.disagreements) == 3
+    assert any("גבאי" in line and "not counted" in line for line in outcome.disagreements)
+    assert any("highlight 5" in line and "2 reader-only" in line for line in outcome.disagreements)
+    assert any("דוד" in line and "miss line" in line for line in outcome.disagreements)
+
+
+def test_ec16_two_partial_lines_for_one_highlight(tmp_path: Path):
+    # Highlight 3 now runs from the end of one name into the start of the next: "כהן פגש את רחל".
+    spans = [SPANS[0], (2, 0, 8, 22), SPANS[3], SPANS[4]]
+    marks = {1: ("partial", 0), 2: ("partial", 0), 4: ("found", 0), 5: ("not_person", 0)}
+    misses = [(0, "יעקב כהן", "partial", 1), (0, "רחל לוי", "partial", 2), (0, "יעקב כהן", "partial", 2), *MISSES[1:]]
+    files = read_reader_files(write(tmp_path, spans=spans, marks=marks, misses=misses), "doc01")
+    assert sorted(line.highlight for line in files.misses if line.kind == "partial") == [1, 2, 2]
+
+
+def test_ec17_two_names_under_one_highlight(tmp_path: Path):
+    spans = [(1, 0, 3, 26), SPANS[3], SPANS[4]]
+    for extra in (1, 0):
+        marks = {1: ("found", extra), 4: ("found", 0), 5: ("not_person", 0)}
+        outcome = result(tmp_path, spans=spans, marks=marks, misses=MISSES[1:])
+        assert (outcome.items, outcome.agreeing, outcome.reader_only) == (7, 7, 0)
+    outcome = result(tmp_path, spans=spans, marks={1: ("found", 2), 4: ("found", 0), 5: ("not_person", 0)}, misses=MISSES[1:])
+    assert (outcome.agreeing, outcome.reader_only) == (7, 1)
+
+
+@pytest.mark.parametrize("verdict", ["surplus", "partial"])
+def test_ec18_a_name_that_is_not_counted_under_another_verdict(tmp_path: Path, verdict: str):
+    misses = [*MISSES, (2, "גבאי", "partial", 5)] if verdict == "partial" else MISSES
+    outcome = result(tmp_path, marks={**MARKS, 5: (verdict, 0)}, misses=misses)
+    assert (outcome.items, outcome.agreeing) == (7, 6)
+    assert outcome.reader_only == (1 if verdict == "partial" else 0)
+
+
+def test_ec19_reader_only_items_by_verdict(tmp_path: Path):
+    spans = [*SPANS, (6, 1, 4, 8)]
+
+    def reader_only(verdict: str, extra: int, base=MARKS) -> int:
+        misses = [*MISSES, (1, "שילם", "partial", 6)] if verdict == "partial" else MISSES
+        return result(tmp_path, spans=spans, marks={**base, 6: (verdict, extra)}, misses=misses).reader_only
+
+    assert reader_only("partial", 0) == 1
+    assert reader_only("partial", 2) == 3
+    assert reader_only("surplus", 0) == 0
+    assert reader_only("surplus", 3) == 0
+    # `extra` on the partial highlight 3, which overlaps a counted mention, adds nothing.
+    assert reader_only("not_person", 0, base={**MARKS, 3: ("partial", 2)}) == 0
+
+
+def test_ec20_partial_wins_over_found_on_one_name(tmp_path: Path):
+    marks = {**MARKS, 1: ("partial", 0), 2: ("found", 0)}
+    misses = [(0, "יעקב כהן", "partial", 1), *MISSES]
+    outcome = result(tmp_path, marks=marks, misses=misses)
+    assert (outcome.items, outcome.agreeing) == (7, 6)
+    assert any("יעקב כהן" in line and "reader partial" in line for line in outcome.disagreements)
+
+
+TWO_NAMES = ["כהן פגש את יעקב כהן"]
+TWO_GOLD = [
+    Gold(paragraph=0, start=0, end=3, name="כהן", person="A", form="surname", prefix="", alone=False, classes=frozenset(), counted=True),
+    Gold(paragraph=0, start=11, end=19, name="יעקב כהן", person="B", form="full", prefix="", alone=False, classes=frozenset(), counted=True),
+]
+TWO_DOCUMENT = Document(doc_id="doc01", template="t", kind="letter", filling=1, paragraphs=TWO_NAMES, gold=TWO_GOLD)
+
+
+def two_names(folder: Path, misses: list, spans=(), marks=None):
+    lines = ["highlight,paragraph,start,end,text", *(f"{n},{p},{s},{e},{TWO_NAMES[p][s:e]}" for n, p, s, e in spans)]
+    (folder / "doc01_spans.csv").write_text("\n".join(lines) + "\n", encoding="utf-8-sig")
+    lines = ["highlight,verdict,group,extra,note", *(f"{n},{v},private,{x}," for n, (v, x) in (marks or {}).items())]
+    (folder / "doc01_marks.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    lines = ["doc_id,paragraph,text,kind,group,other_label,category,highlight"]
+    lines += [f"doc01,0,{text},missed,private,no,other," for text in misses]
+    (folder / "doc01_misses.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return compare(TWO_DOCUMENT, read_reader_files(folder, "doc01"))
+
+
+def test_b9_exact_text_first_with_two_different_names(tmp_path: Path):
+    for misses in (["יעקב כהן", "לכהן"], ["לכהן", "יעקב כהן"]):
+        outcome = two_names(tmp_path, misses)
+        assert (outcome.items, outcome.agreeing, outcome.reader_only) == (2, 2, 0)
+
+
+def test_b10_a_line_whose_text_lies_inside_the_name(tmp_path: Path):
+    outcome = two_names(tmp_path, ["כהן", "כהן"])
+    assert (outcome.items, outcome.agreeing, outcome.reader_only) == (2, 2, 0)
+
+
+def test_b11_a_highlight_that_only_touches_a_name(tmp_path: Path):
+    # "כהן" is 0..3 and "יעקב כהן" is 11..19. The highlights 3..10 and 10..11 touch them and overlap neither.
+    outcome = two_names(tmp_path, ["כהן", "יעקב כהן"], spans=[(1, 0, 3, 10), (2, 0, 10, 11)],
+                        marks={1: ("not_person", 0), 2: ("not_person", 0)})
+    assert (outcome.items, outcome.agreeing, outcome.reader_only) == (2, 2, 0)
+    outcome = two_names(tmp_path, ["כהן", "יעקב כהן"], spans=[(1, 0, 3, 10), (2, 0, 10, 11)],
+                        marks={1: ("found", 0), 2: ("found", 0)})
+    assert (outcome.agreeing, outcome.reader_only) == (2, 2)
+
+
+def test_e8_a_highlight_marked_twice(tmp_path: Path):
+    folder = write(tmp_path)
+    marks = folder / "doc01_marks.csv"
+    marks.write_text(marks.read_text(encoding="utf-8") + "1,found,private,0,\n", encoding="utf-8")
+    with pytest.raises(ReaderFileError):
+        read_reader_files(folder, "doc01")
+
+
+NO_PARTIALS = {"marks": {**MARKS, 3: ("found", 0)}, "misses": MISSES[1:]}
+MARK_ROWS_WITHOUT_EXTRA = "".join(f"{number},found,private,
+" for number in MARKS)
+
+
+@pytest.mark.parametrize(
+    ("name", "content"),
+    [
+        ("doc01_misses.csv", "doc01,1,רחל,missed,private,no,other,
+"),
+        ("doc01_misses.csv", ""),
+        ("doc01_misses.csv", "doc_id,paragraph,words,kind,group,other_label,category,highlight
+"),
+        ("doc01_marks.csv", "highlight,verdict,group,note
+" + MARK_ROWS_WITHOUT_EXTRA),
+        ("doc01_spans.csv", "highlight,paragraph,start,text
+1,0,3,יעקב
+"),
+    ],
+    ids=["misses_without_header", "misses_empty_file", "misses_wrong_column", "marks_without_extra", "spans_without_end"],
+)
+def test_e9_a_file_without_the_columns_it_needs(tmp_path: Path, name: str, content: str):
+    # The set has no partial highlight, so that a misses file read as empty is not refused for another reason.
+    folder = write(tmp_path, **NO_PARTIALS)
+    read_reader_files(folder, "doc01")
+    (folder / name).write_text(content, encoding="utf-8")
+    with pytest.raises(ReaderFileError, match="column"):
+        read_reader_files(folder, "doc01")
+
+
+def test_e10_b12_spans_at_the_edges(tmp_path: Path):
+    folder = write(tmp_path, spans=[*SPANS, (6, 0, 15, 19)], marks={**MARKS, 6: ("not_person", 0)})
+    assert PARAGRAPHS[0][15:19] == " את "
+    outcome = compare(DOCUMENT, read_reader_files(folder, "doc01"))
+    assert (outcome.items, outcome.agreeing, outcome.reader_only) == (7, 7, 0)
+    spans = folder / "doc01_spans.csv"
+    spans.write_text(spans.read_text(encoding="utf-8-sig").replace("6,0,15,19", "6,9,15,19"), encoding="utf-8-sig")
+    with pytest.raises(ReaderFileError, match="not of this document"):
+        compare(DOCUMENT, read_reader_files(folder, "doc01"))
+
+
+def test_ec21_main_prints_the_pooled_line(tmp_path: Path, capsys):
+    documents = {document.doc_id: document for document in corpus(HERE / "templates", HERE / "names.tsv")}
+    for doc_id in ("doc01", "doc11", "doc21", "doc31"):
+        (tmp_path / f"{doc_id}_spans.csv").write_text("highlight,paragraph,start,end,text\n", encoding="utf-8-sig")
+        (tmp_path / f"{doc_id}_marks.csv").write_text("highlight,verdict,group,extra,note\n", encoding="utf-8")
+        lines = ["doc_id,paragraph,text,kind,group,other_label,category,highlight"]
+        lines += [f'{doc_id},{gold.paragraph},"{gold.name}",missed,private,no,other,' for gold in documents[doc_id].gold if gold.counted]
+        if doc_id == "doc21":
+            lines.append(f"{doc_id},0,שלום,missed,private,no,other,")
+        (tmp_path / f"{doc_id}_misses.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
+    reader_check.main(tmp_path)
+    printed = capsys.readouterr().out
+    assert "reader against gold, pooled: 123/124 = 99.19%" in printed
+    assert "verdict: inside_prediction (prediction 98 percent or more, threshold below 95 percent)" in printed
+    assert "doc21: gold items 28, agreeing 28, reader-only 1, agreement 28/29 = 96.55%" in printed
+    assert "miss line" in printed and "שלום" in printed
+    assert "  none" not in printed
