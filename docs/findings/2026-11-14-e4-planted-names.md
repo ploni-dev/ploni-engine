@@ -313,10 +313,10 @@ Apart from these: the two weak kinds of mention are worth carrying into the plan
 
 Option 1, and option 2 beside it.
 
-- The first part needs no reader at all. On four kinds of text the model is far above the line of 80, and 51 of its 61 errors are of two known kinds. That is what the plan asked E1 to show, and here it does not rest on anyone's count.
+- The first part needs no reader at all. On four kinds of text the model is far above the line of 80, and 51 of its 61 errors are of two known kinds. That is what the plan asked E1 to show on real documents (`build-plan.md:1030`); here it is shown on generated text, and it does not rest on anyone's count.
 - The second part shows less than it was meant to. The readers were right wherever a highlight or the list pointed them. Whether they find what nothing points to is not shown. E1's count of real documents therefore stands as before: a reader's count, not checked.
-- Option 2 costs no reader and nothing from Achia, and it turns the open question into a number. It does not have to hold up the decision on E1.
-- The plan measures recall again later: on the 10 real documents at the gate of Phase 3 (`build-plan.md:645`), on a larger generated corpus with these hard cases in Phase 5 (`build-plan.md:683`, `:685`), and on client documents only at the pilot firm (`build-plan.md:687`).
+- Option 2 costs no reader and nothing from Achia, and it says how large the open question is. Only option 3 can close it. It does not have to hold up the decision on E1.
+- The plan measures recall again later: on the 10 real documents at the gate of Phase 3 (`build-plan.md:645`), on a larger generated corpus in Phase 5 (`build-plan.md:683`), with hard cases, among them names that are everyday words and two people sharing a surname (`:685`), and on client documents only at the pilot firm (`build-plan.md:687`).
 
 ## Scope requested
 
