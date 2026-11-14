@@ -239,6 +239,12 @@ People: 250, of them 29 with Arabic names and 37 with transliterated ones.
 
 ## Amended on 2026-11-14, after the first two parts were reported: the third part
 
+This section was revised in place on the same day, after two reviews of the script and
+before the run: the paragraph on what is known, the bullet on other labels, the lines
+on 80 to under 90 percent and on 52 to 54, the threshold cell, and details of the
+rule. The commits show each change. No span list of the other 36 documents existed at
+any of them.
+
 **Why.** The second part was meant to test whether a reader finds a name that the model
 left without a highlight. The review of the findings note
 (`docs/findings/2026-11-14-e4-planted-names.md`) found that it did not: the four documents
@@ -247,8 +253,8 @@ given. A reader's unaided search was tested on no case. In E1, 17 of the 18 miss
 readers reported were on that list too, so E1's count leans on it.
 
 The third part asks what can be asked with no reader: **of the names the model misses,
-how many does the list point to?** What the list does not hold is what a reader has to
-find alone.
+how many does the list point to?** What neither the list nor a highlight of another
+label points to is what a reader has to find alone.
 
 **What is known when this is written.** The run of `c05133a`, its 61 errors and their
 text. The lists of the four documents of the second part: four rows, three of them on
@@ -298,6 +304,8 @@ times. What the run adds is the count itself and the places that are off the lis
   places with or without the list. The number and the threshold are read on all items,
   those 12 included. The findings note also gives, from the error list of the same run,
   how many items have no highlight of any label, and how many of those are on the list.
+  "Under another label" is the scorer's flag: one span of another label covers the
+  whole name. A name that such a span covers only in part counts as having none.
   An item with no highlight of any label that is off the list is what a reader has to
   find alone, and each such item is printed.
 - An item is **on the list** if a row of the list shares at least one character with the
@@ -328,6 +336,10 @@ times. What the run adds is the count itself and the places that are off the lis
 
 From 80 to under 90 percent the result is outside the prediction and does not cross the
 threshold: the findings note says so in its first line, and the E1 note is not amended.
+
+The registered line is 90 percent, which is 52 of 57 or more. Claude's own expectation,
+given above, is higher: 55 to 57. A result of 52 to 54 is inside the prediction and
+under that expectation, and the findings note says so in its first lines.
 
 The reason for the prediction: most names missed in part one belong to a person whose
 name is highlighted somewhere else in the same document, and E1's figure was 17 of 18.
