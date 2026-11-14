@@ -19,8 +19,11 @@ Known limits:
 - The list is made by the rule of the throwaway script that made E1's lists, kept as it
   was, oddities included: a title that follows a title is passed over together with the
   word after it, and the row of a word after a title keeps punctuation at its edge.
-- Only `PER` highlights are known here, so a missed mention under another label is not
-  told apart. The list never looked at other labels either.
+- Only `PER` highlights are known here, so a missed mention under a highlight of another
+  label is an item like any other. The worksheet shows such a highlight in grey, which
+  points a reader there without the list; `run.py --list-errors` tells those apart.
+- One place can give two rows, as a name word and, with punctuation at its edge, as
+  the word after a title. So the rows on missed mentions can outnumber the mentions.
 - It says where a reader is pointed, not whether the reader looks.
 """
 
@@ -44,7 +47,7 @@ import score
 # changed after its run, so its helpers are used under their private names.
 from reader_check import SPAN_COLUMNS, _check_spans, _rows, _whole_number
 
-# The four constants and the list of titles are those of the throwaway script.
+# The letters, the punctuation, the titles and the lengths below are those of the throwaway script.
 PREFIX_LETTERS = "והבלמכש"
 HEBREW = "א-ת"
 EDGE_PUNCTUATION = " \t.,:;()[]{}\"'׳״-–־!?/"
@@ -110,11 +113,6 @@ class Coverage(NamedTuple):
     off_list: list[generate.Gold]
     found: int
 
-    @property
-    def rows(self) -> int:
-        """The number of rows of the list."""
-        return len(self.places)
-
 
 def name_variants(span_text: str) -> set[str]:
     """Give the words of a highlighted name that the list searches for.
@@ -165,7 +163,8 @@ def listed_places(paragraphs: list[str], spans: list[Span]) -> list[Place]:
 
     Contract: `spans` are the PER highlights of the document. A place is listed if no
     highlight is on any of its characters. A place found both ways is listed once, as a
-    name word. Rows are in reading order. The rule is in PREREGISTRATION.md.
+    name word. Rows are in reading order; rows that begin at one place keep the order
+    they were found in, as in the throwaway. The rule is in PREREGISTRATION.md.
     """
     # One search per name word, as the throwaway did: a combined search would pass over
     # a place that begins inside another word's match.
@@ -176,7 +175,7 @@ def listed_places(paragraphs: list[str], spans: list[Span]) -> list[Place]:
         for kind, start, end in _candidates(text, name_words):
             if all(end <= s or start >= e for s, e in highlighted):
                 rows.setdefault((index, start, end), kind)
-    return [Place(kind, *position) for position, kind in sorted(rows.items())]
+    return [Place(kind, *position) for position, kind in sorted(rows.items(), key=lambda row: row[0][:2])]
 
 
 def read_spans(folder: Path, document: generate.Document) -> list[Span]:
@@ -268,7 +267,7 @@ def report(documents: list[generate.Document], spans: dict[str, list[Span]]) -> 
     """
     results = {document.doc_id: coverage(document, spans[document.doc_id]) for document in documents}
     lines = [
-        f"{doc_id}: list rows {r.rows}, on a missed mention {r.rows_on_items}; "
+        f"{doc_id}: list rows {len(r.places)}, on a missed mention {r.rows_on_items}; "
         f"missed mentions {len(r.items)}, on the list {len(r.items) - len(r.off_list)}"
         for doc_id, r in results.items()
     ]
