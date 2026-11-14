@@ -54,7 +54,7 @@ More cases, added after the review of the script and before any list of the 36 w
   EC22 every punctuation mark is taken off the edge of a name word
   EC23 a dot inside a name word is a dot, not any letter
   EC24 a word that only begins like a title (`מרים`) is no title; a title and two spaces
-  EC25 after a title: a bare hyphen, a title with prefix letters (`ועו"ד`), a title with
+  EC25 after a title: a bare hyphen or maqaf, a title with prefix letters (`ועו"ד`), a title with
        its geresh (`גב'`) -> not listed
   EC26 the report with a name that is not counted under a row, a partial mention, long
        paragraphs, and only one kind missed
@@ -321,7 +321,14 @@ def test_ec20_two_name_words_at_one_place_keep_the_order_found():
     assert places('ד"ר לד באו', ['ד"ר', "לד"], other='פנו לד"ר') == [("name_word", 'לד"ר'), ("name_word", "לד")]
 
 
-@pytest.mark.parametrize("title", list_check.TITLES)
+# Spelled out here and not taken from list_check.TITLES: a title missing there must fail a case.
+EVERY_TITLE = [
+    "מר", "גב'", "גב׳", "גברת", 'עו"ד', "עו״ד", 'ד"ר', "ד״ר", "פרופ'", "פרופ׳",
+    "השופט", "השופטת", "הנשיא", "הנשיאה", "הרשם", "הרשמת", "כב'", "כב׳",
+]
+
+
+@pytest.mark.parametrize("title", EVERY_TITLE)
 def test_ec21_every_title(title: str):
     assert places(f"פנו אל {title} פרץ") == [("after_title", "פרץ")]
 
@@ -347,7 +354,11 @@ def test_ec24_what_is_a_title():
     assert places("מר  פרץ בא") == [("after_title", "פרץ")]
 
 
-@pytest.mark.parametrize("paragraph", ["מר - כהן", 'מר ועו"ד כהן', "מר גב' לוי"], ids=["hyphen", "prefixed_title", "title_with_geresh"])
+@pytest.mark.parametrize(
+    "paragraph",
+    ["מר - כהן", "מר ־ כהן", 'מר ועו"ד כהן', "מר גב' לוי"],
+    ids=["hyphen", "maqaf", "prefixed_title", "title_with_geresh"],
+)
 def test_ec25_not_a_word_after_a_title(paragraph: str):
     assert places(paragraph) == []
 
