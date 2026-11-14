@@ -2,7 +2,6 @@ kind	gender	name	classes
 given	m	יעקב	
 given	m	יוסף	
 given	m	אברהם	
-given	m	יצחק	
 given	m	שמעון	prefix_initial
 given	m	אליהו	
 given	m	אהרן	
@@ -23,8 +22,8 @@ given	m	נתן	also_word
 given	m	עמוס	also_word
 given	m	מאיר	also_word,prefix_initial
 given	m	מנחם	also_word,prefix_initial
-given	m	הדר	also_word,prefix_initial
-given	m	לביא	also_word,prefix_initial
+given	m	חיים	also_word
+given	m	יצחק	also_word
 given	m	אור	ordinary
 given	m	שחר	ordinary,prefix_initial
 given	m	רון	ordinary
@@ -34,9 +33,10 @@ given	m	עומר	ordinary
 given	m	נועם	ordinary
 given	m	דקל	ordinary
 given	m	תום	ordinary
-given	m	חיים	ordinary
 given	m	ברק	ordinary,prefix_initial
 given	m	שי	ordinary,prefix_initial
+given	m	הדר	ordinary,prefix_initial
+given	m	לביא	ordinary,prefix_initial
 given	m	מוחמד	arabic,prefix_initial
 given	m	אחמד	arabic
 given	m	מחמוד	arabic,prefix_initial
@@ -65,7 +65,6 @@ given	f	דינה
 given	f	עדנה	
 given	f	ציפורה	
 given	f	אורית	
-given	f	יהודית	
 given	f	ענת	
 given	f	דבורה	also_word
 given	f	תמר	also_word
@@ -74,7 +73,7 @@ given	f	מרים	also_word,prefix_initial
 given	f	שרה	also_word,prefix_initial
 given	f	חנה	also_word
 given	f	יעל	also_word
-given	f	סיגל	also_word
+given	f	יהודית	also_word
 given	f	שירה	ordinary,prefix_initial
 given	f	שקד	ordinary,prefix_initial
 given	f	יונה	ordinary
@@ -85,6 +84,7 @@ given	f	שיר	ordinary,prefix_initial
 given	f	מעיין	ordinary,prefix_initial
 given	f	לילך	ordinary,prefix_initial
 given	f	ורד	ordinary,prefix_initial
+given	f	סיגל	ordinary
 given	f	פאטמה	arabic
 given	f	אמל	arabic
 given	f	סמירה	arabic

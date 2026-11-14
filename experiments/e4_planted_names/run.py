@@ -128,12 +128,16 @@ def error_lines(documents: list[generate.Document], outcomes: dict[str, list[sco
 def main(model_dir: Path, list_errors: bool, worksheets_dir: Path | None) -> None:
     """Print the E4 report for the pinned model.
 
-    Contract: see the module docstring. The corpus is generated and checked before
-    the model is loaded, so a broken template stops the run before any number exists.
+    Contract: see the module docstring. The corpus is generated and checked, and the
+    worksheet folder is made, before the model is loaded, so a broken template or a
+    bad folder stops the run before any number exists.
     """
     torch.set_num_threads(TORCH_THREADS)
     documents = generate.corpus(HERE / "templates", HERE / "names.tsv")
     check_corpus(documents)
+    if worksheets_dir is not None:
+        # Before the model is loaded: a folder that cannot be made must not cost a run.
+        worksheets_dir.mkdir(parents=True, exist_ok=True)
     code = code_revision()
     hashes = pinned_model_hashes(model_dir)
     model, tokenizer = load_ner_model(model_dir)

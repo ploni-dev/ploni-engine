@@ -22,7 +22,6 @@ attach a prefix where Hebrew would need more than that.
 
 from __future__ import annotations
 
-import itertools
 import random
 import re
 from collections import Counter
@@ -402,7 +401,7 @@ def _fill_fresh(template: Template, bank: Bank, seed: str, taken: set[str]) -> t
     filling whose full names (FULL_NAME_FORMS) are all outside `taken`. Raises
     TemplateError after MAX_REDRAWS tries.
     """
-    for attempt in itertools.islice(itertools.count(), MAX_REDRAWS):
+    for attempt in range(MAX_REDRAWS):
         paragraphs, gold = fill(template, bank, random.Random(f"{seed}:{attempt}" if attempt else seed))
         if not taken & {item.name for item in gold if item.counted and item.form in FULL_NAME_FORMS}:
             return paragraphs, gold
@@ -440,8 +439,9 @@ def buckets_of(gold: Gold) -> list[str]:
     Contract: first the form's bucket from FORM_BUCKETS. A given name alone is then
     exactly one of `given_ordinary`, `given_also_word`, `given_plain`. A mention with
     prefix letters is `prefixed`, and also `prefix_on_name` or `prefix_on_title` by
-    what the letters are attached to; on a group word it is `prefixed` only, because
-    the group row already carries its own prediction. Last, `alone`.
+    what the letters are attached to. On a group word, and on a given name alone of
+    class `ordinary`, it is `prefixed` only: those two rows carry a lower prediction
+    of their own, and would pull `prefix_on_name` under its own. Last, `alone`.
     """
     names = [FORM_BUCKETS[gold.form]]
     if gold.form == "given":
@@ -451,7 +451,7 @@ def buckets_of(gold: Gold) -> list[str]:
         names.append("prefixed")
         if gold.form in TITLE_FORMS:
             names.append("prefix_on_title")
-        elif gold.form not in GROUP_WORDS:
+        elif gold.form not in GROUP_WORDS and "given_ordinary" not in names:
             names.append("prefix_on_name")
     if gold.alone:
         names.append("alone")

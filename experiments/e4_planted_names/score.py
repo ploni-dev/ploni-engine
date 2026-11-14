@@ -144,7 +144,8 @@ def format_report(documents: list[Document], outcomes: dict[str, list[Outcome]])
 
     Contract: `outcomes` maps each document's id to what `score_document` returned.
     Breakdowns, in this order: form bucket; the rows of `generate.TRAITS`; name class;
-    kind of document; template. Every row is printed, also when it holds nothing.
+    kind of document; template. Every row of the first three is printed, also when it
+    holds nothing; a kind or a template is printed only if the corpus has it.
     """
     everything = [item for document in documents for item in outcomes[document.doc_id]]
     found = sum(item.verdict == "found" for item in everything)
