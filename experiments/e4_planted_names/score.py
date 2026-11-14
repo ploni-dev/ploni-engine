@@ -14,7 +14,7 @@ from __future__ import annotations
 from collections.abc import Iterable
 from typing import NamedTuple
 
-from generate import FORM_BUCKETS, KINDS, NAME_CLASSES, Document, Gold, buckets_of
+from generate import FORM_BUCKETS, KINDS, NAME_CLASSES, TRAITS, Document, Gold, buckets_of
 
 PERSON_LABEL = "PER"  # the model's label for a person, as in e1_hebrew_recall/worksheet.py
 # PREREGISTRATION.md, "Prediction and threshold".
@@ -117,34 +117,42 @@ def _table(title: str, rows: list[tuple[str, list[Outcome]]]) -> list[str]:
     return lines
 
 
+def _grouped(documents: list[Document], outcomes: dict[str, list[Outcome]]) -> dict[str, dict[str, list[Outcome]]]:
+    """Sort every outcome into the rows of the report.
+
+    Contract: returns `row`, `class`, `kind` and `template`, each mapping a row name to
+    its outcomes. A mention is in every row `buckets_of` names for it and in every
+    class of its name, or in `no_class`.
+    """
+    groups: dict[str, dict[str, list[Outcome]]] = {"row": {}, "class": {}, "kind": {}, "template": {}}
+    for document in documents:
+        for item in outcomes[document.doc_id]:
+            for name in buckets_of(item.gold):
+                groups["row"].setdefault(name, []).append(item)
+            for name in item.gold.classes or {"no_class"}:
+                groups["class"].setdefault(name, []).append(item)
+            groups["kind"].setdefault(document.kind, []).append(item)
+            groups["template"].setdefault(document.template, []).append(item)
+    return groups
+
+
 def format_report(documents: list[Document], outcomes: dict[str, list[Outcome]]) -> str:
-    """Write the whole E4 report: the pooled number, the verdicts, and every breakdown.
+    """Write the whole E4 report: the pooled number, the verdicts, every breakdown.
 
     Why: the findings note pastes this as printed, so every number the
     pre-registration asks for is in it.
 
     Contract: `outcomes` maps each document's id to what `score_document` returned.
-    Breakdowns: form bucket; prefixed, alone, given_ordinary; name class; kind of
-    document; template. A mention is listed in every bucket it belongs to.
+    Breakdowns, in this order: form bucket; the rows of `generate.TRAITS`; name class;
+    kind of document; template. Every row is printed, also when it holds nothing.
     """
     everything = [item for document in documents for item in outcomes[document.doc_id]]
     found = sum(item.verdict == "found" for item in everything)
     partial = sum(item.verdict == "partial" for item in everything)
     missed = len(everything) - found - partial
     under_other = sum(item.other_label for item in everything)
-    by_bucket: dict[str, list[Outcome]] = {}
-    by_class: dict[str, list[Outcome]] = {}
-    for item in everything:
-        for name in buckets_of(item.gold):
-            by_bucket.setdefault(name, []).append(item)
-        for name in item.gold.classes or {"no_class"}:
-            by_class.setdefault(name, []).append(item)
-    by_kind: dict[str, list[Outcome]] = {}
-    by_template: dict[str, list[Outcome]] = {}
-    for document in documents:
-        by_kind.setdefault(document.kind, []).extend(outcomes[document.doc_id])
-        by_template.setdefault(document.template, []).extend(outcomes[document.doc_id])
-    form_names = list(dict.fromkeys(FORM_BUCKETS.values()))
+    groups = _grouped(documents, outcomes)
+    forms = list(dict.fromkeys(FORM_BUCKETS.values()))
     lines = [
         f"documents: {len(documents)}",
         f"strict PERSON recall, pooled: {_ratio(found, len(everything))}",
@@ -154,10 +162,10 @@ def format_report(documents: list[Document], outcomes: dict[str, list[Outcome]])
         f"lenient recall (partial counted as found): {_ratio(found + partial, len(everything))}",
         f"any-label recall: {_ratio(found + under_other, len(everything))}",
         f"errors: {partial + missed} (partial {partial}, missed {missed}, of them under another label {under_other})",
-        *_table("by form:", [(name, by_bucket.get(name, [])) for name in form_names]),
-        *_table("by trait:", [(name, by_bucket.get(name, [])) for name in ("prefixed", "alone", "given_ordinary")]),
-        *_table("by name class:", [(name, by_class.get(name, [])) for name in (*sorted(NAME_CLASSES), "no_class")]),
-        *_table("by kind of document:", [(name, by_kind.get(name, [])) for name in KINDS if name in by_kind]),
-        *_table("by template:", sorted(by_template.items())),
+        *_table("by form:", [(name, groups["row"].get(name, [])) for name in forms]),
+        *_table("by trait:", [(name, groups["row"].get(name, [])) for name in TRAITS]),
+        *_table("by name class:", [(name, groups["class"].get(name, [])) for name in (*sorted(NAME_CLASSES), "no_class")]),
+        *_table("by kind of document:", [(name, groups["kind"][name]) for name in KINDS if name in groups["kind"]]),
+        *_table("by template:", sorted(groups["template"].items())),
     ]
     return "\n".join(lines)

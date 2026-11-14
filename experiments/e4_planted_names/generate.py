@@ -22,6 +22,7 @@ attach a prefix where Hebrew would need more than that.
 
 from __future__ import annotations
 
+import itertools
 import random
 import re
 from collections import Counter
@@ -35,7 +36,15 @@ MIN_COUNTED_MENTIONS = 1000
 MIN_PER_BUCKET = 30
 KINDS = ("judgment", "contract", "letter", "medical")
 GENDERS = ("m", "f")
-NAME_CLASSES = frozenset({"ordinary", "prefix_initial", "arabic", "translit"})
+# `ordinary`: a modern name taken from an everyday word (build-plan.md Phase 1: אור, טל).
+# `also_word`: a traditional name that is also an everyday word (דוד, מרים).
+NAME_CLASSES = frozenset({"ordinary", "also_word", "prefix_initial", "arabic", "translit"})
+# A given name is paired with a surname of its own origin; names of neither class are "hebrew".
+ORIGINS = ("arabic", "translit")
+# PREREGISTRATION.md, second part: the first filling of the first template of each kind.
+PART_TWO_DOCUMENTS = ("doc01", "doc11", "doc21", "doc31")
+# A filling that repeats a full name of an earlier filling is drawn again, at most this often.
+MAX_REDRAWS = 50
 
 PREFIX_LETTERS = "והבלמכש"
 # ל, ב and כ merge with the definite article of the word they attach to: לשופט, not להשופט.
@@ -53,6 +62,10 @@ FORM_BUCKETS = {
     "group_brothers": "group",
     "group_family": "group",
 }
+TITLE_FORMS = frozenset({"title_surname", "title_full", "title_initial_surname"})
+FULL_NAME_FORMS = frozenset({"full", "title_full"})
+# The rows of the report beside the form buckets, in the order they are printed.
+TRAITS = ("given_ordinary", "given_also_word", "given_plain", "prefixed", "prefix_on_name", "prefix_on_title", "alone")
 STAR_FORMS = frozenset({"cited", "firm", "placeholder"})
 PLACEHOLDER = "פלוני"
 
@@ -176,23 +189,35 @@ def load_bank(path: Path) -> Bank:
     return Bank(given, surnames)
 
 
-def _parse_person(line: str) -> Person:
+def _parse_kind(line: str) -> str:
+    """Read the `% kind X` header line.
+
+    Contract: returns X, one of KINDS. Raises TemplateError for any other `%` line.
+    """
+    fields = line[1:].split()
+    if len(fields) != 2 or fields[0] != "kind" or fields[1] not in KINDS:
+        raise TemplateError(f"unknown header line: {line}")
+    return fields[1]
+
+
+def _parse_person(line: str, declared: dict[str, Person]) -> Person:
     """Read one `@ KEY gender option=value ...` header line.
 
-    Contract: `title` is required; `surname` and `class` are optional. Raises
-    TemplateError for anything else.
+    Contract: `title` is required; `surname` and `class` are optional. `declared` are
+    the people read so far. Raises TemplateError for a malformed line, a key declared
+    twice, an unknown class, or a shared surname that points at no earlier person.
     """
     fields = line[1:].split()
     options = dict(field.split("=", 1) for field in fields[2:] if "=" in field)
     if len(fields) < 3 or len(options) != len(fields) - 2 or not set(options) <= {"title", "surname", "class"}:
         raise TemplateError(f"bad person line: {line}")
-    key, gender = fields[0], fields[1]
-    wanted_class = options.get("class", "")
-    if not re.fullmatch(r"[A-Z][0-9]?", key) or gender not in GENDERS or "title" not in options:
+    person = Person(fields[0], fields[1], options.get("title", ""), options.get("surname", ""), options.get("class", ""))
+    well_formed = re.fullmatch(r"[A-Z][0-9]?", person.key) and person.gender in GENDERS and person.title
+    if not well_formed or (person.wanted_class and person.wanted_class not in NAME_CLASSES):
         raise TemplateError(f"bad person line: {line}")
-    if wanted_class and wanted_class not in NAME_CLASSES:
-        raise TemplateError(f"unknown name class: {line}")
-    return Person(key, gender, options["title"], options.get("surname", ""), wanted_class)
+    if person.key in declared or (person.shares and person.shares not in declared):
+        raise TemplateError(f"person declared twice, or shares an unknown surname: {line}")
+    return person
 
 
 def _check_slots(line: str, persons: dict[str, Person]) -> None:
@@ -217,24 +242,17 @@ def parse_template(text: str) -> Template:
     """Turn the text of a template file into its kind, people and paragraphs.
 
     Contract: see the module docstring for the format. Raises TemplateError for an
-    unknown header line, a missing or unknown kind, a person declared twice, a shared
-    surname that points at no earlier person, or a paragraph `_check_slots` refuses.
+    unknown header line, a missing kind, a person line `_parse_person` refuses, or a
+    paragraph `_check_slots` refuses.
     """
     kind = ""
     persons: dict[str, Person] = {}
     lines = []
-    for line in (raw.rstrip() for raw in text.splitlines()):
-        if not line.strip():
-            continue
+    for line in (raw.rstrip() for raw in text.splitlines() if raw.strip()):
         if line.startswith("%"):
-            fields = line[1:].split()
-            if len(fields) != 2 or fields[0] != "kind" or fields[1] not in KINDS:
-                raise TemplateError(f"unknown header line: {line}")
-            kind = fields[1]
+            kind = _parse_kind(line)
         elif line.startswith("@"):
-            person = _parse_person(line)
-            if person.key in persons or (person.shares and person.shares not in persons):
-                raise TemplateError(f"person declared twice, or shares an unknown surname: {line}")
+            person = _parse_person(line, persons)
             persons[person.key] = person
         else:
             lines.append(line)
@@ -245,32 +263,41 @@ def parse_template(text: str) -> Template:
     return Template(kind, persons, lines)
 
 
+def _origin(classes: frozenset[str]) -> str:
+    """Name the origin group of a name: `arabic`, `translit`, or `hebrew` for the rest."""
+    return next((name for name in ORIGINS if name in classes), "hebrew")
+
+
 def _draw_people(template: Template, bank: Bank, rng: random.Random) -> dict[str, tuple]:
     """Give every person of a template a given name and a surname.
 
-    Contract: returns key -> ((given, classes), (surname, classes)). No two people of
-    a document share a given name; no two share a surname unless the template says so.
-    Raises TemplateError when the bank has no unused name left that fits.
+    Why: a given name paired with a surname of another origin (`מוחמד לוי`) is a name
+    real documents do not hold, and it would blur the rows per name class.
+
+    Contract: returns key -> ((given, classes), (surname, classes)). The two names of a
+    person share an origin (`_origin`), also when the surname is another person's. No
+    two people of a document share a given name; no two share a surname unless the
+    template says so. Raises TemplateError when the bank has no unused name that fits.
     """
     people: dict[str, tuple] = {}
     used_given: set[str] = set()
     used_surnames: set[str] = set()
     for person in template.persons.values():
+        shared = people[person.shares][1] if person.shares else None
         fitting = [
             entry
             for entry in bank.given[person.gender]
-            if entry[0] not in used_given and (not person.wanted_class or person.wanted_class in entry[1])
+            if entry[0] not in used_given
+            and (not person.wanted_class or person.wanted_class in entry[1])
+            and (shared is None or _origin(entry[1]) == _origin(shared[1]))
         ]
         if not fitting:
             raise TemplateError(f"the bank has no given name left for {person.key}")
         given = rng.choice(fitting)
-        if person.shares:
-            surname = people[person.shares][1]
-        else:
-            free = [entry for entry in bank.surnames if entry[0] not in used_surnames]
-            if not free:
-                raise TemplateError(f"the bank has no surname left for {person.key}")
-            surname = rng.choice(free)
+        free = [entry for entry in bank.surnames if entry[0] not in used_surnames and _origin(entry[1]) == _origin(given[1])]
+        if shared is None and not free:
+            raise TemplateError(f"the bank has no surname left for {person.key}")
+        surname = shared or rng.choice(free)
         used_given.add(given[0])
         used_surnames.add(surname[0])
         people[person.key] = (given, surname)
@@ -285,10 +312,8 @@ def _render_person(person: Person, form: str, prefix: str, given: tuple, surname
     title or group word, if any.
     """
     initial = f"{given[0][0]}'"
-    head = {"title_surname": person.title, "title_full": person.title, "title_initial_surname": person.title}.get(
-        form, GROUP_WORDS.get(form, "")
-    )
-    if form in ("full", "title_full"):
+    head = person.title if form in TITLE_FORMS else GROUP_WORDS.get(form, "")
+    if form in FULL_NAME_FORMS:
         name, classes = f"{given[0]} {surname[0]}", given[1] | surname[1]
     elif form == "given":
         name, classes = given[0], given[1]
@@ -367,6 +392,23 @@ def fill(template: Template, bank: Bank, rng: random.Random) -> tuple[list[str],
     return paragraphs, gold
 
 
+def _fill_fresh(template: Template, bank: Bank, seed: str, taken: set[str]) -> tuple[list[str], list[Gold]]:
+    """Fill a template so that no person carries a full name in `taken`.
+
+    Why: the pre-registration says each template is filled five times with different
+    people, and two draws from one bank can land on the same full name.
+
+    Contract: tries `seed`, then `seed:1`, `seed:2` and so on, and returns the first
+    filling whose full names (FULL_NAME_FORMS) are all outside `taken`. Raises
+    TemplateError after MAX_REDRAWS tries.
+    """
+    for attempt in itertools.islice(itertools.count(), MAX_REDRAWS):
+        paragraphs, gold = fill(template, bank, random.Random(f"{seed}:{attempt}" if attempt else seed))
+        if not taken & {item.name for item in gold if item.counted and item.form in FULL_NAME_FORMS}:
+            return paragraphs, gold
+    raise TemplateError(f"no filling with new people after {MAX_REDRAWS} tries: {seed}")
+
+
 def corpus(templates_dir: Path, bank_path: Path) -> list[Document]:
     """Generate the whole corpus: every template, FILLINGS times.
 
@@ -374,43 +416,58 @@ def corpus(templates_dir: Path, bank_path: Path) -> list[Document]:
     come in template order, then filling order, and are named `doc01` onwards. Each
     document is seeded from SEED, its template's name and its filling number, so the
     corpus is the same on every run and adding a template does not change the others.
-    Raises TemplateError as `parse_template`, `load_bank` and `fill` do.
+    The fillings of one template share no full name. Raises TemplateError as
+    `parse_template`, `load_bank`, `fill` and `_fill_fresh` do.
     """
     bank = load_bank(bank_path)
     documents = []
     for path in sorted(templates_dir.glob("*.txt")):
         template = parse_template(path.read_text(encoding="utf-8"))
+        taken: set[str] = set()
         for filling in range(1, FILLINGS + 1):
-            paragraphs, gold = fill(template, bank, random.Random(f"{SEED}:{path.stem}:{filling}"))
+            paragraphs, gold = _fill_fresh(template, bank, f"{SEED}:{path.stem}:{filling}", taken)
+            taken |= {item.name for item in gold if item.counted and item.form in FULL_NAME_FORMS}
             documents.append(Document(f"doc{len(documents) + 1:02d}", path.stem, template.kind, filling, paragraphs, gold))
     return documents
 
 
 def buckets_of(gold: Gold) -> list[str]:
-    """Name every report bucket one counted mention belongs to.
+    """Name every report row one counted mention belongs to.
 
-    Contract: the form's bucket from FORM_BUCKETS, then `prefixed`, `alone` and
-    `given_ordinary` where they apply. PREREGISTRATION.md names these buckets.
+    Why: the pre-registration makes a prediction per row, so the rows that carry one
+    must not overlap in a way that hides which mentions failed.
+
+    Contract: first the form's bucket from FORM_BUCKETS. A given name alone is then
+    exactly one of `given_ordinary`, `given_also_word`, `given_plain`. A mention with
+    prefix letters is `prefixed`, and also `prefix_on_name` or `prefix_on_title` by
+    what the letters are attached to; on a group word it is `prefixed` only, because
+    the group row already carries its own prediction. Last, `alone`.
     """
     names = [FORM_BUCKETS[gold.form]]
+    if gold.form == "given":
+        kind = next((name for name in ("ordinary", "also_word") if name in gold.classes), "plain")
+        names.append(f"given_{kind}")
     if gold.prefix:
         names.append("prefixed")
+        if gold.form in TITLE_FORMS:
+            names.append("prefix_on_title")
+        elif gold.form not in GROUP_WORDS:
+            names.append("prefix_on_name")
     if gold.alone:
         names.append("alone")
-    if gold.form == "given" and "ordinary" in gold.classes:
-        names.append("given_ordinary")
     return names
 
 
 def bucket_counts(documents: list[Document]) -> Counter[str]:
-    """Count the counted mentions of a corpus, in all and per bucket.
+    """Count the counted mentions of a corpus, in all and per row of the report.
 
     Why: the pre-registration promises at least MIN_COUNTED_MENTIONS in all and
-    MIN_PER_BUCKET per bucket; a test holds the committed templates to it.
+    MIN_PER_BUCKET per row that carries a prediction; a test holds the committed
+    templates to it.
 
-    Contract: key `all`, and every bucket `buckets_of` can name, present even at 0.
+    Contract: key `all`, every form bucket and every name in TRAITS, present even at 0.
     """
-    counts: Counter[str] = Counter({name: 0 for name in (*FORM_BUCKETS.values(), "prefixed", "alone", "given_ordinary", "all")})
+    counts: Counter[str] = Counter({name: 0 for name in (*FORM_BUCKETS.values(), *TRAITS, "all")})
     for document in documents:
         for gold in document.gold:
             if gold.counted:
