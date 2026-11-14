@@ -43,6 +43,9 @@ read_reader_files, a file that does not follow the guide
   E4   a highlight marked partial with no partial line, or the other way round
   E5   a miss line of an unknown kind
 
+compare, a span list that is not of this document
+  E7   a highlight whose text is not what the document holds at its position -> ReaderFileError
+
 agreement_verdict (98 percent or more predicted; below 95 crosses the threshold)
   B7   98 of 100 -> inside_prediction; 97 of 100 -> outside_prediction
   B8   95 of 100 -> outside_prediction; 94 of 100 -> threshold_crossed
@@ -205,3 +208,10 @@ def test_b7_b8_agreement_verdict(agreeing: int, expected: str):
 def test_e6_nothing_compared():
     with pytest.raises(ValueError):
         agreement_verdict(0, 0)
+
+
+def test_e7_a_span_list_of_another_document(tmp_path: Path):
+    files = read_reader_files(write(tmp_path), "doc01")
+    other = DOCUMENT._replace(paragraphs=["x" * 30, PARAGRAPHS[1], PARAGRAPHS[2]])
+    with pytest.raises(ReaderFileError, match="not of this document"):
+        compare(other, files)
