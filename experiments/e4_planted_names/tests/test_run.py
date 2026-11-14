@@ -22,6 +22,10 @@ main
 write_worksheets
   EC4  writes a worksheet page and a span list for the four documents of the second
        part and for no other, in E1's formats
+  EC8  asked for every document (the third part), writes them for all 40
+
+main
+  E1   `all_documents` without a worksheet folder -> ValueError before the model is loaded
 """
 
 from __future__ import annotations
@@ -152,3 +156,24 @@ def test_ec7_the_worksheet_folder_is_made_before_the_model_is_loaded(tmp_path: P
     with pytest.raises(RuntimeError, match="would be loaded"):
         run.main(tmp_path, False, target)
     assert target.is_dir()
+
+
+def test_ec8_worksheets_for_every_document(tmp_path: Path):
+    documents = corpus(HERE / "templates", HERE / "names.tsv")
+    entities = {document.doc_id: [] for document in documents}
+    run.write_worksheets(documents, entities, tmp_path, [document.doc_id for document in documents])
+    assert sorted(path.name for path in tmp_path.iterdir()) == sorted(
+        f"doc{number:02d}{suffix}" for number in range(1, 41) for suffix in (".html", "_spans.csv")
+    )
+
+
+def test_e1_all_documents_needs_a_worksheet_folder(tmp_path: Path, monkeypatch):
+    def stop(model_dir):
+        raise RuntimeError("the model would be loaded now")
+
+    monkeypatch.setattr(run, "code_revision", lambda: {"commit": "none", "dirty": False})
+    monkeypatch.setattr(run, "pinned_model_hashes", lambda model_dir: {})
+    monkeypatch.setattr(run, "load_ner_model", stop)
+    with pytest.raises(ValueError, match="worksheet folder"):
+        run.main(tmp_path, False, None, True)
+
