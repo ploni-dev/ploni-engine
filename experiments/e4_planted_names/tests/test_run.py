@@ -22,6 +22,12 @@ main
 write_worksheets
   EC4  writes a worksheet page and a span list for the four documents of the second
        part and for no other, in E1's formats
+  EC8  asked for every document (the third part), writes them for all 40
+
+main
+  E1   `all_documents` without a worksheet folder -> ValueError before the model is loaded
+  EC9  with a stand-in for the model: no folder -> nothing written; a folder -> the four
+       documents and their line; a folder and `all_documents` -> all 40 and their line
 """
 
 from __future__ import annotations
@@ -152,3 +158,47 @@ def test_ec7_the_worksheet_folder_is_made_before_the_model_is_loaded(tmp_path: P
     with pytest.raises(RuntimeError, match="would be loaded"):
         run.main(tmp_path, False, target)
     assert target.is_dir()
+
+
+def test_ec8_worksheets_for_every_document(tmp_path: Path):
+    documents = corpus(HERE / "templates", HERE / "names.tsv")
+    entities = {document.doc_id: [] for document in documents}
+    run.write_worksheets(documents, entities, tmp_path, [document.doc_id for document in documents])
+    assert sorted(path.name for path in tmp_path.iterdir()) == sorted(
+        f"doc{number:02d}{suffix}" for number in range(1, 41) for suffix in (".html", "_spans.csv")
+    )
+
+
+def test_e1_all_documents_needs_a_worksheet_folder(tmp_path: Path, monkeypatch):
+    def stop(model_dir):
+        raise RuntimeError("the model would be loaded now")
+
+    monkeypatch.setattr(run, "code_revision", lambda: {"commit": "none", "dirty": False})
+    monkeypatch.setattr(run, "pinned_model_hashes", lambda model_dir: {})
+    monkeypatch.setattr(run, "load_ner_model", stop)
+    with pytest.raises(ValueError, match="worksheet folder"):
+        run.main(tmp_path, False, None, True)
+
+
+@pytest.mark.parametrize(
+    ("folder", "all_documents", "files", "last_line"),
+    [
+        (False, False, 0, None),
+        (True, False, 8, "worksheets written for doc01, doc11, doc21, doc31"),
+        (True, True, 80, "worksheets written for all 40 documents"),
+    ],
+    ids=["no_folder", "second_part", "all_documents"],
+)
+def test_ec9_main_with_a_stand_in_model(tmp_path: Path, monkeypatch, capsys, folder, all_documents, files, last_line):
+    monkeypatch.setattr(run, "code_revision", lambda: {"commit": "none", "dirty": False})
+    monkeypatch.setattr(run, "pinned_model_hashes", lambda model_dir: {})
+    monkeypatch.setattr(run, "load_ner_model", lambda model_dir: (None, None))
+    monkeypatch.setattr(
+        run, "run_model", lambda documents, model, tokenizer: ({document.doc_id: [] for document in documents}, "no model")
+    )
+    target = tmp_path / "out"
+    run.main(tmp_path, False, target if folder else None, all_documents)
+    printed = capsys.readouterr().out.splitlines()
+    assert len(list(target.iterdir())) == files if folder else not target.exists()
+    assert "strict PERSON recall, pooled: 0/1145 = 0.00%" in printed
+    assert (printed[-1] == last_line) if last_line else not printed[-1].startswith("worksheets written")

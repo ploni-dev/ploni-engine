@@ -4,13 +4,14 @@ Why: Achia asked for a check with a ground truth in place of a check by a person
 prediction, the threshold and the scoring rule are in PREREGISTRATION.md, committed
 before the templates were written and before this script was first run.
 
-Contract: `python -I run.py --model-dir M [--list-errors] [--worksheets-dir W]`,
+Contract: `python -I run.py --model-dir M [--list-errors] [--worksheets-dir W [--all-documents]]`,
 offline, in the environment of `experiments/e1_hebrew_recall/requirements.txt`. Prints
 the model hashes, the commit, the library versions, the size of the corpus and the
 report of `score.format_report`. With `--list-errors` it also prints every mention that
 was not found, with the text around it: allowed here because every sentence and every
 name is generated. With `--worksheets-dir` it writes, for the four documents of the
-second part, the worksheet and the span list E1's readers worked from. Raises
+second part, the worksheet and the span list E1's readers worked from; with
+`--all-documents` it writes them for every document, which the third part needs. Raises
 ValueError before the model is loaded if the weights are not the pinned file, and
 `generate.TemplateError` if the corpus is smaller than the pre-registration promises.
 
@@ -24,6 +25,7 @@ import argparse
 import csv
 import sys
 import time
+from collections.abc import Collection
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
@@ -63,19 +65,25 @@ def check_corpus(documents: list[generate.Document]) -> None:
         raise generate.TemplateError(f"corpus too small: {counts['all']} mentions, short rows {short}")
 
 
-def write_worksheets(documents: list[generate.Document], entities: dict[str, list[Entity]], out_dir: Path) -> None:
-    """Write what a reader of the second part works from, in E1's formats.
+def write_worksheets(
+    documents: list[generate.Document],
+    entities: dict[str, list[Entity]],
+    out_dir: Path,
+    doc_ids: Collection[str] = generate.PART_TWO_DOCUMENTS,
+) -> None:
+    """Write the model's highlights of chosen documents, in E1's formats.
 
-    Why: the second part compares a Claude reader's count with the gold. The reader
-    gets the model's highlights and never the gold, which stays in the generator.
+    Why: the second part compares a Claude reader's count with the gold, and the
+    third part sets the readers' cross-check list against it. Both work from the
+    model's highlights and never from the gold, which stays in the generator.
 
-    Contract: for each document of generate.PART_TWO_DOCUMENTS, writes `docNN.html`
-    and `docNN_spans.csv` into `out_dir`, as `e1_hebrew_recall/run_model.py` does.
+    Contract: for each document whose id is in `doc_ids`, writes `docNN.html` and
+    `docNN_spans.csv` into `out_dir`, as `e1_hebrew_recall/run_model.py` does.
     `entities` maps a document's id to the model's entities for it. Nothing else is
     written, and no file holds a gold position.
     """
     for document in documents:
-        if document.doc_id not in generate.PART_TWO_DOCUMENTS:
+        if document.doc_id not in doc_ids:
             continue
         spans = entities[document.doc_id]
         (out_dir / f"{document.doc_id}.html").write_text(
@@ -125,13 +133,16 @@ def error_lines(documents: list[generate.Document], outcomes: dict[str, list[sco
     return lines
 
 
-def main(model_dir: Path, list_errors: bool, worksheets_dir: Path | None) -> None:
+def main(model_dir: Path, list_errors: bool, worksheets_dir: Path | None, all_documents: bool = False) -> None:
     """Print the E4 report for the pinned model.
 
     Contract: see the module docstring. The corpus is generated and checked, and the
     worksheet folder is made, before the model is loaded, so a broken template or a
-    bad folder stops the run before any number exists.
+    bad folder stops the run before any number exists. Raises ValueError, also
+    before the model is loaded, when `all_documents` is asked with no folder.
     """
+    if all_documents and worksheets_dir is None:
+        raise ValueError("--all-documents needs a worksheet folder to write into")
     torch.set_num_threads(TORCH_THREADS)
     documents = generate.corpus(HERE / "templates", HERE / "names.tsv")
     check_corpus(documents)
@@ -160,8 +171,10 @@ def main(model_dir: Path, list_errors: bool, worksheets_dir: Path | None) -> Non
     if list_errors:
         print("mentions not found:", *error_lines(documents, outcomes), sep="\n")
     if worksheets_dir is not None:
-        write_worksheets(documents, entities, worksheets_dir)
-        print(f"worksheets written for {', '.join(generate.PART_TWO_DOCUMENTS)}")
+        doc_ids = [document.doc_id for document in documents] if all_documents else generate.PART_TWO_DOCUMENTS
+        write_worksheets(documents, entities, worksheets_dir, doc_ids)
+        written = f"all {len(doc_ids)} documents" if all_documents else ", ".join(doc_ids)
+        print(f"worksheets written for {written}")
 
 
 if __name__ == "__main__":
@@ -171,5 +184,6 @@ if __name__ == "__main__":
     parser.add_argument("--model-dir", type=Path, required=True)
     parser.add_argument("--list-errors", action="store_true")
     parser.add_argument("--worksheets-dir", type=Path)
+    parser.add_argument("--all-documents", action="store_true")
     arguments = parser.parse_args()
-    main(arguments.model_dir, arguments.list_errors, arguments.worksheets_dir)
+    main(arguments.model_dir, arguments.list_errors, arguments.worksheets_dir, arguments.all_documents)

@@ -7,6 +7,10 @@ The commit order is the evidence.
 names, the rows of the report and which prediction each carries, and it fixes the second
 part. What stands above it is kept as first written.**
 
+**Amended again on 2026-11-14, after the first two parts were run and reported: a third
+part, which measures the readers' cross-check list against the gold. See the section at
+the end. Nothing above it is changed.**
+
 ## Why this experiment exists
 
 It is not in `build-plan.md` section 11, which has three experiments. Achia asked for it on
@@ -232,3 +236,128 @@ People: 250, of them 29 with Arabic names and 37 with transliterated ones.
 - Where the line between `ordinary` and `also_word` runs is a judgement. A reader who
   draws it elsewhere moves a few mentions between `given_ordinary`, `given_also_word` and
   `given_plain`.
+
+## Amended on 2026-11-14, after the first two parts were reported: the third part
+
+This section was revised in place on the same day, after two reviews of the script and
+before the run: the paragraph on what is known, the bullet on other labels, the lines
+on 80 to under 90 percent and on 52 to 54, the threshold cell, and details of the
+rule. The commits show each change. No span list of the other 36 documents existed at
+any of them.
+
+**Why.** The second part was meant to test whether a reader finds a name that the model
+left without a highlight. The review of the findings note
+(`docs/findings/2026-11-14-e4-planted-names.md`) found that it did not: the four documents
+held three such names, and all three were rows of the cross-check list the reader was
+given. A reader's unaided search was tested on no case. In E1, 17 of the 18 misses the
+readers reported were on that list too, so E1's count leans on it.
+
+The third part asks what can be asked with no reader: **of the names the model misses,
+how many does the list point to?** What neither the list nor a highlight of another
+label points to is what a reader has to find alone.
+
+**What is known when this is written.** The run of `c05133a`, its 61 errors and their
+text. The lists of the four documents of the second part: four rows, three of them on
+the three missed mentions. The list of the other 36 documents has not been made, and no
+span list of theirs exists.
+
+**The prediction below is not blind.** With the gold and the 61 printed errors, the
+place of every one of the 57 missed mentions is known, and so is that the other 1,084
+counted mentions carry a `PER` highlight. The name words of the list come from those
+highlights, so most of the result could be worked out by hand with no model run.
+Claude did not count it. Before predicting, Claude did reason through several of the
+errors (a surname after `משפחת`, the given names `שיר` and `מעיין`, `מח'טיב`, a full
+name alone on a line) and expects 55 to 57 of the 57 to be on the list. 51 of the 57
+are group surnames or everyday-word given names of people the templates name several
+times. What the run adds is the count itself and the places that are off the list.
+
+**What is measured.**
+
+- `run.py --worksheets-dir W --all-documents --list-errors` runs the model again and
+  writes the span list of every document. `W` is a new, empty folder, so that the files
+  of the second part are not written over. That run prints its own pooled number. If it is not part one's
+  1084 of 1145, that is said first in the report, and the third part is counted on the
+  spans of the new run.
+- `list_check.py --folder W` makes the cross-check list of every document, by the rule
+  of the throwaway script that made the lists of E1 and of the second part. The rule is
+  now in the repository, with tests:
+  - A *name word* is a word of any `PER` highlight of the document, cut at white space
+    and hyphens, with punctuation taken off its edges, of two letters or more; and also
+    that word with one, two or three leading prefix letters (`והבלמכש`) taken off, if
+    three letters or more are left.
+  - The list holds every place where a name word stands with at most three prefix
+    letters before it, no Hebrew letter on either side, and no `PER` highlight on any of
+    its characters.
+  - It also holds the word after a title: the whole run of characters up to the next
+    white space, so a comma at its end is inside the row (`מר`, `גב'`, `גברת`, `עו"ד`, `ד"ר`, `פרופ'`,
+    `השופט`, `השופטת`, `הנשיא`, `הנשיאה`, `הרשם`, `הרשמת`, `כב'`, with at most two
+    prefix letters before the title, and no Hebrew letter before those), if that word,
+    with punctuation taken off its edges, is not itself a title with or without prefix
+    letters, and no `PER` highlight is on it. Where a title follows a title (`כב' השופט`), the search goes on
+    after the second one, so the word after it is not listed by this rule. The
+    throwaway behaves so, and it is kept.
+- **An item** is a counted mention that the scorer calls missed, from the span lists: 57
+  in part one. A partial mention is not an item: a highlight sits on it, in front of
+  the reader.
+- **A missed mention under another label is an item.** 12 of the 57 are such. The
+  worksheet shows a highlight of another label in grey, so a reader is pointed to those
+  places with or without the list. The number and the threshold are read on all items,
+  those 12 included. The findings note also gives, from the error list of the same run,
+  how many items have no highlight of any label, and how many of those are on the list.
+  "Under another label" is the scorer's flag: one span of another label covers the
+  whole name. A name that such a span covers only in part counts as having none.
+  An item with no highlight of any label that is off the list is what a reader has to
+  find alone, and each such item is printed.
+- An item is **on the list** if a row of the list shares at least one character with the
+  planted name.
+- **The number**: items on the list over all items, pooled over the 40 documents, as an
+  exact fraction.
+- Also reported: the same by kind of mention (a surname after `משפחת`, a surname after
+  `האחים`, a given name alone that is an everyday word, the rest); how many rows the
+  lists have and how many of them lie on an item, which is what a reader has to look
+  through; and every item that is off the list, with its text. One place can give two
+  rows (a name word, and the same word with a comma as the word after a title), so the
+  rows on items can outnumber the items.
+- The port is checked once against the throwaway: the rows `list_check.py` makes for
+  `doc01`, `doc11`, `doc21` and `doc31` are compared with the four files the readers
+  had. Those files are outside the repository, so this is reported in the findings note
+  and is not a test. The throwaway itself is not in the repository either: its one long
+  function is over the size limit of `CLAUDE.md`, and split up it would no longer be the
+  script that made the lists. A copy is kept beside the output of the run, SHA-256
+  `bd02b49f2668a5f733f82c6982404e39c4e0aa26504137826a2bfdc9f83d9d51`. The reviewer of
+  the port compared the two on made-up highlights; the count of that comparison is in
+  the pull request.
+
+**Prediction and threshold, Claude's, stated before the list of the 36 is made.**
+
+| What | Prediction | Threshold |
+|---|---|---|
+| Missed mentions that are on the list, pooled | 90 percent or more | below 80 percent: the E1 findings note is amended to say that a fifth or more of the misses of the kinds seen here are not on the readers' list |
+
+From 80 to under 90 percent the result is outside the prediction and does not cross the
+threshold: the findings note says so in its first line, and the E1 note is not amended.
+
+The registered line is 90 percent, which is 52 of 57 or more. Claude's own expectation,
+given above, is higher: 55 to 57. A result of 52 to 54 is inside the prediction and
+under that expectation, and the findings note says so in its first lines.
+
+The reason for the prediction: most names missed in part one belong to a person whose
+name is highlighted somewhere else in the same document, and E1's figure was 17 of 18.
+
+**What the number is used for.** One estimate, given as arithmetic and named as resting
+on an assumption: if a share `c` of misses is on the list, and a reader found none of
+the others, then E1's 17 misses from the list stand for about `17 / c` misses in all.
+The assumption is that the share carries over from this text to a judgment. Nothing
+shows that it does.
+
+**What the third part cannot show.**
+
+- The 57 items are not independent draws: five fillings of a template share every
+  sentence, so a place that is off the list is likely off it five times.
+- The templates name every person several times, so a missed name usually has a
+  highlighted twin in the same document. A person named once in a real document, and
+  missed, is on no list. The share measured here is therefore more likely too high than
+  too low for real text.
+- Whether a reader takes every miss from the list. The second part saw three of three.
+- Whether a reader finds a miss that is off the list. That needs a reader, on the
+  documents where the third part finds such a miss. It is not part of this amendment.
