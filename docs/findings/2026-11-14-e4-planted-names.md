@@ -1,4 +1,4 @@
-# Finding: E4 PERSON recall on planted names is 94.67 percent (1,084 of 1,145), inside the predicted 90 to 96 and 0.86 points under E1; four Claude readers agree with the planted truth on 123 of 123 items
+# Finding: E4 PERSON recall on planted names is 94.67 percent (1,084 of 1,145), inside the predicted 90 to 96; four Claude readers agree with the planted truth on 123 of 123 items, and a reader's unaided search for a missed name was tested on no case
 
 This note is not about a gate that failed. Both parts came out inside their predictions. It is written because the pre-registration says the result is reported in a findings note with `## Decision` left empty, and because E4 now stands where a person's check of E1 was meant to stand. Whether that is enough is Achia's decision.
 
@@ -11,7 +11,7 @@ E4 is that method. A script writes 40 Hebrew documents from eight templates and 
 It measures two things:
 
 1. **The model.** `dicta-il/dictabert-joint` at E1's revision, with E1's input handling and E1's strict rule: a mention is found only if `PER` spans cover every character of the name.
-2. **The readers.** Four of the 40 documents are counted by fresh Claude sessions exactly as E1's documents were counted. A script then compares each reader's files with the planted names.
+2. **The readers.** Four of the 40 documents are counted by fresh Claude sessions in the way E1's documents were counted. A script then compares each reader's files with the planted names.
 
 The rules are in `experiments/e4_planted_names/PREREGISTRATION.md`. It was committed before any template was written, and amended once, after the review of the harness and before any run.
 
@@ -204,22 +204,27 @@ Five fillings of a template share every sentence, so these rows are not independ
 | | E1, ten real judgments | E4, 40 generated documents |
 |---|---|---|
 | Strict recall | 449/470 = 95.53% | 1084/1145 = 94.67% |
-| A surname in a group term | 1/14 | 22/55 |
-| Without the group terms | 448/456 = 98.25% | 1062/1090 = 97.43% |
+| `האחים` and a surname | 1/14 | 21/30 |
+| A family surname for a group | 6/6 | 1/25 |
+| Both kinds of group term | 7/20 | 22/55 |
+| Without the group terms | 442/450 = 98.22% | 1062/1090 = 97.43% |
 | How the count was made | Claude readers, not checked | a script, from planted positions |
 
-The last two rows of numbers are arithmetic on the measured counts. The weak spot is the same in both: a surname that follows a group word.
+The E1 column is from the E1 note, table of doubtful cases: "14 places, 1 found", "highlights 29 to 34, all found", "Both: 442 of 450". The rows below the first are arithmetic on measured counts.
 
-One thing differs. In E1 the family surnames of `doc08` were all found (E1 note, table of doubtful cases). Here `משפחת` and a surname is almost never found. The E1 places are not the same wording, and this note does not explain the difference.
+Pooled, group terms are weak in both. By wording the two disagree, both ways: `האחים` and a surname is almost never found in E1 and mostly found here; a family surname is always found in E1 and almost never here. The E1 places are other sentences, in one document each. This note does not explain the difference. What both show is that a surname after a group word cannot be relied on.
+
+The pre-registered test against E1 was "within 10 points", and it held. That the two numbers are 0.86 points apart says less than it seems. The pooled number here is a mean of two groups: the two weak kinds, 173/224 = 77.23 percent, and the rest, 911/921 = 98.91 percent. Claude chose how much of each the templates hold.
 
 ### The second part
 
 In the order it happened:
 
-1. The run above wrote worksheets and span lists for `doc01`, `doc11`, `doc21` and `doc31` into a folder outside the repository. No file there holds a gold position.
-2. Four fresh Claude sessions, one per document, counted them with E1's guide. Each was told the folder and told not to open `experiments/e4_planted_names/`.
-3. The comparison script `reader_check.py` was written with tests, reviewed in three passes by a session that was told not to open the readers' folder, and merged (PR #56, `4c0a281`). Until then neither the writing session nor the reviewer opened a reader's file.
-4. The script was run once, from `main` at `4c0a281`:
+1. The run above wrote worksheets and span lists for `doc01`, `doc11`, `doc21` and `doc31` into a folder outside the repository. E1's throwaway script, which is not in the repository, then made what E1's readers also had: a plain-text worksheet, and a **cross-check list** of places that may hold a missed name. It holds two kinds of place, as in E1 (E1 note, "The cross-check"): a word that the model highlighted as a person somewhere in the document, where it stands without a highlight; and a word after a title that has no highlight. No file in the folder holds a gold position.
+2. Four fresh Claude sessions, one per document, counted them with E1's guide. Each was told the folder and told not to open `experiments/e4_planted_names/`. The brief also said: "every natural person named in it is a counted mention; a name in the title of a cited decision, a name inside the name of a firm, and a placeholder are not." The guide holds these rules among others. They are also the three kinds of name the generator plants as not counted, and the session that wrote the brief knew that.
+3. Each reader's final answer came back to the writing session with its counts (for `doc31`: three missed, in paragraphs 13, 22 and 24). That was before the comparison script was written, and the writing session knows the gold. What protects the result is that the rule of the comparison was fixed in the pre-registration before the run (`c05133a`), and that file is unchanged since.
+4. The comparison script `reader_check.py` was written with tests, reviewed in three passes by a session that was told not to open the readers' folder, and merged (PR #56, `4c0a281`). Until then neither the writing session nor the reviewer opened a reader's file.
+5. The script was run once, from `main` at `4c0a281`:
 
 ```
 experiments/.venv/Scripts/python.exe -I experiments/e4_planted_names/reader_check.py --folder <private folder>
@@ -249,6 +254,8 @@ What the four documents held, counted after the comparison by a throwaway script
 | of them the model found | 28 | 32 | 26 | 26 | 112 |
 | of them partial | 1 | 0 | 0 | 0 | 1 |
 | of them missed, no highlight | 0 | 0 | 0 | 3 | 3 |
+| of those, on the cross-check list | | | | 3 | 3 |
+| Rows of the cross-check list | 0 | 0 | 0 | 4 | 4 |
 | Names that are not counted | 1 | 3 | 2 | 1 | 7 |
 | of them under a highlight | 1 | 2 | 2 | 1 | 6 |
 | Highlights | 30 | 33 | 28 | 27 | 118 |
@@ -259,40 +266,57 @@ What the four documents held, counted after the comparison by a throwaway script
 
 The readers listed the three mentions that had no highlight, marked the one partial as partial, and counted none of the six highlighted names that E1's rules leave out. No reader used `surplus` or `extra`, and no highlight fell on plain text.
 
-**Did a reader look at the answer?** Nothing prevents it; the pre-registration says so. The session logs of the four readers, which are on Achia's laptop and not in the repository, were searched after the comparison. Each session read and wrote files in the worksheet folder. The only tool call in any of them that names the repository is one command per reader that runs the repository's Python on the reader's own check script, which is in the worksheet folder.
+**The three missed mentions were all on the cross-check list.** The list for `doc31` has four rows: the three missed names and the word `בן`. The reader of `doc31` wrote in its final answer that it found no miss beyond those rows. So what was tested is that a reader takes a miss from the list and leaves a false row out. A name with no highlight that is not on the list was tested on no case. For E1 the same figure is 17 of 18 misses on the list (E1 note, "The cross-check").
+
+**The readers' doubts.** Three readers wrote doubts; the reader of `doc11` had none. In five places a reader wrote that another reading was possible. Each time the reader chose what the gold says.
+
+| Where | The doubt | Decided |
+|---|---|---|
+| `doc01` highlight 30 | `ר'` before a surname: an initial, or the title `רב` | an initial, so partial |
+| `doc01` highlights 15 and 25 | a surname after `האחים` stands for two brothers: `extra` 1 or 0 | 0 |
+| `doc21` highlight 1 | a full name alone on a letterhead: a person, or a firm | a person |
+| `doc31` highlight 8 | `בתום`: the given name with a prefix, or the word "at the end of" | the name |
+| `doc31` paragraph 22 | a surname after `משפחת`: a counted mention or not | counted, missed |
+
+By the count of the reviewer of this note, who ran the comparison on copies of the files with the other reading: any one of them alone gives 122/123 = 99.19 percent (the brothers one, 123/125 = 98.40 percent), and all five together 119/125 = 95.20 percent, which is outside the prediction and does not cross the threshold. E1's guide does not settle the last row; the reader reasoned it out.
+
+**Did a reader look at the answer?** Nothing prevents it; the pre-registration says so. The session logs of the four readers, which are on Achia's laptop and not in the repository, were searched after the comparison. Each session read and wrote files in the worksheet folder. Every read, search and write in them is inside the worksheet folder. The only call that reads, searches or runs anything and names the repository is one command per reader: it runs the repository's Python on the reader's own check script, which is in the worksheet folder. The reviewer of this note read the four logs separately and found the same.
 
 ## What this rules in and what it rules out
 
 **Rules in**
 
-- On generated legal, contract, letter and medical text, the model finds 94.67 percent of person mentions by the strict rule. That is inside what was predicted and within one point of E1. E1's number is repeated on text where the count needs no reader.
+- On generated legal, contract, letter and medical text, the model finds 94.67 percent of person mentions by the strict rule. That is inside what was predicted, far above the line of 80, and the count needs no reader.
 - The errors are concentrated. 51 of the 61 are in two kinds of mention: a surname after a group word (33), and a given name alone that is an everyday word (18, of them 13 with prefix letters). Everything else is found 98.91 percent of the time.
 - Document kind does not move the number much: 93.33 to 96.06 percent over the four kinds.
-- Readers who follow E1's guide gave the same answer as the planted truth on all 123 items of four documents.
+- Readers who follow E1's guide, with the model's highlights and the cross-check list before them, gave the same answer as the planted truth on all 123 items of four documents.
 
 **Does not rule in**
 
 - **Real documents.** The text is written by a language model, and the names come from a bank of 166. A client's document has stranger sentences and names no bank holds. E1 is still the only measurement on real text, and its corpus is ten Supreme Court judgments.
-- **The readers' main risk is tested on three cases.** The risk in E1 is a name that the model did not highlight and the reader also passed over. In these four documents the model left three mentions without a highlight, and the readers listed all three. Three of three does not give a rate. The four documents are also short and clean: about 1,700 characters each, against judgments of 8 to 25 pages in E1.
+- **The readers' main risk is tested on no case.** The risk in E1 is a name that the model did not highlight and the reader also passed over. In these four documents the model left three mentions without a highlight, and all three were on the list handed to the reader. A missed name that the list does not hold, which the reader must find by reading, did not occur. How many of the other 57 errors of the run are off the list is not known: the list was made for four documents only. The four documents are also short and clean: about 1,700 characters each, against judgments of 8 to 20 pages in E1.
 - **Not a random sample of sentences.** Eight templates, five fillings each. A sentence the model cannot read is missed five times.
 - **How often these forms occur.** A given name alone is a quarter of the mentions here. A formal document uses it far less. So the pooled number depends on a mix that Claude chose.
+- **The 123 of 123 rests on five judgement calls** that went the gold's way (the table of doubts above).
 - **No person checked anything.** What replaces the person is that the script wrote the answer down before the model ran.
 
 ## Options, with the cost of each
 
-1. **Take E4 as the check that stands in for the person's check of E1, and go on to the decision the E1 note asks for.** Cost: nothing more is built. What stays open is that the readers' care on unhighlighted names rests on three cases.
-2. **Widen the second part first.** Have readers count the other 36 documents, which hold 57 of the 61 errors. Cost: 36 reader sessions; a small change to `run.py` so it writes all worksheets, and a second model run of about seven minutes; the pre-registration amended before it. It would give a rate where there are now three cases. It would still be short generated text.
-3. **Ask for a person's check after all**, of E1 or of E4. Cost: Achia's reading time, which Achia chose not to spend on 2026-11-14.
+1. **Take E4 as the check that stands in for the person's check of E1, and go on to the decision the E1 note asks for.** Cost: nothing more is built. What stays open is whether a reader finds a missed name that the cross-check list does not hold. E4 has no case of it, and E1 has one (the caption line of `doc06`).
+2. **Measure the cross-check list against the gold, with no reader.** Make the list for all 40 documents and count how many of the 61 errors it holds. That says how much of the model's misses a reader is pointed to, and how much is left to unaided reading. Cost: the list script comes into the repository with tests; a small change to `run.py` so it writes all span lists; a second model run of about seven minutes; the pre-registration amended before it. No reader session.
+3. **Then have readers count the documents that hold a miss off the list**, if there are any. Cost: one reader session per such document. It would test the one thing this note could not. It would still be short generated text.
+4. **Ask for a person's check after all**, of E1 or of E4. Cost: Achia's reading time, which Achia chose not to spend on 2026-11-14.
 
 Apart from these: the two weak kinds of mention are worth carrying into the plan as named test cases, whatever is decided. The E1 note already proposes this for a shared surname in a group term (Phase 6). For names that are everyday words, the plan's main defence is a title before the name (`build-plan.md:575`). The 18 missed here stand alone, with no title, so that defence does not reach them.
 
 ## Recommendation
 
-Option 1.
+Option 1, and option 2 beside it.
 
-- E4's first part needs no reader at all, and it lands within one point of E1 with the same weak spot. That is the stronger support for E1, and it does not depend on the second part.
-- The second part found no disagreement in 123 items. Option 2 would buy a better number for a question that the first part has already made less important.
-- The model's recall on real documents will be measured again, properly, when the product has its own evaluation corpus (`build-plan.md:677`, Phase 5, which asks for these hard cases at `build-plan.md:685`). That is the place to spend the effort.
+- The first part needs no reader at all. On four kinds of text the model is far above the line of 80, and 51 of its 61 errors are of two known kinds. That is what the plan asked E1 to show, and here it does not rest on anyone's count.
+- The second part shows less than it was meant to. The readers were right wherever a highlight or the list pointed them. Whether they find what nothing points to is not shown. E1's count of real documents therefore stands as before: a reader's count, not checked.
+- Option 2 costs no reader and nothing from Achia, and it turns the open question into a number. It does not have to hold up the decision on E1.
+- The plan measures recall again later: on the 10 real documents at the gate of Phase 3 (`build-plan.md:645`), on a larger generated corpus with these hard cases in Phase 5 (`build-plan.md:683`, `:685`), and on client documents only at the pilot firm (`build-plan.md:687`).
 
 ## Scope requested
 
