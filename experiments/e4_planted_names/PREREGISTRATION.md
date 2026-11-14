@@ -117,3 +117,92 @@ E1's count rests on readers. Here their count can be compared with the truth.
 
 No number is rounded before it is compared. The findings note gives the report as printed,
 per form, per kind of document and per template, and leaves `## Decision` empty.
+
+## Amended on 2026-11-14, after the review of the harness and before any run
+
+The model has not been run on generated text. A fresh review of the harness found no fault
+in the gold or in the scorer, and asked for the changes below. The prediction for the
+pooled number, the two thresholds and the decision rule are unchanged.
+
+**The names.** A person's given name and surname now come from one origin: Arabic with
+Arabic, transliterated with transliterated, the rest with the rest. Before the change a
+quarter of the people mixed them, which real documents do not.
+
+**Two kinds of name that is also a word.** The bank now marks them apart, and the marking
+is Claude's judgement; the list is `names.tsv`.
+
+- `ordinary`: a modern name taken from an everyday word, the kind the plan lists in Phase 1
+  (`אור`, `טל`, `שחר`). The prediction "a given name alone that is an everyday word, 60 to
+  90 percent" is about this class and no other. Its row is `given_ordinary`.
+- `also_word`: a traditional name that is also an everyday word (`דוד`, `מרים`, `אריה`).
+  Its row is `given_also_word`. It carries no prediction.
+
+**Which rows "every other form, 90 percent or more" means.** The rows of the report used to
+overlap, so one missed group term could pull a second row under 90. Now:
+
+| Row | What is in it | Prediction |
+|---|---|---|
+| `group` | a surname after `האחים` or `משפחת`, with or without prefix letters | under 50 percent |
+| `given_ordinary` | a given name alone, of class `ordinary` | 60 to 90 percent |
+| `full`, `surname`, `title_surname`, `initial_surname` | the form | 90 percent or more, each |
+| `given_plain` | a given name alone, of neither word class | 90 percent or more |
+| `prefix_on_name` | prefix letters attached to the name itself | 90 percent or more |
+| `prefix_on_title` | prefix letters attached to the title before the name | 90 percent or more |
+| `alone` | a name that is the whole line | 90 percent or more |
+| `given`, `given_also_word`, `prefixed` | all given names alone; the `also_word` ones; every mention with prefix letters, group terms included | none, reported |
+
+A mention is in its form row and in every other row that fits it, so one miss can show in
+two rows.
+
+**The corpus as it is now generated.** 40 documents, 1,035 paragraphs, 67,126 characters,
+1,145 counted mentions, 55 names that are not counted (30 in cited titles, 20 in firms, 5
+placeholders).
+
+| Row | Mentions |
+|---|---|
+| `full` | 410 |
+| `given` | 290: `given_ordinary` 167, `given_also_word` 24, `given_plain` 99 |
+| `surname` | 120 |
+| `title_surname` | 205 |
+| `initial_surname` | 65 |
+| `group` | 55 |
+| `prefixed` | 230: `prefix_on_name` 110, `prefix_on_title` 95, on a group word 25 |
+| `alone` | 135 |
+
+People: 250, of them 29 with Arabic names and 36 with transliterated ones.
+
+**The second part, fixed before the run.**
+
+- The four documents are `doc01`, `doc11`, `doc21` and `doc31`: the first filling of the
+  first template of each kind, in the order of the file names. They hold 116 counted
+  mentions and 7 names that are not counted.
+- `run.py --worksheets-dir` writes their worksheets and span lists from the same run that
+  gives the E4 number, in E1's formats. No file it writes holds a gold position.
+- The reader works as E1's readers did: one fresh Claude session per document, the guide
+  printed in the E1 findings note, the plain-text worksheet and the cross-check lists made
+  by the same throwaway scripts, and the same three output files.
+- The comparison, item by item. For a counted mention the script's verdict is found,
+  partial or missed. The reader's verdict is read from the reader's files: partial if a
+  highlight that overlaps the name is marked partial; else found if one is marked found;
+  else missed if the reader's list of misses has a line in that paragraph whose text holds
+  the name or lies inside it. If none of these, the reader did not see the mention, which
+  is a disagreement. For a name that is not counted, the reader agrees if every highlight
+  on it is marked as not a person and no miss line names it.
+- A reader-only item is a highlight the reader marks found or partial that overlaps no
+  counted mention, or a miss line that fits no counted mention. Each is a disagreement and
+  each adds one to the denominator.
+- Agreement is the agreeing items over all gold items of the four documents plus the
+  reader-only items. The script that computes it is committed, with tests, before any
+  reader's file is compared.
+
+**What else this cannot show**, added to the list above:
+
+- A given name alone is a quarter of the mentions here (290 of 1,145). A formal document
+  uses it far less, mostly where two people share a surname.
+- The 167 `given_ordinary` mentions come from 19 names; the most frequent stands 22 times.
+- Prefix letters: ל 140 times, ו 30, ול 20, ש 20, מ 10, וכש 5, ב 5. None with כ or ה.
+- An initial stands after a title in 60 of the 65 initial forms.
+- 43 mentions hold a surname of two words.
+- A person who shares a surname with another person of the document is never named by the
+  surname alone, with or without a title. The templates were changed so, because such a
+  sentence does not say who is meant.
