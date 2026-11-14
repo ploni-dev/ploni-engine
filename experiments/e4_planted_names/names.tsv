@@ -1,0 +1,167 @@
+kind	gender	name	classes
+given	m	יעקב	
+given	m	יוסף	
+given	m	אברהם	
+given	m	שמעון	prefix_initial
+given	m	אליהו	
+given	m	אהרן	
+given	m	יהודה	
+given	m	גדעון	
+given	m	רפאל	
+given	m	עוזי	
+given	m	אבנר	
+given	m	יגאל	
+given	m	משה	prefix_initial
+given	m	מיכאל	prefix_initial
+given	m	בנימין	prefix_initial
+given	m	דוד	also_word
+given	m	אריה	also_word
+given	m	זאב	also_word
+given	m	צבי	also_word
+given	m	נתן	also_word
+given	m	עמוס	also_word
+given	m	מאיר	also_word,prefix_initial
+given	m	מנחם	also_word,prefix_initial
+given	m	חיים	also_word
+given	m	יצחק	also_word
+given	m	אור	ordinary
+given	m	שחר	ordinary,prefix_initial
+given	m	רון	ordinary
+given	m	טל	ordinary
+given	m	גל	ordinary
+given	m	עומר	ordinary
+given	m	נועם	ordinary
+given	m	דקל	ordinary
+given	m	תום	ordinary
+given	m	ברק	ordinary,prefix_initial
+given	m	שי	ordinary,prefix_initial
+given	m	הדר	ordinary,prefix_initial
+given	m	לביא	ordinary,prefix_initial
+given	m	מוחמד	arabic,prefix_initial
+given	m	אחמד	arabic
+given	m	מחמוד	arabic,prefix_initial
+given	m	ח'אלד	arabic
+given	m	סאמי	arabic
+given	m	כמאל	arabic,prefix_initial
+given	m	עלי	arabic
+given	m	איברהים	arabic
+given	m	ג'מאל	arabic
+given	m	ג'ון	translit
+given	m	צ'רלי	translit
+given	m	ז'אק	translit
+given	m	ג'ורג'	translit
+given	m	אלכס	translit
+given	m	ולדימיר	translit,prefix_initial
+given	m	בוריס	translit,prefix_initial
+given	m	סרגיי	translit
+given	m	מקסים	translit,prefix_initial
+given	f	רחל	
+given	f	רבקה	
+given	f	לאה	prefix_initial
+given	f	נעמי	
+given	f	רות	
+given	f	אסתר	
+given	f	דינה	
+given	f	עדנה	
+given	f	ציפורה	
+given	f	אורית	
+given	f	ענת	
+given	f	דבורה	also_word
+given	f	תמר	also_word
+given	f	מיכל	also_word,prefix_initial
+given	f	מרים	also_word,prefix_initial
+given	f	שרה	also_word,prefix_initial
+given	f	חנה	also_word
+given	f	יעל	also_word
+given	f	יהודית	also_word
+given	f	שירה	ordinary,prefix_initial
+given	f	שקד	ordinary,prefix_initial
+given	f	יונה	ordinary
+given	f	עדן	ordinary
+given	f	שרון	ordinary,prefix_initial
+given	f	חן	ordinary
+given	f	שיר	ordinary,prefix_initial
+given	f	מעיין	ordinary,prefix_initial
+given	f	לילך	ordinary,prefix_initial
+given	f	ורד	ordinary,prefix_initial
+given	f	סיגל	ordinary
+given	f	פאטמה	arabic
+given	f	אמל	arabic
+given	f	סמירה	arabic
+given	f	לילא	arabic,prefix_initial
+given	f	נור	arabic
+given	f	רים	arabic
+given	f	מונא	arabic,prefix_initial
+given	f	ג'ני	translit
+given	f	נטשה	translit
+given	f	אולגה	translit
+given	f	קטיה	translit
+given	f	סבטלנה	translit
+given	f	ז'נט	translit
+surname	-	כהן	prefix_initial
+surname	-	לוי	prefix_initial
+surname	-	ביטון	prefix_initial
+surname	-	דהן	
+surname	-	פרידמן	
+surname	-	אזולאי	
+surname	-	אוחיון	
+surname	-	אוחנה	
+surname	-	חדד	
+surname	-	עמר	
+surname	-	שפירא	prefix_initial
+surname	-	גולדברג	
+surname	-	רוזנברג	
+surname	-	קליין	
+surname	-	וייס	prefix_initial
+surname	-	שוורץ	prefix_initial
+surname	-	הורוביץ	prefix_initial
+surname	-	ברקוביץ	prefix_initial
+surname	-	לנדאו	prefix_initial
+surname	-	שטרן	prefix_initial
+surname	-	גרוס	
+surname	-	קפלן	
+surname	-	אדלר	
+surname	-	וקנין	prefix_initial
+surname	-	סויסה	
+surname	-	טולדנו	
+surname	-	נחום	
+surname	-	הראל	prefix_initial
+surname	-	כרמי	prefix_initial
+surname	-	בן שושן	prefix_initial
+surname	-	אבו חצירה	
+surname	-	מזרחי	also_word,prefix_initial
+surname	-	פרץ	also_word
+surname	-	סגל	also_word
+surname	-	רוזן	also_word
+surname	-	זהבי	also_word
+surname	-	שגיא	also_word,prefix_initial
+surname	-	גבאי	also_word
+surname	-	בן דוד	also_word,prefix_initial
+surname	-	מלכה	ordinary,prefix_initial
+surname	-	אלמוג	ordinary
+surname	-	חזן	ordinary
+surname	-	שלום	ordinary,prefix_initial
+surname	-	דרור	ordinary
+surname	-	אלון	ordinary
+surname	-	שמש	ordinary,prefix_initial
+surname	-	צור	ordinary
+surname	-	נוי	ordinary
+surname	-	ח'טיב	arabic
+surname	-	מנסור	arabic,prefix_initial
+surname	-	עבאס	arabic
+surname	-	חמדאן	arabic
+surname	-	נסאר	arabic
+surname	-	זועבי	arabic
+surname	-	אגבאריה	arabic
+surname	-	מסארוה	arabic,prefix_initial
+surname	-	סעדי	arabic
+surname	-	איבנוב	translit
+surname	-	פטרוב	translit
+surname	-	קוזנצוב	translit
+surname	-	רבינוביץ'	translit
+surname	-	ג'ונסון	translit
+surname	-	סמית	translit
+surname	-	מילר	translit,prefix_initial
+surname	-	פישר	translit
+surname	-	מולר	translit,prefix_initial
+surname	-	בלום	translit,prefix_initial

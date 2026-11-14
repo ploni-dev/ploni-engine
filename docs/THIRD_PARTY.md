@@ -8,7 +8,7 @@ CI fails if a model present in `models/` is absent from this file (`build-plan.m
 
 | Model | Revision | License | License source | Used by | Shipped |
 |---|---|---|---|---|---|
-| `dicta-il/dictabert-joint` | `7b1256fc0846e22d1af431eae299e2dcecee2778` | CC BY 4.0 | `license: cc-by-4.0` in the front matter of `README.md` at that revision | `experiments/e1_hebrew_recall/`, `experiments/e3_prefix_replacement/` and `experiments/e2_int8_latency/` only | no |
+| `dicta-il/dictabert-joint` | `7b1256fc0846e22d1af431eae299e2dcecee2778` | CC BY 4.0 | `license: cc-by-4.0` in the front matter of `README.md` at that revision | `experiments/e1_hebrew_recall/`, `experiments/e3_prefix_replacement/`, `experiments/e2_int8_latency/` and `experiments/e4_planted_names/` only | no |
 
 That row is written by hand: `scripts/download_e1_model.py` fetches the model for experiment E1 (`build-plan.md` section 11) before the Phase 0 `scripts/download_models.py` exists. The model ships Python that runs under `trust_remote_code`; it was read at this revision before first use and is loaded from the local copy only. For the experiment that Python is vendored, byte for byte, in `experiments/e1_hebrew_recall/vendored/dictabert_joint/` with a notice and pinned hashes, and loaded from there without `trust_remote_code`. Vendoring into the product is Phase 3.
 

@@ -17,6 +17,7 @@ product code:
 
 | Experiment | Directory | Status |
 |---|---|---|
-| E1 baseline Hebrew NER recall | `e1_hebrew_recall/` | harness ready, run pending |
+| E1 baseline Hebrew NER recall | `e1_hebrew_recall/` | run on 2026-11-13; `docs/findings/2026-11-13-e1-hebrew-recall.md` |
 | E2 CPU latency after INT8 | `e2_int8_latency/` | harness and pre-registration committed; `export.py`, then `measure.py` |
 | E3 prefix-preserving replacement | `e3_prefix_replacement/` | harness and pre-registration committed; `python -I run.py --model-dir <model dir>`, in the environment of `e1_hebrew_recall/requirements.txt` |
+| E4 PERSON recall against planted names | `e4_planted_names/` | not in the plan; Achia asked for it on 2026-11-14. Harness and pre-registration committed; `python -I run.py --model-dir <model dir> --list-errors --worksheets-dir <folder outside the repository>`, in the same environment. Every sentence and name in it is generated, so its text is in the repository |
