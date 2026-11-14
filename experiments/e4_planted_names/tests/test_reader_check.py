@@ -355,23 +355,17 @@ def test_e8_a_highlight_marked_twice(tmp_path: Path):
 
 
 NO_PARTIALS = {"marks": {**MARKS, 3: ("found", 0)}, "misses": MISSES[1:]}
-MARK_ROWS_WITHOUT_EXTRA = "".join(f"{number},found,private,
-" for number in MARKS)
+MARK_ROWS_WITHOUT_EXTRA = "".join(f"{number},found,private,\n" for number in MARKS)
 
 
 @pytest.mark.parametrize(
     ("name", "content"),
     [
-        ("doc01_misses.csv", "doc01,1,רחל,missed,private,no,other,
-"),
+        ("doc01_misses.csv", "doc01,1,רחל,missed,private,no,other,\n"),
         ("doc01_misses.csv", ""),
-        ("doc01_misses.csv", "doc_id,paragraph,words,kind,group,other_label,category,highlight
-"),
-        ("doc01_marks.csv", "highlight,verdict,group,note
-" + MARK_ROWS_WITHOUT_EXTRA),
-        ("doc01_spans.csv", "highlight,paragraph,start,text
-1,0,3,יעקב
-"),
+        ("doc01_misses.csv", "doc_id,paragraph,words,kind,group,other_label,category,highlight\n"),
+        ("doc01_marks.csv", "highlight,verdict,group,note\n" + MARK_ROWS_WITHOUT_EXTRA),
+        ("doc01_spans.csv", "highlight,paragraph,start,text\n1,0,3,יעקב\n"),
     ],
     ids=["misses_without_header", "misses_empty_file", "misses_wrong_column", "marks_without_extra", "spans_without_end"],
 )
