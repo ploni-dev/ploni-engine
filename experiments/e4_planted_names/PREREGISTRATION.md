@@ -274,7 +274,9 @@ span list of theirs exists.
   - It also holds the word after a title (`מר`, `גב'`, `גברת`, `עו"ד`, `ד"ר`, `פרופ'`,
     `השופט`, `השופטת`, `הנשיא`, `הנשיאה`, `הרשם`, `הרשמת`, `כב'`, with at most two
     prefix letters before the title), if that word is not itself a title and no `PER`
-    highlight is on it.
+    highlight is on it. Where a title follows a title (`כב' השופט`), the search goes on
+    after the second one, so the word after it is not listed by this rule. The
+    throwaway behaves so, and it is kept.
 - **An item** is a counted mention that the scorer calls missed, from the span lists: 57
   in part one. A partial mention is not an item: a highlight sits on it, in front of
   the reader.
