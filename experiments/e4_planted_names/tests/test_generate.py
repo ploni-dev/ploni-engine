@@ -51,8 +51,9 @@ Invariant, 500 generated templates
 The corpus as committed (templates/ and names.tsv)
   C1   40 documents: 8 templates, 5 fillings, 4 kinds with 2 templates each
   C2   at least 1,000 counted mentions
-  C3   at least 30 counted mentions of each form bucket, with a prefix, alone on a line,
-       and of a given name alone that is an everyday word (PREREGISTRATION.md)
+  C3   at least 30 counted mentions of each form bucket and of each row that carries a
+       prediction: prefixed, prefix_on_name, prefix_on_title, alone, given_ordinary,
+       given_plain (PREREGISTRATION.md, amendment)
   C4   every gold position holds exactly its name
   C5   generated twice, the corpus is identical
 

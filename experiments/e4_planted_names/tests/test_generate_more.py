@@ -5,11 +5,14 @@ People
        transliterated with transliterated, the rest with the rest
   EC20 a person who shares a surname gets a given name of that surname's origin
   A1   (over 50 seeds) a cited or firm name is never a person's surname
+  EC24 the classes of a full name are those of the given name and of the surname
+  E7   a filling that cannot avoid a full name already taken -> TemplateError
 
 buckets_of
   EC21 a given name: given_ordinary, given_also_word or given_plain, by its classes
-  EC22 a prefix on the name -> prefixed, prefix_on_name; on a title -> prefixed,
-       prefix_on_title; on a group word -> prefixed only
+  EC22 a prefix on the name -> prefixed, prefix_on_name; on a title, also one before an
+       initial -> prefixed, prefix_on_title; on a group word, or on a given name alone
+       of class ordinary -> prefixed only, because those rows carry their own prediction
   EC23 alone on a line -> alone
 
 Errors
@@ -43,6 +46,7 @@ from generate import (
     Bank,
     Gold,
     TemplateError,
+    _fill_fresh,
     buckets_of,
     corpus,
     fill,
@@ -107,6 +111,10 @@ def item(form: str, prefix: str = "", alone: bool = False, classes=frozenset()) 
         (item("title_surname", prefix="ל"), ["title_surname", "prefixed", "prefix_on_title"]),
         (item("title_full", prefix="ול"), ["full", "prefixed", "prefix_on_title"]),
         (item("group_brothers", prefix="ל"), ["group", "prefixed"]),
+        (item("given", prefix="ל", classes={"ordinary"}), ["given", "given_ordinary", "prefixed"]),
+        (item("given", prefix="ל", classes={"also_word"}), ["given", "given_also_word", "prefixed", "prefix_on_name"]),
+        (item("title_initial_surname", prefix="ל"), ["initial_surname", "prefixed", "prefix_on_title"]),
+        (item("initial_surname", prefix="ו"), ["initial_surname", "prefixed", "prefix_on_name"]),
         (item("full", alone=True), ["full", "alone"]),
         (item("title_initial_surname"), ["initial_surname"]),
     ],
@@ -205,3 +213,21 @@ def test_c9_classes_of_the_bank():
             assert ("prefix_initial" in classes) == (name[0] in "והבלמכש")
             assert len(classes & {"arabic", "translit"}) < 2
             assert not {"ordinary", "also_word"} <= classes
+
+
+def test_ec24_a_full_name_carries_the_classes_of_both_names():
+    template = parse_template("% kind letter\n@ A m title=מר\n{A:full} {A:title_full} {A:given} {A:surname} {A:initial_surname}")
+    for seed in range(40):
+        _, gold = fill(template, ORIGIN_BANK, random.Random(seed))
+        full, title_full, given, surname, initial = (entry.classes for entry in gold)
+        assert full == title_full == given | surname
+        assert initial == surname
+
+
+def test_e7_a_filling_that_cannot_avoid_a_taken_name():
+    bank = Bank(given={"m": [("יעקב", frozenset())], "f": []}, surnames=[("כהן", frozenset())])
+    template = parse_template("% kind letter\n@ A m title=מר\n{A:full}")
+    paragraphs, _ = _fill_fresh(template, bank, "seed", set())
+    assert paragraphs == ["יעקב כהן"]
+    with pytest.raises(TemplateError, match="no filling with new people"):
+        _fill_fresh(template, bank, "seed", {"יעקב כהן"})

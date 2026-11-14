@@ -32,6 +32,7 @@ format_report
   EC12 the pooled line, the verdict, each bucket with its fraction, any-label recall
   EC13 every line of the report of a small case, in order
   EC14 a partial is an error, and the lenient line counts it as found
+  EC15 a mention is listed under every class of its name
 """
 
 from __future__ import annotations
@@ -177,3 +178,20 @@ def test_ec14_a_partial_is_an_error_and_lenient_counts_it():
     assert "lenient recall (partial counted as found): 2/2 = 100.00%" in report
     assert "errors: 1 (partial 1, missed 0, of them under another label 0)" in report
     assert "any-label recall: 1/2 = 50.00%" in report
+
+
+def test_ec15_rows_by_name_class():
+    first = NAME._replace(classes=frozenset({"ordinary", "prefix_initial"}))
+    second = NAME._replace(paragraph=1, classes=frozenset({"arabic"}))
+    documents = [document([first, second])]
+    outcomes = {"doc01": score_document(documents[0], [Span(0, 4, 12, "PER")])}
+    lines = format_report(documents, outcomes).splitlines()
+    block = lines[lines.index("by name class:") + 1 : lines.index("by kind of document:")]
+    assert block == [
+        "  also_word  0/0",
+        "  arabic  0/1 = 0.00%",
+        "  ordinary  1/1 = 100.00%",
+        "  prefix_initial  1/1 = 100.00%",
+        "  translit  0/0",
+        "  no_class  0/0",
+    ]
