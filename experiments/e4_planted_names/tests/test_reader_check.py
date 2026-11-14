@@ -63,6 +63,9 @@ More cases, added after the review of the script and before any reader's file wa
   E8   a highlight marked twice; an empty `extra`; a miss line with no text; a paragraph
        that is not a number; a missed line that carries a highlight number
   E9   a file whose header lacks a column it needs, or with no header at all
+  E11  a row with more cells than the header (a comma in a note or in a text, with no
+       quotes; a comma too many at the end of a row) -> ReaderFileError
+  B13  a header with spaces after its commas -> accepted
   E10  a span list with a paragraph the document does not have -> ReaderFileError
   B12  a highlight with a space at its edge is of this document
   EC21 main prints the pooled line over the four documents, reader-only items in the
@@ -384,7 +387,8 @@ def test_e10_b12_spans_at_the_edges(tmp_path: Path):
     outcome = compare(DOCUMENT, read_reader_files(folder, "doc01"))
     assert (outcome.items, outcome.agreeing, outcome.reader_only) == (7, 7, 0)
     spans = folder / "doc01_spans.csv"
-    spans.write_text(spans.read_text(encoding="utf-8-sig").replace("6,0,15,19", "6,9,15,19"), encoding="utf-8-sig")
+    # Paragraph 3 is the first the document does not have.
+    spans.write_text(spans.read_text(encoding="utf-8-sig").replace("6,0,15,19", "6,3,15,19"), encoding="utf-8-sig")
     with pytest.raises(ReaderFileError, match="not of this document"):
         compare(DOCUMENT, read_reader_files(folder, "doc01"))
 
@@ -396,13 +400,44 @@ def test_ec21_main_prints_the_pooled_line(tmp_path: Path, capsys):
         (tmp_path / f"{doc_id}_marks.csv").write_text("highlight,verdict,group,extra,note\n", encoding="utf-8")
         lines = ["doc_id,paragraph,text,kind,group,other_label,category,highlight"]
         lines += [f'{doc_id},{gold.paragraph},"{gold.name}",missed,private,no,other,' for gold in documents[doc_id].gold if gold.counted]
+        if doc_id == "doc01":
+            del lines[1]  # the reader overlooks one mention, so agreeing and gold items differ
         if doc_id == "doc21":
             lines.append(f"{doc_id},0,שלום,missed,private,no,other,")
         (tmp_path / f"{doc_id}_misses.csv").write_text("\n".join(lines) + "\n", encoding="utf-8")
     reader_check.main(tmp_path)
     printed = capsys.readouterr().out
-    assert "reader against gold, pooled: 123/124 = 99.19%" in printed
+    assert "reader against gold, pooled: 122/124 = 98.39%" in printed
+    assert "doc01: gold items 30, agreeing 29, reader-only 0, agreement 29/30 = 96.67%" in printed
+    assert "script missed, reader nothing" in printed
     assert "verdict: inside_prediction (prediction 98 percent or more, threshold below 95 percent)" in printed
     assert "doc21: gold items 28, agreeing 28, reader-only 1, agreement 28/29 = 96.55%" in printed
     assert "miss line" in printed and "שלום" in printed
     assert "  none" not in printed
+
+
+@pytest.mark.parametrize(
+    ("name", "row"),
+    [
+        ("doc01_marks.csv", "1,found,private,0,second highlight, same name\n"),
+        ("doc01_marks.csv", "1,found,private,0,,\n"),
+        ("doc01_misses.csv", "doc01,1,רחל, שוב,missed,private,no,other,\n"),
+    ],
+    ids=["comma_in_a_note", "comma_too_many", "comma_in_a_text"],
+)
+def test_e11_a_row_with_more_cells_than_the_header(tmp_path: Path, name: str, row: str):
+    folder = write(tmp_path, **NO_PARTIALS)
+    with (folder / name).open("a", encoding="utf-8") as handle:
+        handle.write(row)
+    with pytest.raises(ReaderFileError, match="more cells"):
+        read_reader_files(folder, "doc01")
+
+
+def test_b13_a_header_with_spaces(tmp_path: Path):
+    folder = write(tmp_path)
+    for name, header in (("doc01_marks.csv", "highlight, verdict, group, extra, note"),
+                         ("doc01_misses.csv", "doc_id, paragraph, text, kind, group, other_label, category, highlight")):
+        lines = (folder / name).read_text(encoding="utf-8").splitlines()
+        (folder / name).write_text("\n".join([header, *lines[1:]]) + "\n", encoding="utf-8")
+    outcome = compare(DOCUMENT, read_reader_files(folder, "doc01"))
+    assert (outcome.items, outcome.agreeing, outcome.reader_only) == (7, 7, 0)
