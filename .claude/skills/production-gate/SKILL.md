@@ -13,7 +13,7 @@ description: Run the merge-to-main gate for a branch: the Ponytail skill pass wi
 
 Ponytail is installed here **as a skill**, invoked by name. If the installed copy also exposes mode or review commands, use them; the obligations are the same either way.
 
-1. **It should already have been invoked at the start of this session, before any code was written**, at the middle intensity level if the skill offers levels. Its rules have to be in context while code is written. Retrofitting minimalism afterwards produces a rewrite, not a review. If it was not invoked at the start, say so plainly in the PR body rather than pretending otherwise.
+1. **It should already have been invoked at the start of this session, before any code was written**, at level `ultra` (`CLAUDE.md`, Ponytail). Its rules have to be in context while code is written. Retrofitting minimalism afterwards produces a rewrite, not a review. If it was not invoked at the start, say so plainly in the PR body rather than pretending otherwise.
 2. **A session or subagent that did not write the code invokes it on the final diff** as a review pass (`CLAUDE.md`, Ponytail). Its output names the commit it reviewed.
 3. Paste its output into the PR body under `## Ponytail review`.
 4. Resolve **every** finding as one of:
@@ -24,7 +24,7 @@ At phase close, run it over the whole module or repo rather than a single diff, 
 
 ### Intensity
 
-Middle level while writing code. The most aggressive level only for a deliberate audit pass over a finished module, never as the session default: the extra pressure lands on exactly the validation and error handling this product cannot trade away.
+`ultra`, decided by Achia on 2026-11-15 (`CLAUDE.md`, Ponytail). This file said the middle level until then, because the extra pressure of the highest level lands on exactly the validation and error handling this product cannot trade away. Two rules of `CLAUDE.md` hold that risk: Ponytail never removes error handling, validation, `safety/`, a test, a fixture or a registered abstraction; and at `ultra` the push-back is a question to Achia before building, which drops nothing by itself.
 
 ### What Ponytail must never remove
 
@@ -98,7 +98,7 @@ Then report and stop. Only Achia can grant it, by filling in the decision and ad
 
 In addition to everything above:
 
-- Full suite green: T4 integration, T5 system journeys, T6 metrics, T7 performance
+- Full suite green: T4 integration, T5 system journeys, T6 metrics, T7 performance. For now T7 records times and asserts none (`PROCESS.md` section 10)
 - Metric gates at or above baseline, with the results file committed and its SHA matching the phase-close commit (see the `eval-baseline` skill)
 - Ponytail pass over the whole module or repo, findings triaged
 - Mutation testing over the whole of `ploni/`, survivors triaged

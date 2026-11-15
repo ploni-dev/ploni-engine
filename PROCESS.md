@@ -55,7 +55,7 @@ Resolution: `build-plan.md` is in the repo. Any change to scope or a gate is a P
 
 *"Tomer needs a narrow surface or he becomes a bottleneck on everything."*
 
-Resolution: he owns exactly `ploni/i18n/claims/`, enforced by CODEOWNERS.
+Resolution: he owns exactly `ploni/i18n/claims/`, enforced by CODEOWNERS. Not in force as of 2026-11-15: Tomer is not involved for now, and the question goes to Achia (`CLAUDE.md`, "Who decides").
 
 ### Senior software engineer
 
@@ -90,7 +90,6 @@ All source, tests, fixtures, the eval harness, `build-plan.md`, `PROCESS.md`, `C
 ### 2.3 Branch protection on `main`
 
 - No direct pushes. PR required. Fast CI green required. Linear history, squash merge.
-- GitHub does not enforce this on a private repository of the free plan. What enforces it for the merges that happen here is the local merge gate of `PROMOTION.md` section 11.
 - CODEOWNERS review on: `ploni/api.py`, `eval/baselines.json`, `build-plan.md`, `PROCESS.md`, `CLAUDE.md`, `ploni/i18n/claims/`.
 
 ### 2.4 One feature, one branch
@@ -423,7 +422,13 @@ When a gate cannot be met, or a measurement disagrees with its prediction beyond
 
 The note is a PR of its own. Nothing is tuned or loosened, and no further implementation happens on that path until the decision line is filled.
 
-**Speed is the exception, for now.** Decided by Achia on 2026-11-13 and again on 2026-11-15: speed is measured for every stage and recorded at every phase, and it is not a test that has to pass. A timing past its target or its fail threshold stops no work and blocks no merge. It is reported, and `docs/STATUS.md` says when a number is clearly worse than the last one measured. This holds until Achia turns speed into a gate.
+**Speed is the exception, for now.** Decided by Achia on 2026-11-13 and again on 2026-11-15: speed is measured for every stage and recorded at every phase, and it is not a test that has to pass. A slow time, past its target or its fail threshold, stops no work and blocks no merge. This holds until Achia turns speed into a gate.
+
+- What it covers: the run time of the pipeline's own work, and nothing else. Peak memory stays a limit. The time a person needs in the persona and demo gates is not touched. No other gate is touched (`docs/findings/2026-11-11-e2-int8-latency.md`, Decision, point 2).
+- A time below the low end of the plan's table is still a finding and still stops work: it points at missed text (`build-plan.md` section 8.2).
+- T7 records times and asserts none, so a slow time does not turn the full suite red.
+- Each time is reported with the power state of its run. The same files took 1.03 seconds on mains power and up to 11.7 on battery.
+- At every phase close `docs/STATUS.md` shows the last two times of each stage side by side, and says when one is clearly worse.
 
 Findings notes are the project's memory. Six months later, "why is this threshold 0.92 and not 0.98" has an answer with the raw numbers attached.
 
@@ -458,7 +463,6 @@ Gates passed is the only velocity metric that means anything here.
    - `pyproject.toml` with the ruff and mypy configuration of section 4.5, and the ceiling counter for suppressions in `.ratchet.json`.
    - Hashes in every requirements file, the ones under `experiments/` included, and installs with `--require-hashes`.
    - Claude Code hooks committed in `.claude/settings.json`: refuse `--no-verify`, refuse a push to `main`, and refuse an edit to `docs/WAIVERS.md`, the one file only Achia writes. A small set, because a hook that fires wrongly stops work. No hook runs the test suite when a session ends its turn: test-first needs a commit whose tests fail, and section 10 needs a session to be able to stop and report.
-   - The merge gate: a Claude Code hook in `.claude/settings.json` that refuses `gh pr merge` unless every check of the PR's last commit is green. Decided by Achia on 2026-11-15, in place of paid branch protection (`PROMOTION.md` section 11).
    - A local `pre-push` git hook that runs the fast suite: the free stand-in for required status checks, which GitHub Free does not enforce on a private repository (`PROMOTION.md` section 11).
    - The commit-order check of `PROMOTION.md` section 5.2. Its row there states what it covers.
    - A check that the commit named in the PR's Ponytail section is the PR's last commit, or that every commit after it is a merge of `main` that leaves the branch's own diff unchanged.
@@ -477,6 +481,6 @@ Gates passed is the only velocity metric that means anything here.
 1. ~~**Repo name.**~~ Decided 2026-11-11: `ploni-engine`.
 2. ~~**What the installed ponytail skill actually exposes.**~~ Decided 2026-11-15: the skill takes a level, and this project uses `ultra` (`CLAUDE.md`, `docs/THIRD_PARTY.md`). The recommendation below was the middle level; Achia chose the highest. As first written: Does your copy have intensity modes and separate review, audit and debt commands, or is it a single skill invocation? This changes steps 1, 2 and 4 of section 7.1 from commands into plain invocations. Record the answer in `CLAUDE.md` so every session uses it the same way. If it does have intensity modes, the recommendation is the middle level while writing and the most aggressive level only for a deliberate audit of a finished module, because that extra pressure lands on validation and error handling.
 3. **Record the Ponytail version.** It shapes the code that ships, so it is a dependency. Record its source and version in `docs/THIRD_PARTY.md` like any other.
-4. ~~**Self-review discipline.**~~ Decided 2026-11-15: every PR is reviewed before merge by a session or subagent that did not write it (section 7.1), and Claude merges only as `CLAUDE.md`, "Merging", says. As first written: You are the only reviewer. Recommendation: cold review the next session for anything in Phases 2, 3, 7 and 10; merge on green elsewhere.
+4. **Self-review discipline.** You are the only reviewer. Recommendation: cold review the next session for anything in Phases 2, 3, 7 and 10; merge on green elsewhere.
 5. **Where the week-one experiments live.** Recommendation: `experiments/`, excluded from the layering test, the docstring check and coverage, with findings notes as the output. It is not product code and gating it wastes time.
 6. ~~**Tomer's access.**~~ Decided 2026-11-15: none for now. Tomer is not involved; legal and regulatory questions go to Achia (`CLAUDE.md`, "Who decides"). If he joins, that is a new decision. As first written: Recommendation: collaborator, CODEOWNERS on `ploni/i18n/claims/` only.

@@ -49,14 +49,13 @@
 - Minimum samples: detectors 40 positive and 40 negative; invariants 500 generated
   cases, 5,000 at phase close.
 - Coverage is a diagnostic, never a target.
-- Every PR runs the fast suite in CI. From Phase 0 a merge gate refuses a merge unless every
-  check of the PR's last commit is green (`PROMOTION.md` section 11). Until the gate
-  exists, the PR body carries the test output of a local run.
 
 ## Ponytail
 - Ponytail is used here as a skill, at level `ultra` (Achia, 2026-11-15). Invoke it at
   the start of any session that writes code, before writing any, so its rules are in
   context while the code is written.
+- At `ultra` the push-back is a question to Achia before building. It drops nothing by
+  itself, and never a test, a gate or a plan deliverable.
 - Invoke it again on the diff before every PR. Paste the output into the PR body.
 - That review is run by a session or subagent that did not write the code, and its
   output names the commit it reviewed.
@@ -72,25 +71,18 @@
   review in the PR body, in those words. Never claim it ran, and never quietly skip it.
   Its status is tracked in docs/THIRD_PARTY.md.
 
-## Merging
-- Claude merges a PR, by squash, when three things hold: every check is green, the
-  Ponytail review of its final diff is clean, and the PR is not one of Achia's.
-- A PR is Achia's when it touches a file of the Level 3 list in `PROMOTION.md` (the rule
-  and plan files, baselines and gate values, CI workflows, the approved abstractions,
-  `docs/WAIVERS.md`, `ploni/api.py`, the claims wording), or when it fills the
-  `## Decision` of a findings note. Claude opens it and does not merge it without
-  Achia's yes, quoted in the PR body.
-- Never merge past a red check, and never around the merge gate.
-
 ## How work is gated
 - Read the relevant build-plan.md phase section first. Restate goal, deliverable, gate.
 - Never weaken a test, threshold or baseline to pass a gate. If a gate cannot be met,
   stop and write docs/findings/<date>-<slug>.md, then report.
 - Code changes and baseline or gate changes never share a PR.
 - Speed is measured, for every stage, and recorded at every phase. For now it is not a
-  gate: a slow number blocks no merge and stops no work (Achia, 2026-11-13 and
-  2026-11-15). Say in `docs/STATUS.md` when a number is clearly worse than the last
-  one measured.
+  gate: a slow time blocks no merge and stops no work (Achia, 2026-11-13 and
+  2026-11-15). This covers the run time of the pipeline only: not memory, not the
+  persona and demo budgets, no other gate. A time below the plan's low end is still
+  a finding and still stops work.
+- Say in `docs/STATUS.md` when a time is clearly worse than the last one measured. At
+  every phase close it shows the last two times of each stage side by side.
 
 ## Architecture boundaries (enforced by tests/t0_contract/test_layering.py)
 - adapters/ may not import detect/, resolve/, policy/, write/
@@ -114,9 +106,9 @@
   the file is behind.
 
 ## Who decides
-- Achia decides alone. Tomer has no access to the repository and is not asked
-  (Achia, 2026-11-15). A legal or regulatory question goes to Achia: explain the risk
-  in plain words and ask.
+- Achia decides alone. For now Tomer has no access to the repository and is not asked
+  (Achia, 2026-11-15). If he joins, that is a new decision. A legal or regulatory
+  question goes to Achia: explain the risk in plain words and ask.
 
 ## Exceptions (PROMOTION.md section 8)
 - You have no authority to waive any rule, test, threshold or gate. No flag, comment or
