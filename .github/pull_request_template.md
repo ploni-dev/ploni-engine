@@ -39,8 +39,8 @@ Findings rejected, with the ADR number justifying each:
 
 ## Who merges
 <!-- CLAUDE.md, "Merging". Every review run on the last commit is pasted above, each with its brief. -->
-Achia's PR: yes / no, because:
-Achia's yes (question as asked, his answer, date):
+Carries a decision of Achia's: yes / no, because:
+The decision (question as asked, his answer, date; or the line that already holds it):
 
 ## Modern Web Guidance
 <!-- Only when the PR touches HTML, CSS or browser JavaScript; delete this section otherwise.
