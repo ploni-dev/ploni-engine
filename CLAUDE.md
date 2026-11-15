@@ -109,8 +109,9 @@
   text of the issue.
   - A PR that changes only `.md` files. While no workflow is on main it has no check
     and merges on 2 and 3.
-  - The PRs of issues #17 and #22, then #69, then #18 and #19, then #24, then #25.
-    Each merges on all three, its own check green on GitHub.
+  - The PRs of issues #17 and #22, then #69, which must refuse a red PR, then #18
+    and #19, then #24, then #25. Each merges on all three, its own check green on
+    GitHub.
 
   Nothing else merges. This order is Claude's reading of "all the gating we defined".
   Tell Achia in chat when the gate works, with the number of the refused PR, before
