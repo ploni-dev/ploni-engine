@@ -1,0 +1,79 @@
+# Project metadata and the one ruff and one mypy configuration (PROCESS.md section 4.5).
+# A change to a limit in this file needs a decision of Achia's (PROMOTION.md, Level 3 list).
+
+[project]
+name = "ploni"
+version = "0.0.0"
+description = "Offline pseudonymization of sensitive documents, Hebrew first."
+# build-plan.md Phase 0: Python 3.13 (Achia, 2026-11-13).
+requires-python = ">=3.13"
+
+[tool.ruff]
+target-version = "py313"
+line-length = 120
+# Vendored third-party code is pinned byte for byte and is outside both tools (section 4.5).
+extend-exclude = ["experiments/*/vendored", "models"]
+
+[tool.ruff.lint]
+select = [
+    "F",       # unused imports and names, undefined names
+    "B",       # likely bugs
+    "BLE",     # errors caught blindly
+    "S",       # unsafe calls; S110 and S112 are errors caught and dropped
+    "E722",    # bare except
+    "C901",    # complexity, the hard limit of section 4.1
+    "PLR0915", # statements, the hard limit of section 4.1
+    "ERA001",  # commented-out code
+    "T201",    # print, under ploni/ only (see per-file-ignores)
+    "TID251",  # banned imports, anywhere
+    "TID253",  # banned module-level imports, under ploni/ only (see per-file-ignores)
+]
+
+[tool.ruff.lint.mccabe]
+# PROCESS.md section 4.1, the hard limit: complexity over 10 is split.
+max-complexity = 10
+
+[tool.ruff.lint.pylint]
+# PROCESS.md section 4.1, the hard limit: over 50 statements is split.
+max-statements = 50
+
+[tool.ruff.lint.flake8-tidy-imports.banned-api]
+# CLAUDE.md, Hard constraints: never use PyMuPDF, it is AGPL. Both of its import names.
+"fitz".msg = "PyMuPDF is AGPL and is never used (CLAUDE.md, Hard constraints)."
+"pymupdf".msg = "PyMuPDF is AGPL and is never used (CLAUDE.md, Hard constraints)."
+
+[tool.ruff.lint.flake8-tidy-imports]
+# CLAUDE.md, Hard constraints: no networking imports anywhere under ploni/.
+# shortcut: this rule sees imports at module level only, the T8 test of issue #19 scans every import.
+banned-module-level-imports = [
+    "aiohttp",
+    "ftplib",
+    "http",
+    "httpx",
+    "imaplib",
+    "poplib",
+    "requests",
+    "smtplib",
+    "socket",
+    "socketserver",
+    "ssl",
+    "telnetlib",
+    "urllib",
+    "urllib3",
+    "websockets",
+    "xmlrpc",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# print and networking imports are banned under ploni/ only.
+"!ploni/**" = ["T201", "TID253"]
+# pytest tests assert.
+"tests/**" = ["S101"]
+"experiments/*/tests/**" = ["S101"]
+
+[tool.mypy]
+# PROCESS.md section 4.5: strict, on ploni/ only. scripts/check.py adds the mypy step
+# once that folder exists.
+files = ["ploni"]
+python_version = "3.13"
+strict = true
