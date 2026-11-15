@@ -1,16 +1,9 @@
-# Project metadata and the one ruff and one mypy configuration (PROCESS.md section 4.5).
+# The one ruff and one mypy configuration (PROCESS.md section 4.5), and how pytest finds the code.
 # A change to a limit in this file needs a decision of Achia's (PROMOTION.md, Level 3 list).
 
-[project]
-name = "ploni"
-version = "0.0.0"
-description = "Offline pseudonymization of sensitive documents, Hebrew first."
-# build-plan.md Phase 0: Python 3.13 (Achia, 2026-11-13).
-requires-python = ">=3.13"
-
 [tool.ruff]
+# build-plan.md Phase 0: Python 3.13 (Achia, 2026-11-13).
 target-version = "py313"
-line-length = 120
 # Vendored third-party code is pinned byte for byte and is outside both tools (section 4.5).
 extend-exclude = ["experiments/*/vendored", "models"]
 
@@ -27,6 +20,7 @@ select = [
     "T201",    # print, under ploni/ only (see per-file-ignores)
     "TID251",  # banned imports, anywhere
     "TID253",  # banned module-level imports, under ploni/ only (see per-file-ignores)
+    "RUF100",  # a noqa that no longer suppresses anything
 ]
 
 [tool.ruff.lint.mccabe]
@@ -44,7 +38,8 @@ max-statements = 50
 
 [tool.ruff.lint.flake8-tidy-imports]
 # CLAUDE.md, Hard constraints: no networking imports anywhere under ploni/.
-# shortcut: this rule sees imports at module level only, the T8 test of issue #19 scans every import.
+# shortcut: this rule sees only a plain import line at the top level of a module, not one under
+# try, if, a class or a function, and only the names listed; the T8 test of issue #19 scans every import.
 banned-module-level-imports = [
     "aiohttp",
     "ftplib",
@@ -71,9 +66,15 @@ banned-module-level-imports = [
 "tests/**" = ["S101"]
 "experiments/*/tests/**" = ["S101"]
 
+[tool.pytest.ini_options]
+# Tests import the code from the repository root, however pytest is started.
+pythonpath = ["."]
+# Two tiers may hold a test file of the same name (test_<module>.py in t1 and in t4).
+addopts = ["--import-mode=importlib"]
+
 [tool.mypy]
-# PROCESS.md section 4.5: strict, on ploni/ only. scripts/check.py adds the mypy step
-# once that folder exists.
+# PROCESS.md section 4.5: strict, on ploni/ only. Until that folder exists, the mypy step of
+# scripts/check.py prints that it was skipped.
 files = ["ploni"]
 python_version = "3.13"
 strict = true
