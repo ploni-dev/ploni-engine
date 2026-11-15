@@ -100,6 +100,7 @@ Required status checks on the PR. Under five minutes. **Enforced by GitHub Actio
 | T2 property, reduced example count | invariant violations |
 | T3 golden | unintended output changes |
 | T8 privacy: network, eval isolation, log canary, temp canary | leak paths |
+| Per-PR recall check, from Phase 3 (section 11) | a name that was found before and is now missed |
 | Secret scan | credentials |
 | Docstring presence, a `Why:` section, and a `Contract:` section on public functions | undocumented public surface |
 | Ratchet checks (section 6) | weakened tests or fixtures |
@@ -423,7 +424,12 @@ Achia asked for tests that a PR has to pass in order to merge, and chose the fre
 - **What it does not do.** It matches one command. It does not stop an agent that goes around it: another merge command, a call to the GitHub API, a local merge pushed to `main`, a session started in another folder, an edit of the hook. `CLAUDE.md` forbids each of these, and that part is discipline, not mechanism. It is also not branch protection: a merge by hand in the browser, or from a machine without the hook, is not stopped. `git log --first-parent main` at every phase close still shows what arrived and how.
 - **Until it is built and has refused a red PR, it does not exist.** In that time the agent merges nothing without Achia's yes to that PR (Achia, 2026-11-15), and "What compensates, and what does not" above stays the whole truth. The refusal is tried in the closing test of Phase 0 (section 10).
 - **Achia's yes cannot be checked on GitHub.** For his own PRs Achia chose to say "merge #N" in chat, and not to press merge himself (2026-11-15). The agent writes the PR text and works under Achia's account, so nothing on GitHub tells his yes from the agent's quote of it. The rule that holds this (`CLAUDE.md`, "Merging") is discipline: the yes is given to one PR by number after its last commit, the PR carries the question, the answer and the date, and a later commit voids it. Achia can press merge himself at any time; that is the form that does not rest on the agent's word.
-- **What the gate tests on every PR.** The fast suite of Level 1. Of the project's main ideas it carries three: no network access from product code (T8), no document text in logs or temp files (T8, the log and temp canaries), and the layering (T0). The fourth, that no name gets through, is not in it. Recall and the leak rates are T6, which the plan runs at a phase boundary (`build-plan.md` section 7), so the gate does not test them on a single PR.
+- **What the gate tests on every PR.** The fast suite of Level 1. Of the project's main ideas it carries three: no network access from product code (T8), no document text in logs or temp files (T8, the log and temp canaries), and the layering (T0). The fourth, that no name gets through, is measured in full by T6, which the plan runs at a phase boundary (`build-plan.md` section 7).
+- **The per-PR recall check, decided 2026-11-15.** Achia decided that a small form of the fourth idea also runs on every PR: a fixed set of invented documents with known names, and the PR fails if a name that was found before is now missed. It is a row of Level 1.
+  - It can exist only from Phase 3, which builds the first model that finds names. Until then the gate does not test this idea.
+  - T3 golden already turns red when the detection output on a fixture changes, and the author may update a golden file in the same PR with an explanation. This check differs in one thing: its list of names found is a baseline, so a change to it is Achia's and never shares a PR with code.
+  - It guards against getting worse on a fixed set. It does not measure recall: T6 stays the measure.
+  - Its run time is measured when it is built.
 
 ### When to revisit
 
