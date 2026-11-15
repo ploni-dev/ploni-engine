@@ -206,7 +206,7 @@ No mechanism exists and pretending otherwise is worse than admitting it.
 - Whether an exit demo actually demonstrated the thing.
 - Whether web code follows the Modern Web Guidance guides, and whether the right guides were found (the Web code rules of `CLAUDE.md`, added 2026-11-15). No machine checks any of them yet.
 
-These are your five jobs at Level 2 and Level 4. Everything in Class A exists so that your attention is available for Class C instead of being spent on things a machine should have caught.
+These are your six jobs at Level 2 and Level 4. Everything in Class A exists so that your attention is available for Class C instead of being spent on things a machine should have caught.
 
 ---
 

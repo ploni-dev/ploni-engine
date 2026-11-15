@@ -23,7 +23,7 @@ Web code means HTML, CSS and JavaScript that runs in a browser. HTML that a Pyth
    - any CSS: `css/css.md`; a layout: also `css/css-layout.md`; a colour: also `visual-design/color.md`
    - a form: `forms/forms.md`
    - a page that a server sends, which every Phase 12 screen is: `security/security.md`, `privacy/privacy.md`, `performance/performance.md`. A page opened from disk with no script needs none of the three.
-3. **A guide may point to another** with `npx -y modern-web-guidance@latest retrieve "<id>"`. Read `guides/<folder>/<id>.md`. Do not run the command.
+3. **A guide may point to another** with `npx -y modern-web-guidance@latest retrieve "<id>"`. Find the file with Glob `guides/*/<id>.md`; there is exactly one. Read it. Do not run the command.
 4. **No guide fits:** write the code without one, and say so in the PR (section 3).
 5. **Before finishing**, check the code against each guide read: the pattern, and the fallback the guide asks for.
 
@@ -38,7 +38,8 @@ The guides are written for websites on the open internet. Ploni is an offline de
   - *Widely available:* use it, with no fallback.
   - *Newly available, or Limited availability with two engines or more:* use it with the fallback the guide gives, or leave it out.
   - *One engine only (for example Chrome and Edge and nothing else), or an Origin Trial:* not used.
-  - The last line is stricter than the source, which lets an agent use such a feature with a fallback. It is strict because the browser that shows the Phase 12 screens is not decided. When Achia decides it, the policy goes into `CLAUDE.md` and this list follows it.
+  - *No status line* (30 of the 209 guides have none): if the guide says in words that the feature is a preview, behind a flag, or in some browsers only, it counts as one engine and is not used. Otherwise it is treated as Widely available. Say which in the PR.
+  - The one-engine line is stricter than the source for a one-engine feature older than three months, which the source allows with a fallback. It is strict because the browser that shows the Phase 12 screens is not decided. When Achia decides it, the policy goes into `CLAUDE.md` and this list follows it.
 - **Ponytail still holds.** A guide is used for what the task needs. It is not a reason to add a feature nobody asked for.
 - **Hebrew and right-to-left.** No guide covers text that mixes right-to-left and left-to-right. The Hebrew axes of the `test-matrix` skill do.
 - **No document text leaves the page.** `CLAUDE.md` bans document text in logs and temp files. In a page that also means: not in a URL, and not in browser storage. `privacy/privacy.md` does not cover this.
