@@ -493,9 +493,11 @@ Define it once and record it in `docs/REFERENCE_MACHINE.md`: a mainstream busine
 
 A number below the low end is also a finding: suspect the model is not seeing the full text.
 
-**Not enforced for now.** Decided by Achia on 2026-11-13 and again on 2026-11-15: the numbers of this table are targets. Speed is measured and reported. A number past its fail threshold stops no work and blocks no merge (`PROCESS.md` section 10). Before a release Achia decides whether the budget becomes a gate.
+**Time is not enforced for now.** Decided by Achia on 2026-11-13 and again on 2026-11-15: the time rows of this table are targets. Speed is measured and reported. A time past its fail threshold stops no work and blocks no merge (`PROCESS.md` section 10). Before a release Achia decides whether time becomes a gate.
 
-**Per stage.** From the first phase that has a stage to time, a run prints the time of every stage: reading the document, each detector, and each later layer of section 4.7. Every phase close records those times beside the last ones, so that the expensive stage is known before anyone tunes anything.
+Two things stay as they were. Peak RSS is memory, not speed, and stays a limit. A time below the low end is still a finding and still stops work: it points at missed text.
+
+**Per stage.** From the first phase that has a stage to time, a run prints the time of every stage: reading the document, each detector, and each later layer of section 4.7. Each time is printed with the power state of the run, mains or battery: the same files took 1.03 seconds on mains power and up to 11.7 on battery (`docs/findings/2026-11-11-e2-int8-latency.md`). Every phase close records the times in its results file, and `docs/STATUS.md` shows the last two times of each stage side by side, so that the expensive stage is known before anyone tunes anything.
 
 ### 8.3 The demo script, as an acceptance test
 
@@ -968,7 +970,7 @@ A 60-page file is roughly 120 windows plus verification. Requirements: streaming
 
 **Tests added.** T7 the full performance budget on the reference machine. T6 post-quantization eval, both numbers recorded. T5 S13 on the packaged build. Install and uninstall on a clean Windows 11 VM.
 
-**Gate.** Every number in section 8.2 met. Post-quantization recall regression under 1 point, or the quantization is rejected. Installer installs and uninstalls cleanly on a fresh VM.
+**Gate.** Every number in section 8.2 met; the time rows are not enforced for now (section 8.2). Post-quantization recall regression under 1 point, or the quantization is rejected. Installer installs and uninstalls cleanly on a fresh VM.
 
 ---
 
@@ -1005,7 +1007,7 @@ v1.0 ships when all of the following are true and measured:
 **Product**
 19. Personas P1 to P5 pass within budget.
 20. Demo script under 10 minutes, no workarounds.
-21. Performance budget met on the reference machine. Not enforced for now (section 8.2).
+21. Performance budget met on the reference machine. The time rows are not enforced for now (section 8.2).
 22. Installer verified on a clean VM.
 23. `THIRD_PARTY.md` complete, every license verified.
 
@@ -1026,7 +1028,7 @@ v1.0 ships when all of the following are true and measured:
 | 11 | 10 Mapping, restore, rehydrate, verify | 4 to 5 | 90 percent rehydration, exact restore |
 | 12 | 11 Report and usage log | 2 | complete, chained, chain-break detected |
 | 13 | 12 Application | 5 to 8 | all journeys, demo under 10 minutes |
-| 14 | 13 Performance and packaging | 3 to 5 | budget met, installer clean |
+| 14 | 13 Performance and packaging | 3 to 5 | budget met (time rows not enforced for now, section 8.2), installer clean |
 
 ## 11. Week one: three experiments before any product code
 
