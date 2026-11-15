@@ -104,20 +104,17 @@
   3. If the PR needs a decision of Achia's, the decision is quoted in the PR, and the
      reviewer found it at its source and reports that the PR does no more, but for
      choices that only narrow Claude (last bullet).
-- Until the merge gate works, only these merge, and code only in this order. "Works"
-  is in `PROMOTION.md` section 11: built, has refused a red PR, and the fast suite
-  holds the network test, the two canaries and the layering test.
+- Until the merge gate works, only these merge. "Works" is in `PROMOTION.md` section
+  11, with the list of what each issue named here may hold; that list wins over the
+  text of the issue.
   - A PR that changes only `.md` files. While no workflow is on main it has no check
     and merges on 2 and 3.
-  - The PRs of issues #17 and #22: the project skeleton and the fast workflow. The
-    first to merge carries the workflow.
-  - The PR of issue #69: the gate. It must then refuse a red PR.
-  - The PRs of issues #18, #19, #24 and #25: the four tests and the code they need.
+  - The PRs of issues #17 and #22, then #69, then #18 and #19, then #24, then #25.
+    Each merges on all three, its own check green on GitHub.
 
-  Each code PR merges on all three, its own check green on GitHub. No other code
-  merges. This order is Claude's reading of "all the gating we defined". Tell Achia
-  in chat when the gate works, with the number of the refused PR, before the first
-  merge of any other kind.
+  Nothing else merges. This order is Claude's reading of "all the gating we defined".
+  Tell Achia in chat when the gate works, with the number of the refused PR, before
+  the first merge of any other kind.
 - Paste every review that was run on that commit into the PR, each with the brief its
   reviewer got, word for word. A finding in any of them counts. A finding of an
   earlier review of the PR stays listed there, with what was done about it.
@@ -127,8 +124,8 @@
   or removes a fixture or edits one so that it asks less; or adds or replaces a
   dependency or a model; or asks for or uses a waiver; or fills the `## Decision` of a
   findings note; or rejects a Ponytail finding. In doubt, it does. Say in the PR
-  whether it does, and why. Granting a waiver is Achia's own edit of
-  `docs/WAIVERS.md`: Claude never edits that file.
+  whether it does, and why. Granting a waiver is Achia's own act: he fills the
+  `## Decision` of the request and edits `docs/WAIVERS.md`. Claude does neither.
 - Such a PR merges only after Achia decided what it changes. Ask him that, in plain
   words, not whether to merge. No answer, no merge. Put the question, his answer and
   the date in the PR. What he already decided needs no new question: quote his words,

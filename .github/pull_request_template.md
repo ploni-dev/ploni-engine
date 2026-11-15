@@ -41,6 +41,7 @@ Findings rejected, with the ADR number justifying each:
 <!-- CLAUDE.md, "Merging". Every review run on the last commit is pasted above, each with its brief. -->
 Needs a decision of Achia's: yes / no, because:
 The decision (question as asked, his answer, date; or a line that names him and the date):
+Choices of Claude's that only narrow what Claude may do (each one listed; the reviewer reports on each):
 
 ## Modern Web Guidance
 <!-- Only when the PR touches HTML, CSS or browser JavaScript; delete this section otherwise.
