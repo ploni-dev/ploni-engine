@@ -1,7 +1,7 @@
 # Build Plan v3.0: Local Hebrew-First Document Pseudonymization Tool
 
 Product name: **Ploni** (פלוני). Python package and CLI: `ploni`. Repo: `ploni-engine`. Decided 2026-11-11; trademark check still open with Tomer.
-Achia owns engineering. Tomer (lawyer) owns everything legal and regulatory. As of 2026-11-15 Tomer is not involved and has no access to the repository: wherever this plan names Tomer, the question goes to Achia (`CLAUDE.md`, "Who decides").
+Achia owns engineering. Tomer (lawyer) owns everything legal and regulatory. As of 2026-11-15 Tomer is not involved for now and has no access to the repository: wherever this plan names Tomer, the question goes to Achia (`CLAUDE.md`, "Who decides").
 Implementer: Claude Code, phase by phase.
 Date: 2026-11-01. Supersedes v2.0. Changelog in section 30.
 
@@ -497,7 +497,7 @@ A number below the low end is also a finding: suspect the model is not seeing th
 
 Two things stay as they were. Peak RSS is memory, not speed, and stays a limit. A time below the low end is still a finding and still stops work: it points at missed text.
 
-**Per stage.** From the first phase that has a stage to time, a run prints the time of every stage: reading the document, each detector, and each later layer of section 4.7. Each time is printed with the power state of the run, mains or battery: the same files took 1.03 seconds on mains power and up to 11.7 on battery (`docs/findings/2026-11-11-e2-int8-latency.md`). Every phase close records the times in its results file, and `docs/STATUS.md` shows the last two times of each stage side by side, so that the expensive stage is known before anyone tunes anything.
+**Per stage.** From the first phase that has a stage to time, a run prints the time of every stage: reading the document, each detector, and each later layer of section 4.7. Each time is printed with the power state of the run, mains or battery: the same files took 1.03 seconds on mains power and up to 11.7 on battery (`docs/findings/2026-11-11-e2-int8-latency.md`). Every phase close records the times in `docs/STATUS.md`, which shows the last two times of each stage side by side, and from Phase 5 also in `eval/results/<git-sha>.json`, so that the expensive stage is known before anyone tunes anything.
 
 ### 8.3 The demo script, as an acceptance test
 
