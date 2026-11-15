@@ -65,7 +65,7 @@ If a change genuinely cannot be split without breaking `main`, that is a design 
 
 "Production" means two different things here and conflating them is where sloppiness enters.
 
-**Boundary 1: merge to `main`.** The code is integrated and trusted. Nobody is running it yet. Gated by the fast suite and your review.
+**Boundary 1: merge to `main`.** The code is integrated and trusted. Nobody is running it yet. Gated by the fast suite and the review of Level 2.
 
 **Boundary 2: a release tag.** A signed, packaged installer a person installs on their laptop. For a desktop product, this is the real production boundary. Gated by the full suite, the metric gates, the persona acceptance tests and a clean-VM install.
 
@@ -100,6 +100,7 @@ Required status checks on the PR. Under five minutes. **Enforced by GitHub Actio
 | T2 property, reduced example count | invariant violations |
 | T3 golden | unintended output changes |
 | T8 privacy: network, eval isolation, log canary, temp canary | leak paths |
+| Per-PR recall check, from Phase 3 (section 11) | a name that was found before and is now missed |
 | Secret scan | credentials |
 | Docstring presence, a `Why:` section, and a `Contract:` section on public functions | undocumented public surface |
 | Ratchet checks (section 6) | weakened tests or fixtures |
@@ -114,7 +115,7 @@ A PR cannot merge with any of these red. Branch protection enforces that, not di
 
 **On the current plan it does not.** See section 11: GitHub Free does not enforce branch protection on a private repository, so today these checks run and report but do not block a merge. Read every "cannot merge" and "enforced by branch protection" claim in this document against that section.
 
-### Level 2: your review
+### Level 2: review
 
 What a machine cannot judge. Read in this order, and stop early if an earlier item fails.
 
@@ -124,9 +125,13 @@ What a machine cannot judge. Read in this order, and stop early if an earlier it
 4. **Docstring quality.** Does `Why:` state a real reason, or does it restate the function name?
 5. **The implementation.** Last. If the tests did not convince you, send it back without reading it.
 
+**Who reads.** For a PR that Claude merges (`CLAUDE.md`, "Merging"), the independent reviewer of the Ponytail rule does these five readings, and its report says what it found for each. A reading that does not apply to the PR (no code, no tests) is reported as "does not apply", with the reason. A reading that applies and could not be done is a finding. For one of Achia's PRs, Achia does them. This follows from Achia's decision of 2026-11-15 that Claude merges such a PR; until then this level said Achia reads every PR. Where the list above says "you", read "the reader". By the first lines of this section, anything enforced by the agent is not enforced: on a PR Claude merges, Level 2 is discipline, not a check. The author writes the reviewer's brief, so every review run on the commit is pasted with its brief (`CLAUDE.md`, "Merging").
+
 ### Level 3: merge to `main`
 
-Squash merge, linear history, branch deleted. Requires Levels 1 and 2. CODEOWNERS approval additionally required if the PR touches `ploni/api.py`, `eval/baselines.json`, `config.py` gate values, any CI workflow, `docs/adr/APPROVED_ABSTRACTIONS.md`, `docs/WAIVERS.md`, `CLAUDE.md`, `build-plan.md`, `PROCESS.md`, `PROMOTION.md`, or `ploni/i18n/claims/`.
+Squash merge, linear history, branch deleted. Requires Levels 1 and 2. Who runs the merge command, and on what, is in `CLAUDE.md`, "Merging".
+
+Achia's yes is additionally required if the PR touches a path of this list, the Level 3 list: `ploni/api.py`, `eval/baselines.json`, `config.py` gate values, any CI workflow, `docs/adr/APPROVED_ABSTRACTIONS.md`, `docs/WAIVERS.md`, `CLAUDE.md`, `build-plan.md`, `PROCESS.md`, `PROMOTION.md`, `ploni/i18n/claims/`, and, added 2026-11-15: the rest of `docs/adr/`, `docs/findings/README.md`, `.ratchet.json` when a counter falls or is removed, `pyproject.toml` and any other pytest, ruff or mypy configuration file, `.claude/settings.json`, `.claude/settings.local.json` and any other hook or hook configuration, any checker script or `make` target that a workflow step or a hook calls (test files are covered by kind, not by this), `.claude/skills/`, `.github/CODEOWNERS` and `.github/pull_request_template.md`. `CLAUDE.md`, "Merging", adds the PRs that are Achia's by what they do and not by path. `.github/CODEOWNERS` carries the paths of this list that a file pattern can name; GitHub does not enforce it on this plan (section 11).
 
 ### Level 4: phase close
 
@@ -206,7 +211,7 @@ No mechanism exists and pretending otherwise is worse than admitting it.
 - Whether an exit demo actually demonstrated the thing.
 - Whether web code follows the Modern Web Guidance guides, and whether the right guides were found (the Web code rules of `CLAUDE.md`, added 2026-11-15). No machine checks any of them yet.
 
-These are your six jobs at Level 2 and Level 4. Everything in Class A exists so that your attention is available for Class C instead of being spent on things a machine should have caught.
+These are the six jobs of the reader at Level 2, and yours at Level 4. Level 2 says who reads: for a PR Claude merges it is the independent reviewer, which is not a human. Everything in Class A exists so that your attention is available for Class C instead of being spent on things a machine should have caught.
 
 ---
 
@@ -353,6 +358,8 @@ In this order. Nothing in Class A exists until it is built, so build it before t
 11. The five skills saved.
 12. Milestones for all fourteen phases. Issues for Phase 0 and Phase 1.
 
+The merge gate of section 11 is built first, with the first version of the fast CI workflow of item 5. Until it works, as section 11 says what "works" means, every merge waits for Achia's yes (Achia, 2026-11-15).
+
 ### The closing test for Phase 0
 
 **Phase 0 is not closed until eight deliberately bad PRs are each rejected by CI.** Prove the guardrails before trusting them, because a guardrail you never tested is a guardrail you are only assuming:
@@ -365,6 +372,8 @@ In this order. Nothing in Class A exists until it is built, so build it before t
 6. A test file with one test function deleted, with no `ratchet-override` line
 7. A code change and a `baselines.json` change in the same PR
 8. A PR body citing `waiver: WAIVER-999`, which does not exist
+
+For each of the eight, once CI is red, the plain `gh pr merge` is tried and the refusal of the merge gate (section 11) is recorded in that PR. CI going red is not the gate refusing, and a gate that never fired is only assumed. The gate is also tried once on a PR with no check, once while a check is still running, and from each shell tool the session has. The bad PRs target a scratch branch cut from `main`, not `main`, so a gate that fails puts nothing on `main`. The fast workflow runs on a PR to any base branch, and the gate does not look at the base. The number stays eight.
 
 If any of those eight merges, the enforcement layer is decoration and the number eight is the only honest way to find out.
 
@@ -401,18 +410,33 @@ Class B and Class C are unaffected. They were never blocking.
 Compensating, honestly:
 
 - Every check still runs in CI and is visible before merge.
-- One developer, one reviewer. The failure mode that branch protection exists to stop, someone else merging past a red check, has no one to perform it.
-- The agent has no authority to merge. Merging is a human act, performed by Achia, after reading the PR. An agent that pushes to `main` directly is violating `CLAUDE.md`, and that violation shows in the commit history with no PR attached.
+- One developer. The failure mode that branch protection exists to stop, someone merging past a red check, has one possible actor here: the agent, which runs the merge command. Until 2026-11-15 this line said it has no one to perform it.
+- The agent merges only as `CLAUDE.md`, "Merging", says. Until the merge gate below works (three things, see "Until it works"), that means: nothing without Achia's yes to that PR. Until 2026-11-15 this line said that the agent has no authority to merge, and that merging is a human act, performed by Achia after reading the PR. That is not what happened. From 2026-11-12 the agent ran the merge command under Achia's account. The merge commits of #5 to #11 say "Merged on Achia's instruction in the working session of 2026-11-12"; the merge commits of #12 to #15 say "Merged by Claude". Both are the agent's own record, and the repository shows no Level 2 reading by Achia before them. An agent that pushes to `main` directly is violating `CLAUDE.md`, and that violation shows in the commit history with no PR attached.
 - `git log --first-parent main` shows any commit that arrived without a PR. Check it at every phase close.
 
 Not compensating, and worth saying plainly: none of the above is a mechanism. All of it is discipline, which is exactly what section 1 said not to rely on. This section exists so that nobody reads section 4 in six months and believes the gate held when it was only ever requested.
+
+### The merge gate, decided 2026-11-15
+
+Achia asked for tests that a PR has to pass in order to merge, and chose the free form of it: a local merge gate, not the paid plan. His words are in the body of the commit that added this section.
+
+- **What it is.** A Claude Code hook, committed in `.claude/settings.json`, that refuses the agent's plain `gh pr merge` unless every check on the PR's last commit has finished and is green, and the fast-suite check is one of them. A missing check, one still running, or one that GitHub marks skipped counts as red. It is the first thing built in Phase 0, with the first version of the fast CI workflow it reads.
+- **What it does not do.** It matches one command. It does not stop an agent that goes around it: another merge command, a call to the GitHub API, a local merge pushed to `main`, a check status set by hand, a session started in another folder, an edit of the hook made some other way than the plain edit that a second hook refuses (`PROCESS.md` section 12 item 8). `CLAUDE.md` forbids each of these, and that part is discipline, not mechanism. Two ways need no bad intent, and the test of section 10 looks for the second: a session on a branch cut before the gate was merged does not have the hook file, and the same command typed in another shell tool may not be matched. It is also not branch protection: a merge by hand in the browser, or from a machine without the hook, is not stopped. `git log --first-parent main` at every phase close still shows what arrived and how.
+- **Until it works, it does not exist.** "Works" means three things: it is built, it has refused a red PR, and the fast suite holds the network test, the two canaries and the layering test. Without the third, "the check is green" would be true with almost nothing behind it. The third is Claude's reading of Achia's words "especially to test the main ideas"; he was told this time lasts "only for the first step of Phase 0", and with the third it lasts longer. He can shorten it. Until the gate works the agent merges nothing without Achia's yes to that PR (Achia, 2026-11-15), and "What compensates, and what does not" above stays the whole truth. The first refusal is tried right after the gate is built, on a red PR that targets a scratch branch, as in section 10; the closing test of Phase 0 tries it again.
+- **Achia's yes cannot be checked on GitHub.** For his own PRs Achia chose to say "merge #N" in chat, and not to press merge himself (2026-11-15). The agent writes the PR text and works under Achia's account, so nothing on GitHub tells his yes from the agent's quote of it. The rule that holds this (`CLAUDE.md`, "Merging") is discipline: the yes is given to one PR by number after its last commit, the question says what the PR changes, the PR carries the question, the answer and the date, and a later commit voids it. Achia can press merge himself at any time; that is the form that does not rest on the agent's word.
+- **What the gate tests on every PR.** The fast suite of Level 1. Of the project's main ideas it carries three: no network access from product code (T8), no document text in logs or temp files (T8, the log and temp canaries), and the layering (T0). The fourth, that no name gets through, is measured in full by T6, which the plan runs at a phase boundary (`build-plan.md` section 7).
+- **The per-PR recall check, decided 2026-11-15.** Achia decided that a small form of the fourth idea also runs on every PR: a fixed set of invented documents with known names, and the PR fails if a name that was found before is now missed. It is a row of Level 1.
+  - Achia was told "Phase 2 or so". Phase 3 is Claude's reading of the plan: it builds the first model that finds names (`build-plan.md`, Phase 3). The trigger words of Phase 1 find some names earlier, and T1 tests them. Until Phase 3 the gate does not test this idea.
+  - T3 golden already turns red when the detection output on a fixture changes, and the author may update a golden file in the same PR with an explanation. This check differs in one thing: its list of names found is a baseline, so a change to it is Achia's and never shares a PR with code.
+  - It guards against getting worse on a fixed set. It does not measure recall: T6 stays the measure.
+  - It needs the model on the CI runner, and `PROCESS.md` section 5.4 found that slow and brittle for the metric gates. If it does not work there, the check runs locally with a committed results file that the gate reads, as section 5.4 does for metrics, and this section is changed to say so. A check that the gate cannot see is not this check. Its run time is measured when it is built.
 
 ### When to revisit
 
 Upgrade to Team, one seat, at the first of these:
 
-1. The first PR that contains real product code rather than scaffolding, because that is the first merge where a red check actually means something.
+1. The first PR that contains real product code rather than scaffolding, because that is the first merge where a red check actually means something. On 2026-11-15 Achia chose the local merge gate and not the paid plan. As Claude reads it, that answers this trigger once the gate works, as this section says. Until then the trigger stands.
 2. Tomer, or anyone else, getting write access.
 3. The first time a red check is merged past, whatever the reason. If it happens once it will happen again, and at that point $4 is cheap.
 
-Until then, this section is the truthful answer to "is this rule enforced", and the answer for every Class A row is: it runs, it reports, it does not block.
+Until then, this section is the truthful answer to "is this rule enforced", and the answer for every Class A row is: it runs, it reports, it does not block. Once the merge gate works, the answer for the fast suite becomes: it blocks the agent's plain merge command, and nothing else.

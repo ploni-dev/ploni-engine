@@ -84,6 +84,38 @@
   review in the PR body, in those words. Never claim it ran, and never quietly skip it.
   Its status is tracked in docs/THIRD_PARTY.md.
 
+## Merging
+- Squash merge only, with the plain `gh pr merge <N> --squash`: no `--admin`, no
+  `--auto`. Never around the merge gate: no other merge command, no API call, no local
+  merge pushed to main, no check status set by hand, no edit of the gate's own files
+  to get a merge through.
+- Never past a red, pending or skipped check. Once the fast CI workflow is on main,
+  a missing check counts as red too. The one merge command that may be run on such
+  a PR is the gate's own test, on a PR that targets a scratch branch
+  (`PROMOTION.md` sections 10 and 11).
+- For now, merge nothing without Achia's yes to that PR (Achia, 2026-11-15). This ends
+  when the merge gate of `PROMOTION.md` section 11 is built, has refused a red PR, and
+  the fast suite holds the network test, the two canaries and the layering test. Tell
+  Achia in chat, with the number of the refused PR, before the first merge without
+  his yes.
+- After that, merge a PR when three things hold: every check on the PR's last commit
+  has finished and is green, and the fast-suite check is one of them; the Ponytail
+  review of that commit reports the five readings of `PROMOTION.md` Level 2 and leaves
+  no finding open and none rejected; the PR is not one of Achia's.
+- Paste every review that was run on that commit into the PR, each with the brief its
+  reviewer got, word for word. A finding in any of them counts. A finding of an
+  earlier review of the PR stays listed there, with what was done about it.
+- A PR is Achia's when it touches a path of the Level 3 list in `PROMOTION.md`; or
+  changes a threshold, baseline, gate value or limit wherever it lives; or lowers a
+  ratchet counter; or removes, weakens, skips or deselects a test; or removes a
+  fixture or edits one so that it asks less; or adds or replaces a dependency or a model; or asks
+  for or uses a waiver; or fills the `## Decision` of a findings note; or rejects a
+  Ponytail finding. In doubt, it is Achia's. Say in the PR which it is, and why.
+- Achia's yes, now and later, is given in chat to one PR by number ("merge #N") after
+  its last commit. The question says in one line what the PR changes and, when the PR
+  is his, which line of this section makes it his. Put the question, his answer and
+  the date in the PR. A later commit voids the yes: ask again.
+
 ## How work is gated
 - Read the relevant build-plan.md phase section first. Restate goal, deliverable, gate.
 - Never weaken a test, threshold or baseline to pass a gate. If a gate cannot be met,

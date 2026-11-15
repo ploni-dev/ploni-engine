@@ -14,7 +14,7 @@ description: Run the merge-to-main gate for a branch: the Ponytail skill pass wi
 Ponytail is installed here **as a skill**, invoked by name. If the installed copy also exposes mode or review commands, use them; the obligations are the same either way.
 
 1. **It should already have been invoked at the start of this session, before any code was written**, at level `ultra` (`CLAUDE.md`, Ponytail). Its rules have to be in context while code is written. Retrofitting minimalism afterwards produces a rewrite, not a review. If it was not invoked at the start, say so plainly in the PR body rather than pretending otherwise.
-2. **A session or subagent that did not write the code invokes it on the final diff** as a review pass (`CLAUDE.md`, Ponytail). Its output names the commit it reviewed.
+2. **A session or subagent that did not write the code invokes it on the final diff** as a review pass (`CLAUDE.md`, Ponytail). Its output names the commit it reviewed. On a PR that Claude merges, it also reports the five readings of `PROMOTION.md` Level 2, and every review run on that commit is pasted with its brief (`CLAUDE.md`, "Merging").
 3. Paste its output into the PR body under `## Ponytail review`.
 4. Resolve **every** finding as one of:
    - **Accepted**: change the code.
@@ -59,7 +59,7 @@ Every PR must leave `main` coherent, because phases are milestones and not branc
 
 ## 4. The merge checklist
 
-Every row needs evidence, not assertion. CI enforces some of these and will reject the PR without you; the rest are read by Achia.
+Every row needs evidence, not assertion. CI enforces some of these and will reject the PR without you; the rest are read at review (`PROMOTION.md` Level 2 says by whom).
 
 | Condition | Evidence |
 |---|---|
@@ -111,6 +111,6 @@ In addition to everything above:
 
 ## 8. What CI cannot do, stated plainly
 
-Ponytail is an agent-side skill, not a CI binary, so no workflow can run its review for you. CI can only assert that the `## Ponytail review` section exists and is non-empty. The substance is checked at human review, and the presence of the section is not the gate: the gate is that every finding was actually resolved.
+Ponytail is an agent-side skill, not a CI binary, so no workflow can run its review for you. CI can only assert that the `## Ponytail review` section exists and is non-empty. The substance is checked at review (`PROMOTION.md` Level 2 says by whom), and the presence of the section is not the gate: the gate is that every finding was actually resolved.
 
-The same is true of docstring quality, of whether the chosen equivalence classes cover the real input space, and of whether an ADR cited in a rejection actually applies. Those are human judgments. Do not report them as passed; report what you did and let the review decide.
+The same is true of docstring quality, of whether the chosen equivalence classes cover the real input space, and of whether an ADR cited in a rejection actually applies. Those are judgments for the reader at review, not for the author. Do not report them as passed; report what you did and let the review decide.

@@ -10,12 +10,19 @@
 /.github/workflows/         @AchiaIR
 /.ratchet.json              @AchiaIR
 /docs/WAIVERS.md            @AchiaIR
-/docs/adr/APPROVED_ABSTRACTIONS.md  @AchiaIR
+/docs/adr/                  @AchiaIR
+/docs/findings/README.md    @AchiaIR
 /CLAUDE.md                  @AchiaIR
 /build-plan.md              @AchiaIR
 /PROCESS.md                 @AchiaIR
 /PROMOTION.md               @AchiaIR
+/pyproject.toml             @AchiaIR
+/.claude/settings.json      @AchiaIR
+/.claude/settings.local.json  @AchiaIR
+/.claude/skills/            @AchiaIR
+/.github/CODEOWNERS         @AchiaIR
+/.github/pull_request_template.md  @AchiaIR
 
-# Tomer owns every externally visible claim the product makes.
-# Add him as a collaborator and uncomment when ploni/i18n/claims/ exists.
-# /ploni/i18n/claims/       @tomer-github-handle
+# Every externally visible claim the product makes. Tomer is not involved for now
+# (CLAUDE.md, Who decides); if he joins, that is a new decision of Achia.
+/ploni/i18n/claims/         @AchiaIR
