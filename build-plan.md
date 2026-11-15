@@ -385,7 +385,7 @@ The user edits the source and re-runs; offset-based ids would discard every prio
 | **T3** | Golden | Did verified output change without us intending it? | every commit |
 | **T4** | Integration | Do two or more phases compose correctly? | every commit |
 | **T5** | System | Does a full user journey work end to end? | phase boundary |
-| **T6** | Metrics | Are recall, precision, burden, consistency and utility at or above baseline? | phase boundary |
+| **T6** | Metrics | Are recall, precision, burden, consistency and utility at or above baseline? | phase boundary. From Phase 3 a small recall check also runs on every commit (Achia, 2026-11-15; `PROMOTION.md` section 11) |
 | **T7** | Performance | Is it fast enough on the reference machine? | phase boundary |
 | **T8** | Privacy and security | Does it leak through network, logs, temp files, metadata or co-location? | every commit |
 | **T9** | Persona acceptance | Can the intended user actually do the job, within a time budget? | release candidate |
@@ -646,7 +646,7 @@ Fallback if the joint ONNX export fights back: `onnx-community/dictabert-ner-ONN
 
 **Normalization.** Strip niqqud, normalize final letters (ך ם ן ף ץ), normalize gershayim and geresh variants, fold ktiv male and haser (`יוסף`/`יסף`, `דוד`/`דויד`) under a configurable rule set, normalize maqaf and whitespace. Handle geresh inside transliterated names: `ג'ון`, `צ'רלי`, `ז'אק`, `ג'ורג'`, which break naive tokenizers.
 
-**Tests added.** T1 prefix and normalization units. T2 prefix preservation over generated proclitic forms. T1 windowing: a fixture with the same name deliberately placed at window boundaries, asserting one detection per occurrence with no duplicates and no drops. T3 golden detection output per fixture.
+**Tests added.** T1 prefix and normalization units. T2 prefix preservation over generated proclitic forms. T1 windowing: a fixture with the same name deliberately placed at window boundaries, asserting one detection per occurrence with no duplicates and no drops. T3 golden detection output per fixture. The per-PR recall check: a fixed set of invented documents with known names, failing when a name that was found before is now missed (Achia, 2026-11-15; `PROMOTION.md` section 11).
 
 **Gate.** The windowing test passes exactly. Prefix preservation holds over 1,000 generated forms. PERSON recall measured and printed on the 10 real Hebrew documents, and the number is recorded as the first baseline.
 **Prediction and threshold.** 85 to 92 percent entity-level PERSON recall, errors concentrated in ordinary-word names and proclitic forms; near 1.0 on checksum types. **Below 80 percent PERSON recall, stop: do not proceed to any UI work.** Revisit windowing, the vendored code path, and whether the joint NER head is being read correctly.
