@@ -77,6 +77,7 @@ Every row needs evidence, not assertion. CI enforces some of these and will reje
 | No test, threshold, fixture or baseline weakened | ratchet plus review |
 | No baseline or gate change in this PR | the diff |
 | Ponytail review run, every finding resolved | PR body |
+| Web code, if the PR has any, written with the `modern-web-guidance` skill | `## Modern Web Guidance` in the PR body |
 | Docstrings answer Why, not just What | review |
 | Golden file diffs explained | PR body |
 

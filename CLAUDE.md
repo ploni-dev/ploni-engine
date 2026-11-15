@@ -44,9 +44,10 @@
 - Never run or install the source's own program (npx modern-web-guidance). It is not
   pinned, and it reports search words to Google.
 - Nothing is loaded from another host: no CDN, no remote font, script or polyfill.
-- A PR that touches web code carries ## Modern Web Guidance in its body: the guides
-  read, what each changed, what was left out. The Ponytail reviewer checks the code
-  against those guides.
+- A PR that touches web code carries ## Modern Web Guidance in its body: each guide
+  used, with file and line, what it changed, what was left out.
+- The Ponytail reviewer of such a PR invokes the skill too, finds the guides itself,
+  and puts what it finds in its review.
 - Where a guide and this file disagree, this file wins.
 
 ## Tests
