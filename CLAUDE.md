@@ -93,34 +93,44 @@
   a missing check counts as red too. The one merge command that may be run on such
   a PR is the gate's own test, on a PR that targets a scratch branch
   (`PROMOTION.md` sections 10 and 11).
-- Do not ask Achia to approve a merge: no "merge #N?" (Achia, 2026-11-15, later that
-  day; his words are in `PROMOTION.md` section 11). Merge a PR when the gating below
-  holds, and only then. A PR that cannot pass it does not merge: stop and report.
-- Merge a PR when three things hold: every check on the PR's last commit has finished
-  and is green, and the fast-suite check is one of them; the Ponytail review of that
-  commit reports the five readings of `PROMOTION.md` Level 2 and leaves no finding open
-  and none rejected; if the PR carries a decision of Achia's, that decision is quoted
-  in it.
-- Until the fast CI workflow is on main there is no check to be green. Until then the
-  only PR with code under `ploni/`, `tests/`, `eval/` or `scripts/` that may merge is
-  the one that adds that workflow and the merge gate; it merges on the review and on
-  its own tests run locally, with the output pasted. A PR with no such code merges on
-  the review. This is Claude's reading of "all the gating we defined".
+- Never ask Achia whether to merge (Achia, 2026-11-15; his words are in
+  `PROMOTION.md` section 11). Merge a PR when three things hold, and only then. A PR
+  that cannot pass does not merge: stop and report.
+  1. Every check on its last commit has finished and is green, and the fast-suite
+     check is one of them.
+  2. The Ponytail review of that commit reports the five readings of `PROMOTION.md`
+     Level 2 and leaves no finding open, and none rejected unless Achia decided that
+     rejection.
+  3. If the PR needs a decision of Achia's, the decision is quoted in the PR, and the
+     reviewer found it at its source and reports that the PR does no more.
+- Until the merge gate works, only two kinds of PR merge. "Works" is in `PROMOTION.md`
+  section 11: built, has refused a red PR, and the fast suite holds the network test,
+  the two canaries and the layering test.
+  - A PR that changes only `.md` files. It merges on 2 and 3.
+  - A PR of Phase 0 that builds the fast workflow, the gate, those four tests or the
+    code they test. The first of these to merge is the one that adds the workflow.
+    Each merges on 2 and 3 and on its own check green on GitHub.
+- That bullet narrows what may merge. It is Claude's reading of "all the gating we
+  defined", and Achia was told it in chat. Tell him in chat when the gate works, with
+  the number of the refused PR.
 - Paste every review that was run on that commit into the PR, each with the brief its
   reviewer got, word for word. A finding in any of them counts. A finding of an
   earlier review of the PR stays listed there, with what was done about it.
-- A PR carries a decision of Achia's when it touches a path of the Level 3 list in
+- A PR needs a decision of Achia's when it touches a path of the Level 3 list in
   `PROMOTION.md`; or changes a threshold, baseline, gate value or limit wherever it
   lives; or lowers a ratchet counter; or removes, weakens, skips or deselects a test;
   or removes a fixture or edits one so that it asks less; or adds or replaces a
   dependency or a model; or asks for or uses a waiver; or fills the `## Decision` of a
   findings note; or rejects a Ponytail finding. In doubt, it does. Say in the PR
   whether it does, and why.
-- Such a PR merges only when Achia has decided that thing: the thing itself, asked
-  once in chat in plain words, never the merge. Put the question, his answer and the
-  date in the PR. What he already decided, in chat, in `build-plan.md` or in a rule
-  file, needs no new question: quote it, or cite the line. The PR does no more than
-  the decision says; what goes beyond it is marked as Claude's reading or left out.
+- Such a PR merges only after Achia decided what it changes. Ask him that, in plain
+  words, not whether to merge. No answer, no merge. Put the question, his answer and
+  the date in the PR. What he already decided needs no new question: quote his words,
+  or cite a line that names him and the date. A line marked as Claude's reading is
+  not his decision.
+- The PR does no more than his decision says. What goes beyond it is left out or
+  asked first. One thing may stay, marked as Claude's and told to him in chat: a
+  choice that only narrows what Claude may do.
 
 ## How work is gated
 - Read the relevant build-plan.md phase section first. Restate goal, deliverable, gate.
