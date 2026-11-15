@@ -37,6 +37,18 @@
 - Every magic number is a named constant or carries its source.
 - Where a value comes from the plan, cite it: # build-plan.md Phase 3: stride 128
 
+## Web code (HTML, CSS, browser JavaScript)
+- Before writing any, invoke the modern-web-guidance skill and read the guides that
+  fit (Achia, 2026-11-15). HTML that Python code writes counts. The guides are
+  vendored at a pinned commit under .claude/skills/modern-web-guidance/guides/.
+- Never run or install the source's own program (npx modern-web-guidance). It is not
+  pinned, and it reports search words to Google.
+- Nothing is loaded from another host: no CDN, no remote font, script or polyfill.
+- A PR that touches web code carries ## Modern Web Guidance in its body: the guides
+  read, what each changed, what was left out. The Ponytail reviewer checks the code
+  against those guides.
+- Where a guide and this file disagree, this file wins.
+
 ## Tests
 - Write the failing test first, in a commit of its own before the implementation. Its
   message carries the failing output.
