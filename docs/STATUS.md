@@ -38,7 +38,7 @@ Nothing. No branch is open besides the one that carries this file.
 4. **The reference machine.** Which machine `docs/REFERENCE_MACHINE.md` names, and whether the product should say anything to a user on battery. Neither blocks work now.
 5. **A block on the `modern-web-guidance` command: yes or no.** A reviewer of #63 proposed a deny rule in `.claude/settings.json` for any command that contains that name. Today the ban is words only. It is a permission setting, so Claude does not add it alone. The file arrives with the merge gate (issue #69); the answer is needed then.
 6. **Which browser shows the Phase 12 screens.** Until that is said, web code uses no feature that only one browser engine has; that line is Claude's choice (#63). Not needed before Phase 12.
-7. **The trademark check on the name Ploni, and the name question.** `build-plan.md` (line 3, and open decision 6 at its end) left two things with Tomer: a trademark check, and whether a name tied to anonymity clashes with the rule that the product never claims anonymity. Since 2026-11-15 a question the plan gives to Tomer goes to Achia (#65, #66). Not needed before Phase 0.
+7. **The trademark check on the name Ploni, and the name question.** `build-plan.md` (line 3, and section 15 item 6) left two things with Tomer: a trademark check, and whether a name tied to anonymity clashes with the rule that the product never claims anonymity. Since 2026-11-15 a question the plan gives to Tomer goes to Achia (#65, #66). Not needed before Phase 0.
 
 Not waiting on anyone, and not done:
 
