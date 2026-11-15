@@ -28,7 +28,7 @@ If the plan's gate for this phase is ambiguous, stop and ask. Do not invent a ga
 
 `feat/<phase>-<slug>` for a feature, or `fix/<slug>`, `test/<slug>`, `docs/<slug>`, `chore/<slug>`. One branch, one concern, one PR. A branch that grows a second concern is split, not extended.
 
-Then **invoke the ponytail skill**, before writing any code, so its rules are in context while the code is written rather than retrofitted afterwards.
+Then **invoke the ponytail skill at level `ultra`**, before writing any code, so its rules are in context while the code is written rather than retrofitted afterwards.
 
 ## 3. Write the failing test first
 

@@ -426,8 +426,8 @@ The note is a PR of its own. Nothing is tuned or loosened, and no further implem
 
 - What it covers: the run time of the pipeline's own work, and nothing else. Peak memory stays a limit. The time a person needs in the persona and demo gates is not touched. No other gate is touched (`docs/findings/2026-11-11-e2-int8-latency.md`, Decision, point 2).
 - A time below the low end of the plan's table is still a finding and still stops work: it points at missed text (`build-plan.md` section 8.2).
-- T7 records times and asserts none, so a slow time does not turn the full suite red.
-- Each time is reported with the power state of its run. The same files took 1.03 seconds on mains power and up to 11.7 on battery.
+- T7 fails on no slow time, so a slow time does not turn the full suite red. It still fails on peak memory over its limit and on a time below the low end.
+- Each time is reported with the power state of its run. The same files took 1.03 seconds on mains power and up to 11.7 on battery (`docs/findings/2026-11-11-e2-int8-latency.md`).
 - At every phase close `docs/STATUS.md` shows the last two times of each stage side by side, and says when one is clearly worse.
 
 Findings notes are the project's memory. Six months later, "why is this threshold 0.92 and not 0.98" has an answer with the raw numbers attached.

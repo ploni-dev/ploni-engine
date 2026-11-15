@@ -134,7 +134,7 @@ Not every PR. Once per milestone.
 
 | Check | Enforced by |
 |---|---|
-| Full suite: T4 integration, T5 system journeys, T6 metrics, T7 performance. For now T7 records times and asserts none (`PROCESS.md` section 10) | CI, `run-full` label |
+| Full suite: T4 integration, T5 system journeys, T6 metrics, T7 performance. For now T7 fails on no slow time; it still fails on peak memory over its limit and on a time below the low end (`PROCESS.md` section 10) | CI, `run-full` label |
 | Metric gates at or above baseline | CI comparing the committed results file to `baselines.json` |
 | Results file SHA matches the phase-close commit | CI |
 | Ponytail pass over the whole module, findings triaged | you, from the pasted output |

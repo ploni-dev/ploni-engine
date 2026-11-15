@@ -98,7 +98,7 @@ Then report and stop. Only Achia can grant it, by filling in the decision and ad
 
 In addition to everything above:
 
-- Full suite green: T4 integration, T5 system journeys, T6 metrics, T7 performance. For now T7 records times and asserts none (`PROCESS.md` section 10)
+- Full suite green: T4 integration, T5 system journeys, T6 metrics, T7 performance. For now T7 fails on no slow time; it still fails on peak memory over its limit and on a time below the low end (`PROCESS.md` section 10)
 - Metric gates at or above baseline, with the results file committed and its SHA matching the phase-close commit (see the `eval-baseline` skill)
 - Ponytail pass over the whole module or repo, findings triaged
 - Mutation testing over the whole of `ploni/`, survivors triaged
