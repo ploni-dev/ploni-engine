@@ -1,16 +1,20 @@
 """Test matrix for scripts/check.py, the fast suite runner behind `make check`.
 
 Equivalence classes:
-  EC1  steps, no ploni/ folder        ruff, pytest; no mypy (mypy would have no file to read)
+  EC1  steps, no ploni/ folder        ruff, a mypy step that only says it was skipped, pytest
   EC2  steps, ploni/ folder exists    ruff, mypy, pytest, in that order
   EC3  the pytest step                leaves out the four full-suite tiers and no fast tier
   EC4  run, every step passes         nothing is reported as failed
   EC5  run, a middle step fails       its name is reported, and the step after it still ran
   EC6  run, every step fails          every name is reported, in order
   EC7  main, all pass / one fails     exit code 0 / exit code 1
+  EC8  what each tool is given        ruff checks the whole repository; mypy takes its files
+                                      from pyproject.toml; every tool runs under this interpreter
+  EC9  run, where a step starts       in the folder it was given
 
 Boundaries:
   B1  run with no steps               nothing failed
+  B2  ploni exists but is a file      as EC1: it is not a package folder
 
 Error paths: none documented. Every step starts the interpreter that runs the script, so
 "command not found" cannot happen.
@@ -23,6 +27,7 @@ The Hebrew and document-structure axes of the test-matrix skill do not apply: th
 handles no text and no document.
 """
 
+import subprocess
 import sys
 from pathlib import Path
 
@@ -47,18 +52,27 @@ def names(steps: list[tuple[str, list[str]]]) -> list[str]:
     return [name for name, _ in steps]
 
 
-def test_ec1_no_ploni_folder_means_no_mypy_step(tmp_path: Path) -> None:
-    assert names(check.steps(tmp_path)) == ["ruff", "pytest"]
+def test_ec1_no_ploni_folder_keeps_a_mypy_step_that_says_it_was_skipped(tmp_path: Path) -> None:
+    chosen = check.steps(tmp_path)
+    assert names(chosen) == ["ruff", "mypy", "pytest"]
+    command = dict(chosen)["mypy"]
+    assert "mypy" not in command
+    done = subprocess.run(command, capture_output=True, text=True, check=False)  # noqa: S603 the step under test
+    assert done.returncode == 0
+    assert "skipped" in done.stdout
+    assert "ploni" in done.stdout
 
 
-def test_ec2_ploni_folder_adds_mypy_between_ruff_and_pytest(tmp_path: Path) -> None:
+def test_ec2_ploni_folder_runs_mypy_between_ruff_and_pytest(tmp_path: Path) -> None:
     (tmp_path / "ploni").mkdir()
-    assert names(check.steps(tmp_path)) == ["ruff", "mypy", "pytest"]
+    chosen = check.steps(tmp_path)
+    assert names(chosen) == ["ruff", "mypy", "pytest"]
+    assert dict(chosen)["mypy"] == [sys.executable, "-m", "mypy"]
 
 
-def test_ec2_a_file_named_ploni_is_not_a_package(tmp_path: Path) -> None:
+def test_b2_a_file_named_ploni_is_not_a_package_folder(tmp_path: Path) -> None:
     (tmp_path / "ploni").write_text("", encoding="utf-8")
-    assert names(check.steps(tmp_path)) == ["ruff", "pytest"]
+    assert "mypy" not in dict(check.steps(tmp_path))["mypy"]
 
 
 def test_ec3_pytest_step_leaves_out_the_full_suite_tiers_only(tmp_path: Path) -> None:
@@ -66,13 +80,19 @@ def test_ec3_pytest_step_leaves_out_the_full_suite_tiers_only(tmp_path: Path) ->
     ignored = [arg.removeprefix("--ignore=tests/") for arg in command if arg.startswith("--ignore=")]
     assert sorted(ignored) == sorted(FULL_ONLY_TIERS)
     assert not set(ignored) & set(FAST_TIERS)
-    assert "tests" in command
+    assert command[:4] == [sys.executable, "-m", "pytest", "tests"]
 
 
-def test_ec3_every_step_runs_under_this_interpreter(tmp_path: Path) -> None:
-    (tmp_path / "ploni").mkdir()
+def test_ec8_ruff_checks_the_whole_repository(tmp_path: Path) -> None:
+    assert dict(check.steps(tmp_path))["ruff"] == [sys.executable, "-m", "ruff", "check", "."]
+
+
+@pytest.mark.parametrize("with_ploni", [False, True])
+def test_ec8_every_step_runs_under_this_interpreter(tmp_path: Path, with_ploni: bool) -> None:
+    if with_ploni:
+        (tmp_path / "ploni").mkdir()
     for _, command in check.steps(tmp_path):
-        assert command[:2] == [sys.executable, "-m"]
+        assert command[0] == sys.executable
 
 
 def test_ec4_all_steps_pass(tmp_path: Path) -> None:
@@ -101,7 +121,7 @@ def test_a1_a_loud_failure_with_another_exit_code_is_one_failure(tmp_path: Path)
     assert marker.exists()
 
 
-def test_run_starts_each_step_in_the_given_folder(tmp_path: Path) -> None:
+def test_ec9_run_starts_each_step_in_the_given_folder(tmp_path: Path) -> None:
     command = [sys.executable, "-c", "import pathlib; pathlib.Path('here').touch()"]
     assert check.run([("cwd", command)], tmp_path) == []
     assert (tmp_path / "here").exists()
