@@ -59,7 +59,7 @@ Every PR must leave `main` coherent, because phases are milestones and not branc
 
 ## 4. The merge checklist
 
-Every row needs evidence, not assertion. CI enforces some of these and will reject the PR without you; the rest are read by Achia.
+Every row needs evidence, not assertion. CI enforces some of these and will reject the PR without you; the rest are read at review (`PROMOTION.md` Level 2 says by whom).
 
 | Condition | Evidence |
 |---|---|
@@ -111,6 +111,6 @@ In addition to everything above:
 
 ## 8. What CI cannot do, stated plainly
 
-Ponytail is an agent-side skill, not a CI binary, so no workflow can run its review for you. CI can only assert that the `## Ponytail review` section exists and is non-empty. The substance is checked at human review, and the presence of the section is not the gate: the gate is that every finding was actually resolved.
+Ponytail is an agent-side skill, not a CI binary, so no workflow can run its review for you. CI can only assert that the `## Ponytail review` section exists and is non-empty. The substance is checked at review (`PROMOTION.md` Level 2 says by whom), and the presence of the section is not the gate: the gate is that every finding was actually resolved.
 
-The same is true of docstring quality, of whether the chosen equivalence classes cover the real input space, and of whether an ADR cited in a rejection actually applies. Those are human judgments. Do not report them as passed; report what you did and let the review decide.
+The same is true of docstring quality, of whether the chosen equivalence classes cover the real input space, and of whether an ADR cited in a rejection actually applies. Those are judgments for the reader at review, not for the author. Do not report them as passed; report what you did and let the review decide.

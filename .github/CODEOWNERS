@@ -15,6 +15,11 @@
 /build-plan.md              @AchiaIR
 /PROCESS.md                 @AchiaIR
 /PROMOTION.md               @AchiaIR
+/pyproject.toml             @AchiaIR
+/.claude/settings.json      @AchiaIR
+/.claude/skills/            @AchiaIR
+/.github/CODEOWNERS         @AchiaIR
+/.github/pull_request_template.md  @AchiaIR
 
 # Tomer owns every externally visible claim the product makes.
 # Add him as a collaborator and uncomment when ploni/i18n/claims/ exists.

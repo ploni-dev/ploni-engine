@@ -84,6 +84,24 @@
   review in the PR body, in those words. Never claim it ran, and never quietly skip it.
   Its status is tracked in docs/THIRD_PARTY.md.
 
+## Merging
+- Squash merge only, with the plain `gh pr merge`. Never past a red, missing or pending
+  check. Never around the merge gate: no other merge command, no API call, no local
+  merge pushed to main, no edit of the gate's own files to get a merge through.
+- Until the merge gate of `PROMOTION.md` section 11 is built and has refused a red PR,
+  merge nothing without Achia's yes to that PR (Achia, 2026-11-15).
+- After that, merge a PR when three things hold: the fast-suite check exists and is
+  green on the PR's last commit; the Ponytail review of that commit leaves no finding
+  open and none rejected; the PR is not one of Achia's.
+- A PR is Achia's when it touches a path of the Level 3 list in `PROMOTION.md`; or
+  changes a threshold, baseline, gate value or limit wherever it lives; or lowers a
+  ratchet counter; or removes a test or a fixture; or asks for or uses a waiver; or
+  fills the `## Decision` of a findings note; or rejects a Ponytail finding. In doubt,
+  it is Achia's.
+- Merge one of Achia's PRs only on his yes in chat, given to that PR by number
+  ("merge #N") after its last commit. Put the question, his answer and the date in the
+  PR. A later commit voids the yes: ask again.
+
 ## How work is gated
 - Read the relevant build-plan.md phase section first. Restate goal, deliverable, gate.
 - Never weaken a test, threshold or baseline to pass a gate. If a gate cannot be met,

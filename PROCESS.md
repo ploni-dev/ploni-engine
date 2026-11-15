@@ -90,6 +90,7 @@ All source, tests, fixtures, the eval harness, `build-plan.md`, `PROCESS.md`, `C
 ### 2.3 Branch protection on `main`
 
 - No direct pushes. PR required. Fast CI green required. Linear history, squash merge.
+- GitHub enforces none of this on a private repository of the free plan (`PROMOTION.md` section 11). Once built, the merge gate enforces "fast CI green" for a merge made with the plain `gh pr merge`. Nothing enforces the rest.
 - CODEOWNERS review on: `ploni/api.py`, `eval/baselines.json`, `build-plan.md`, `PROCESS.md`, `CLAUDE.md`, `ploni/i18n/claims/`.
 
 ### 2.4 One feature, one branch
@@ -250,7 +251,7 @@ Decision: **metric gates run locally and their results are committed.** `eval/ru
 
 ### 5.5 What CI cannot enforce
 
-Ponytail is an agent-side skill, not a CI binary, so no workflow can run its review for you. What CI can do is assert that the PR body contains a filled `## Ponytail review` section. The substance is checked by Achia at review. Say this plainly rather than pretending the pipeline enforces it.
+Ponytail is an agent-side skill, not a CI binary, so no workflow can run its review for you. What CI can do is assert that the PR body contains a filled `## Ponytail review` section. The substance is checked at review; `PROMOTION.md` Level 2 says who reads. Say this plainly rather than pretending the pipeline enforces it.
 
 ### 5.6 Pre-commit
 
@@ -462,17 +463,18 @@ Gates passed is the only velocity metric that means anything here.
 8. Fast and full CI workflows, pre-commit, the layering test, the docstring check, the PR-body Ponytail-section check. With them, the checks the rules of 2026-11-12 need:
    - `pyproject.toml` with the ruff and mypy configuration of section 4.5, and the ceiling counter for suppressions in `.ratchet.json`.
    - Hashes in every requirements file, the ones under `experiments/` included, and installs with `--require-hashes`.
-   - Claude Code hooks committed in `.claude/settings.json`: refuse `--no-verify`, refuse a push to `main`, and refuse an edit to `docs/WAIVERS.md`, the one file only Achia writes. A small set, because a hook that fires wrongly stops work. No hook runs the test suite when a session ends its turn: test-first needs a commit whose tests fail, and section 10 needs a session to be able to stop and report.
+   - Claude Code hooks committed in `.claude/settings.json`: refuse `--no-verify`, refuse a push to `main`, refuse an edit to `docs/WAIVERS.md`, the one file only Achia writes, and refuse an edit to `.claude/settings.json` itself, which holds these hooks and the merge gate. Its first version arrives by PR before the hooks are live; a later change is a script that Claude writes and Achia runs. A small set, because a hook that fires wrongly stops work. No hook runs the test suite when a session ends its turn: test-first needs a commit whose tests fail, and section 10 needs a session to be able to stop and report.
+   - The merge gate of `PROMOTION.md` section 11, built first: a Claude Code hook in `.claude/settings.json` that refuses the plain `gh pr merge` unless the fast-suite check exists and is green on the PR's last commit. A missing or pending check counts as red. Decided by Achia on 2026-11-15, in place of paid branch protection.
    - A local `pre-push` git hook that runs the fast suite: the free stand-in for required status checks, which GitHub Free does not enforce on a private repository (`PROMOTION.md` section 11).
    - The commit-order check of `PROMOTION.md` section 5.2. Its row there states what it covers.
    - A check that the commit named in the PR's Ponytail section is the PR's last commit, or that every commit after it is a merge of `main` that leaves the branch's own diff unchanged.
    - A mutation testing tool that runs on Windows, chosen and pinned.
-   - `pyproject.toml` and `.claude/settings.json` added to `CODEOWNERS` and to the Level 3 list of `PROMOTION.md`, so a code PR cannot loosen a limit with one line of configuration.
+   - `pyproject.toml` and `.claude/settings.json` are in `CODEOWNERS` and on the Level 3 list of `PROMOTION.md` since 2026-11-15, before the files exist, so a code PR cannot loosen a limit with one line of configuration. Check that they still are.
    - The `CLAUDE.md` lines these checks cover shrunk to pointers, and the two rules that waited for a tool added there as pointers: hashed requirements, and no warnings from ruff and mypy.
 9. `eval/baselines.json` skeleton, `docs/STATUS.md`, `docs/REFERENCE_MACHINE.md`, `tests/fixtures/MANIFEST.md`.
 10. Then the code skeleton from `build-plan.md` Phase 0.
 
-**Phase 0 is not closed until eight deliberately bad PRs are each rejected by CI.** The eight are listed in `PROMOTION.md` section 10, "The closing test for Phase 0". This line said four until 2026-11-15, when Achia decided on eight. Prove the guardrails work before trusting them.
+**Phase 0 is not closed until eight deliberately bad PRs are each rejected by CI, and the merge gate has refused each.** The eight are listed in `PROMOTION.md` section 10, "The closing test for Phase 0". This line said four until 2026-11-15, when Achia decided on eight. Prove the guardrails work before trusting them.
 
 ---
 
@@ -481,6 +483,6 @@ Gates passed is the only velocity metric that means anything here.
 1. ~~**Repo name.**~~ Decided 2026-11-11: `ploni-engine`.
 2. ~~**What the installed ponytail skill actually exposes.**~~ Decided 2026-11-15: the skill takes a level, and this project uses `ultra` (`CLAUDE.md`, `docs/THIRD_PARTY.md`). The recommendation below was the middle level; Achia chose the highest. As first written: Does your copy have intensity modes and separate review, audit and debt commands, or is it a single skill invocation? This changes steps 1, 2 and 4 of section 7.1 from commands into plain invocations. Record the answer in `CLAUDE.md` so every session uses it the same way. If it does have intensity modes, the recommendation is the middle level while writing and the most aggressive level only for a deliberate audit of a finished module, because that extra pressure lands on validation and error handling.
 3. **Record the Ponytail version.** It shapes the code that ships, so it is a dependency. Record its source and version in `docs/THIRD_PARTY.md` like any other.
-4. **Self-review discipline.** You are the only reviewer. Recommendation: cold review the next session for anything in Phases 2, 3, 7 and 10; merge on green elsewhere.
+4. ~~**Self-review discipline.**~~ Decided 2026-11-15: every PR is reviewed before merge by a session or subagent that did not write it (`CLAUDE.md`, Ponytail), and who merges is in `CLAUDE.md`, "Merging". As first written: You are the only reviewer. Recommendation: cold review the next session for anything in Phases 2, 3, 7 and 10; merge on green elsewhere.
 5. **Where the week-one experiments live.** Recommendation: `experiments/`, excluded from the layering test, the docstring check and coverage, with findings notes as the output. It is not product code and gating it wastes time.
 6. ~~**Tomer's access.**~~ Decided 2026-11-15: none for now. Tomer is not involved; legal and regulatory questions go to Achia (`CLAUDE.md`, "Who decides"). If he joins, that is a new decision. As first written: Recommendation: collaborator, CODEOWNERS on `ploni/i18n/claims/` only.
