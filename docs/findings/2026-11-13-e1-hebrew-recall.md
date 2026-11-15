@@ -407,3 +407,27 @@ Rules out, or does not show:
 None. This is not a waiver request.
 
 ## Decision
+
+Achia, 2026-11-15, in the Claude Code session. Claude asked, word for word:
+
+> One decision of yours stands between us and Phase 0: **is the model good enough at finding names to start building?**
+>
+> - **E1, real court judgments:** 449 of 470 names found (95.5%). I counted these, and no person checked the count.
+> - **E4, generated text where a script knows every name:** 1,084 of 1,145 found (94.7%), as predicted.
+> - **The bar in the plan:** below 80% means rethink the architecture. Both results are well above it.
+> - **Known weak spots:** a surname after a group word such as `משפחת`, and a first name alone that is also an everyday word. Both would become named test cases.
+>
+> I recommend yes. If you say yes, I write your decision into the two findings notes as a PR for you to approve, and then start Phase 0 with the merge gate.
+>
+> **Start Phase 0: yes or no?**
+
+Achia answered:
+
+> Yes
+
+What follows from it, as Claude reads it:
+
+1. Option 1. E1 is taken as not crossing the threshold. The architecture stands and Phase 0 starts. The number stays recorded as it is: 449 of 470, 95.5 percent, on ten Supreme Court civil judgments, counted by Claude and not checked by a person. It stands for Supreme Court civil judgments and for nothing else.
+2. Not option 4. No person counts further documents. The question said that no person checked the count, and the answer was yes. E4 stands beside E1 (`docs/findings/2026-11-14-e4-planted-names.md`, Decision).
+3. A surname after a group word becomes a named test case. The shared surname of `doc10` is the case of it in E1, and option 3 proposes Phase 6 for it. Where the test sits in the plan is a PR to `build-plan.md`, which Achia approves. That PR is not written yet, and nothing in Phase 0 waits on it.
+4. Not decided here: option 2, running E1 again on documents closer to the ones the product is for, before Phase 3 records its baseline. The question did not ask it. Which documents, and from where, stays Achia's to say (issue #4). Nothing before Phase 3 waits on it.

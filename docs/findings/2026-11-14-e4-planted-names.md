@@ -412,3 +412,26 @@ Option 1. As first written this said "and option 2 beside it"; option 2 is now d
 None. This is not a waiver request.
 
 ## Decision
+
+Achia, 2026-11-15, in the Claude Code session. Claude asked, word for word:
+
+> One decision of yours stands between us and Phase 0: **is the model good enough at finding names to start building?**
+>
+> - **E1, real court judgments:** 449 of 470 names found (95.5%). I counted these, and no person checked the count.
+> - **E4, generated text where a script knows every name:** 1,084 of 1,145 found (94.7%), as predicted.
+> - **The bar in the plan:** below 80% means rethink the architecture. Both results are well above it.
+> - **Known weak spots:** a surname after a group word such as `משפחת`, and a first name alone that is also an everyday word. Both would become named test cases.
+>
+> I recommend yes. If you say yes, I write your decision into the two findings notes as a PR for you to approve, and then start Phase 0 with the merge gate.
+>
+> **Start Phase 0: yes or no?**
+
+Achia answered:
+
+> Yes
+
+What follows from it, as Claude reads it:
+
+1. Option 1. E4 is taken as the check that stands in for a person's check of E1, and Phase 0 starts (`docs/findings/2026-11-13-e1-hebrew-recall.md`, Decision). What E4 does not show stays as written above: whether a reader finds a missed name that nothing points to.
+2. The two weak kinds of mention become named test cases: a surname after a group word such as `משפחת` or `האחים`, and a given name alone that is an everyday word. Where each test sits in the plan is a PR to `build-plan.md`, which Achia approves. That PR is not written yet, and nothing in Phase 0 waits on it.
+3. Not decided here: option 3, a test of a reader's own search, and the proposal in its place, that a name standing once with no title becomes a hard case of the Phase 5 corpus. The question named neither. Neither is done now, and nothing before Phase 5 waits on them.
