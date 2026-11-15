@@ -37,6 +37,10 @@ Docstrings still describe the code: yes / no
 Findings accepted:
 Findings rejected, with the ADR number justifying each:
 
+## Modern Web Guidance
+<!-- Only when the PR touches HTML, CSS or browser JavaScript; delete this section otherwise.
+     One line per guide used: file and line, what it changed, what was left out. -->
+
 ## Golden file changes
 None, or: changed because ...
 

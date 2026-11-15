@@ -18,7 +18,7 @@ Planning complete. No product code yet. Next: Phase 0 (build-plan.md section 16,
 | `build-plan.md` | v3.0. What to build: architecture, 14 phases, each with a numeric gate |
 | `PROCESS.md` | v1.1. How work is done: code standards, tests, Ponytail, session shape |
 | `PROMOTION.md` | v1.0. How code reaches `main` and a release tag, and how every rule is enforced |
-| `.claude/skills/` | The five project skills: `phase-gate`, `new-detector`, `eval-baseline`, `test-matrix`, `production-gate`. Also four Ponytail skills vendored at a pinned commit, recorded in `docs/THIRD_PARTY.md` |
+| `.claude/skills/` | The five project skills: `phase-gate`, `new-detector`, `eval-baseline`, `test-matrix`, `production-gate`. Also four Ponytail skills vendored at a pinned commit, and `modern-web-guidance` with its guides vendored at a pinned commit, both recorded in `docs/THIRD_PARTY.md` |
 | `docs/research/` | The market, competition and business-model research the plan is built on |
 
 ## Ownership
