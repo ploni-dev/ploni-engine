@@ -390,6 +390,8 @@ The user edits the source and re-runs; offset-based ids would discard every prio
 | **T8** | Privacy and security | Does it leak through network, logs, temp files, metadata or co-location? | every commit |
 | **T9** | Persona acceptance | Can the intended user actually do the job, within a time budget? | release candidate |
 
+One more check runs on every commit and is not a tier: the per-PR recall check that Achia decided on 2026-11-15. A fixed set of invented documents with known names; it fails when a name that was found before is now missed. It starts in Phase 3, which builds the first model that finds names; the phase is Claude's reading, not part of Achia's answer. It does not measure recall: T6 stays the measure. `PROMOTION.md` section 11 says what it is and where it runs.
+
 ### T2: the invariants worth generating against
 
 These are the tests that find the bugs examples miss.
@@ -646,7 +648,7 @@ Fallback if the joint ONNX export fights back: `onnx-community/dictabert-ner-ONN
 
 **Normalization.** Strip niqqud, normalize final letters (ך ם ן ף ץ), normalize gershayim and geresh variants, fold ktiv male and haser (`יוסף`/`יסף`, `דוד`/`דויד`) under a configurable rule set, normalize maqaf and whitespace. Handle geresh inside transliterated names: `ג'ון`, `צ'רלי`, `ז'אק`, `ג'ורג'`, which break naive tokenizers.
 
-**Tests added.** T1 prefix and normalization units. T2 prefix preservation over generated proclitic forms. T1 windowing: a fixture with the same name deliberately placed at window boundaries, asserting one detection per occurrence with no duplicates and no drops. T3 golden detection output per fixture.
+**Tests added.** T1 prefix and normalization units. T2 prefix preservation over generated proclitic forms. T1 windowing: a fixture with the same name deliberately placed at window boundaries, asserting one detection per occurrence with no duplicates and no drops. T3 golden detection output per fixture. The per-PR recall check of section 7 is built here.
 
 **Gate.** The windowing test passes exactly. Prefix preservation holds over 1,000 generated forms. PERSON recall measured and printed on the 10 real Hebrew documents, and the number is recorded as the first baseline.
 **Prediction and threshold.** 85 to 92 percent entity-level PERSON recall, errors concentrated in ordinary-word names and proclitic forms; near 1.0 on checksum types. **Below 80 percent PERSON recall, stop: do not proceed to any UI work.** Revisit windowing, the vendored code path, and whether the joint NER head is being read correctly.
