@@ -91,7 +91,7 @@ All source, tests, fixtures, the eval harness, `build-plan.md`, `PROCESS.md`, `C
 
 - No direct pushes. PR required. Fast CI green required. Linear history, squash merge.
 - GitHub enforces none of this on a private repository of the free plan (`PROMOTION.md` section 11). Once built, the merge gate enforces "fast CI green" for a merge made with the plain `gh pr merge`. Nothing enforces the rest.
-- CODEOWNERS review on: `ploni/api.py`, `eval/baselines.json`, `build-plan.md`, `PROCESS.md`, `CLAUDE.md`, `ploni/i18n/claims/`.
+- CODEOWNERS review on the Level 3 list of `PROMOTION.md`.
 
 ### 2.4 One feature, one branch
 
@@ -220,7 +220,7 @@ None of this exists yet. There is no `pyproject.toml`, and neither tool is insta
 
 ### 5.1 Two workflows
 
-**Fast suite**, every push and PR, under five minutes: ruff, mypy, T0 contract including layering, T1 unit, T2 property at reduced example counts, T3 golden, T8 privacy, secret scan, docstring presence check. From Phase 3 also the per-PR recall check of `PROMOTION.md` section 11 (Achia, 2026-11-15); whether the five minutes still hold with it is measured when it is built.
+**Fast suite**, every push and PR, under five minutes: ruff, mypy, T0 contract including layering, T1 unit, T2 property at reduced example counts, T3 golden, T8 privacy, secret scan, docstring presence check. Also the per-PR recall check that Achia decided on 2026-11-15, from Phase 3 (`PROMOTION.md` section 11 says what it is and why Phase 3); whether the five minutes still hold with it is measured when it is built.
 
 **Full suite**, on a `run-full` label, on phase-close PRs, and nightly: everything above at full example counts, plus T4 integration, T5 system journeys, T6 metric gates, T7 performance.
 
@@ -463,8 +463,8 @@ Gates passed is the only velocity metric that means anything here.
 8. Fast and full CI workflows, pre-commit, the layering test, the docstring check, the PR-body Ponytail-section check. With them, the checks the rules of 2026-11-12 need:
    - `pyproject.toml` with the ruff and mypy configuration of section 4.5, and the ceiling counter for suppressions in `.ratchet.json`.
    - Hashes in every requirements file, the ones under `experiments/` included, and installs with `--require-hashes`.
-   - Claude Code hooks committed in `.claude/settings.json`: refuse `--no-verify`, refuse a push to `main`, refuse an edit to `docs/WAIVERS.md`, the one file only Achia writes, and refuse an edit to `.claude/settings.json` itself, which holds these hooks and the merge gate. Its first version arrives by PR before the hooks are live; a later change is a script that Claude writes and Achia runs. A small set, because a hook that fires wrongly stops work. No hook runs the test suite when a session ends its turn: test-first needs a commit whose tests fail, and section 10 needs a session to be able to stop and report.
-   - The merge gate of `PROMOTION.md` section 11, built first: a Claude Code hook in `.claude/settings.json` that refuses the plain `gh pr merge` unless the fast-suite check exists and is green on the PR's last commit. A missing or pending check counts as red. Decided by Achia on 2026-11-15, in place of paid branch protection.
+   - Claude Code hooks committed in `.claude/settings.json`: refuse `--no-verify`, refuse a push to `main`, refuse an edit to `docs/WAIVERS.md`, the one file only Achia writes, and refuse an edit to `.claude/settings.json` itself, which holds these hooks and the merge gate. Its first version arrives by PR before the hooks are live; a later change is a script that Claude writes and Achia runs. This fourth hook is Claude's proposal of 2026-11-15, taken from a review, and not a decision of Achia: it costs him one script run for each later change, and he can drop it. It covers `.claude/settings.local.json` too, which git ignores and which can switch hooks off. A small set, because a hook that fires wrongly stops work. No hook runs the test suite when a session ends its turn: test-first needs a commit whose tests fail, and section 10 needs a session to be able to stop and report.
+   - The merge gate of `PROMOTION.md` section 11, built first: a Claude Code hook in `.claude/settings.json` that refuses the plain `gh pr merge` unless every check on the PR's last commit has finished and is green, and the fast-suite check is one of them. A missing or pending check counts as red. Decided by Achia on 2026-11-15, in place of paid branch protection.
    - A local `pre-push` git hook that runs the fast suite: the free stand-in for required status checks, which GitHub Free does not enforce on a private repository (`PROMOTION.md` section 11).
    - The commit-order check of `PROMOTION.md` section 5.2. Its row there states what it covers.
    - A check that the commit named in the PR's Ponytail section is the PR's last commit, or that every commit after it is a merge of `main` that leaves the branch's own diff unchanged.

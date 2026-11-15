@@ -37,6 +37,11 @@ Docstrings still describe the code: yes / no
 Findings accepted:
 Findings rejected, with the ADR number justifying each:
 
+## Who merges
+<!-- CLAUDE.md, "Merging". Every review run on the last commit is pasted above, each with its brief. -->
+Achia's PR: yes / no, because:
+Achia's yes (question as asked, his answer, date):
+
 ## Modern Web Guidance
 <!-- Only when the PR touches HTML, CSS or browser JavaScript; delete this section otherwise.
      One line per guide used: file and line, what it changed, what was left out. -->
