@@ -432,6 +432,7 @@ Achia answered:
 
 What follows from it, as Claude reads it:
 
-1. Option 1. E4 is taken as the check that stands in for a person's check of E1, and Phase 0 starts (`docs/findings/2026-11-13-e1-hebrew-recall.md`, Decision). What E4 does not show stays as written above: whether a reader finds a missed name that nothing points to.
+1. Option 1, and this point is Claude's reading more than the others. The question did not put it in words: it gave E4's number beside E1's and said that no person checked E1's count. Claude reads the yes as option 1: E4 is taken as the check that stands in for a person's check of E1, and Phase 0 starts (`docs/findings/2026-11-13-e1-hebrew-recall.md`, Decision). Achia confirms that reading by approving the PR that adds this section. What E4 does not show stays as written above: whether a reader finds a missed name that nothing points to.
 2. The two weak kinds of mention become named test cases: a surname after a group word such as `משפחת` or `האחים`, and a given name alone that is an everyday word. Where each test sits in the plan is a PR to `build-plan.md`, which Achia approves. That PR is not written yet, and nothing in Phase 0 waits on it.
 3. Not decided here: option 3, a test of a reader's own search, and the proposal in its place, that a name standing once with no title becomes a hard case of the Phase 5 corpus. The question named neither. Neither is done now, and nothing before Phase 5 waits on them.
+4. Not option 4 now: Phase 0 does not wait for a person's check of E1 or of E4. The question did not ask for one. Achia chose on 2026-11-14 not to spend that reading time (option 4, above).
