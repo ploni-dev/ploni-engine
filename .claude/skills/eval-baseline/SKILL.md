@@ -35,7 +35,8 @@ It writes `eval/results/<git-sha>.json` containing the metrics plus the code SHA
 | Verification catch rate | recorded | the value the verification pass adds |
 | Utility preservation | at or above 0.9 | a tool that redacts everything scores perfectly on leaks and is useless |
 | Numeric conservatism violations | 0 | a destroyed contract is a worse product than a leaky one |
-| Runtime per page, runtime for 60 pages, peak RSS | per the performance budget | usability |
+| Runtime per page, runtime for 60 pages | recorded; not a gate for now (`PROCESS.md` section 10) | usability |
+| Peak RSS | per the performance budget | usability |
 
 Report the two zero-leak numbers separately, always. Never collapse them into one figure: a single number either overstates the models or understates the product.
 

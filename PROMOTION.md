@@ -103,7 +103,7 @@ Required status checks on the PR. Under five minutes. **Enforced by GitHub Actio
 | Secret scan | credentials |
 | Docstring presence, a `Why:` section, and a `Contract:` section on public functions | undocumented public surface |
 | Ratchet checks (section 6) | weakened tests or fixtures |
-| PR-body structure check (section 5.3) | missing evidence sections |
+| PR-body structure check (section 5.2) | missing evidence sections |
 | Size limits | oversized PRs |
 | Skip-marker check | `skip` or `xfail` without an issue link |
 | Pinned-dependency check | unpinned or unjustified dependency changes |
@@ -134,7 +134,7 @@ Not every PR. Once per milestone.
 
 | Check | Enforced by |
 |---|---|
-| Full suite: T4 integration, T5 system journeys, T6 metrics, T7 performance | CI, `run-full` label |
+| Full suite: T4 integration, T5 system journeys, T6 metrics, T7 performance. For now T7 fails on no slow time; it still fails on peak memory over its limit and on a time below the low end (`PROCESS.md` section 10) | CI, `run-full` label |
 | Metric gates at or above baseline | CI comparing the committed results file to `baselines.json` |
 | Results file SHA matches the phase-close commit | CI |
 | Ponytail pass over the whole module, findings triaged | you, from the pasted output |
@@ -152,7 +152,7 @@ Not every PR. Once per milestone.
 | Persona acceptance P1 to P5, including the ten-minute demo | you, by hand |
 | Offline journey S13 with networking disabled at the OS level | you, by hand |
 | Installer builds, installs and uninstalls on a clean Windows 11 VM | you, by hand |
-| Performance budget met on the reference machine | CI plus the committed results file |
+| Performance budget met on the reference machine. The time rows are not enforced for now: speed is measured and reported (`PROCESS.md` section 10). Peak memory stays a limit. Before a release Achia decides whether time becomes a gate | CI plus the committed results file |
 | `THIRD_PARTY.md` complete and verified | CI manifest check plus your read |
 | Tag created, artifact hashes published | you |
 

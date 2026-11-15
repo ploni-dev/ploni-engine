@@ -64,8 +64,11 @@
 - Coverage is a diagnostic, never a target.
 
 ## Ponytail
-- Ponytail is used here as a skill. Invoke it at the start of any session that writes
-  code, before writing any, so its rules are in context while the code is written.
+- Ponytail is used here as a skill, at level `ultra` (Achia, 2026-11-15). Invoke it at
+  the start of any session that writes code, before writing any, so its rules are in
+  context while the code is written.
+- At `ultra` the push-back is a question to Achia before building. It drops nothing by
+  itself, and never a test, a gate or a plan deliverable.
 - Invoke it again on the diff before every PR. Paste the output into the PR body.
 - That review is run by a session or subagent that did not write the code, and its
   output names the commit it reviewed.
@@ -86,6 +89,13 @@
 - Never weaken a test, threshold or baseline to pass a gate. If a gate cannot be met,
   stop and write docs/findings/<date>-<slug>.md, then report.
 - Code changes and baseline or gate changes never share a PR.
+- Speed is measured, for every stage, and recorded at every phase. For now it is not a
+  gate: a slow time blocks no merge and stops no work (Achia, 2026-11-13 and
+  2026-11-15). This covers the run time of the pipeline only: not memory, not the
+  persona and demo budgets, no other gate. A time below the plan's low end is still
+  a finding and still stops work.
+- Say in `docs/STATUS.md` when a time is clearly worse than the last one measured. At
+  every phase close it shows the last two times of each stage side by side.
 
 ## Architecture boundaries (enforced by tests/t0_contract/test_layering.py)
 - adapters/ may not import detect/, resolve/, policy/, write/
@@ -107,6 +117,11 @@
   other than a status PR.
 - End a working session by printing the three lists as they are now, and say where
   the file is behind.
+
+## Who decides
+- Achia decides alone. For now Tomer has no access to the repository and is not asked
+  (Achia, 2026-11-15). If he joins, that is a new decision. A legal or regulatory
+  question goes to Achia: explain the risk in plain words and ask.
 
 ## Exceptions (PROMOTION.md section 8)
 - You have no authority to waive any rule, test, threshold or gate. No flag, comment or

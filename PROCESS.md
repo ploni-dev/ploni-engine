@@ -55,7 +55,7 @@ Resolution: `build-plan.md` is in the repo. Any change to scope or a gate is a P
 
 *"Tomer needs a narrow surface or he becomes a bottleneck on everything."*
 
-Resolution: he owns exactly `ploni/i18n/claims/`, enforced by CODEOWNERS.
+Resolution: he owns exactly `ploni/i18n/claims/`, enforced by CODEOWNERS. Not in force as of 2026-11-15: Tomer is not involved for now, and the question goes to Achia (`CLAUDE.md`, "Who decides").
 
 ### Senior software engineer
 
@@ -422,6 +422,14 @@ When a gate cannot be met, or a measurement disagrees with its prediction beyond
 
 The note is a PR of its own. Nothing is tuned or loosened, and no further implementation happens on that path until the decision line is filled.
 
+**Speed is the exception, for now.** Decided by Achia on 2026-11-13 and again on 2026-11-15: speed is measured for every stage and recorded at every phase, and it is not a test that has to pass. A slow time, past its target or its fail threshold, stops no work and blocks no merge. This holds until Achia turns speed into a gate.
+
+- What it covers: the run time of the pipeline's own work, and nothing else. Peak memory stays a limit. The time a person needs in the persona and demo gates is not touched. No other gate is touched (`docs/findings/2026-11-11-e2-int8-latency.md`, Decision, point 2).
+- A time below the low end of the plan's table is still a finding and still stops work: it points at missed text (`build-plan.md` section 8.2).
+- T7 fails on no slow time, so a slow time does not turn the full suite red. It still fails on peak memory over its limit and on a time below the low end.
+- Each time is reported with the power state of its run. The same files took 1.03 seconds on mains power and up to 11.7 on battery (`docs/findings/2026-11-11-e2-int8-latency.md`).
+- At every phase close `docs/STATUS.md` shows the last two times of each stage side by side, and says when one is clearly worse.
+
 Findings notes are the project's memory. Six months later, "why is this threshold 0.92 and not 0.98" has an answer with the raw numbers attached.
 
 ---
@@ -464,15 +472,15 @@ Gates passed is the only velocity metric that means anything here.
 9. `eval/baselines.json` skeleton, `docs/STATUS.md`, `docs/REFERENCE_MACHINE.md`, `tests/fixtures/MANIFEST.md`.
 10. Then the code skeleton from `build-plan.md` Phase 0.
 
-**Phase 0 is not closed until four deliberately bad PRs are rejected by CI:** one importing `requests` under `ploni/`, one violating layering, one logging a canary string, and one with a public function missing its docstring. Prove the guardrails work before trusting them.
+**Phase 0 is not closed until eight deliberately bad PRs are each rejected by CI.** The eight are listed in `PROMOTION.md` section 10, "The closing test for Phase 0". This line said four until 2026-11-15, when Achia decided on eight. Prove the guardrails work before trusting them.
 
 ---
 
 ## 13. Open process decisions for Achia
 
 1. ~~**Repo name.**~~ Decided 2026-11-11: `ploni-engine`.
-2. **What the installed ponytail skill actually exposes.** Does your copy have intensity modes and separate review, audit and debt commands, or is it a single skill invocation? This changes steps 1, 2 and 4 of section 7.1 from commands into plain invocations. Record the answer in `CLAUDE.md` so every session uses it the same way. If it does have intensity modes, the recommendation is the middle level while writing and the most aggressive level only for a deliberate audit of a finished module, because that extra pressure lands on validation and error handling.
+2. ~~**What the installed ponytail skill actually exposes.**~~ Decided 2026-11-15: the skill takes a level, and this project uses `ultra` (`CLAUDE.md`, `docs/THIRD_PARTY.md`). The recommendation below was the middle level; Achia chose the highest. As first written: Does your copy have intensity modes and separate review, audit and debt commands, or is it a single skill invocation? This changes steps 1, 2 and 4 of section 7.1 from commands into plain invocations. Record the answer in `CLAUDE.md` so every session uses it the same way. If it does have intensity modes, the recommendation is the middle level while writing and the most aggressive level only for a deliberate audit of a finished module, because that extra pressure lands on validation and error handling.
 3. **Record the Ponytail version.** It shapes the code that ships, so it is a dependency. Record its source and version in `docs/THIRD_PARTY.md` like any other.
 4. **Self-review discipline.** You are the only reviewer. Recommendation: cold review the next session for anything in Phases 2, 3, 7 and 10; merge on green elsewhere.
 5. **Where the week-one experiments live.** Recommendation: `experiments/`, excluded from the layering test, the docstring check and coverage, with findings notes as the output. It is not product code and gating it wastes time.
-6. **Tomer's access.** Recommendation: collaborator, CODEOWNERS on `ploni/i18n/claims/` only.
+6. ~~**Tomer's access.**~~ Decided 2026-11-15: none for now. Tomer is not involved; legal and regulatory questions go to Achia (`CLAUDE.md`, "Who decides"). If he joins, that is a new decision. As first written: Recommendation: collaborator, CODEOWNERS on `ploni/i18n/claims/` only.
