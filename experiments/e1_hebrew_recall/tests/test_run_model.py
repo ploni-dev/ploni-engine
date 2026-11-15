@@ -47,7 +47,7 @@ import run_model
 class WordTokenizer:
     """One piece per whitespace word; a word containing `?` is unknown."""
 
-    unk_token = "[UNK]"
+    unk_token = "[UNK]"  # noqa: S105 the tokenizer's unknown-word token, not a password
 
     def tokenize(self, text: str) -> list[str]:
         return [self.unk_token if "?" in word else word for word in text.split()]
@@ -153,7 +153,7 @@ def test_e2_folder_inside_this_repository(tmp_path: Path, inside: str):
 def test_e3_folder_inside_another_checkout(tmp_path: Path, out: str):
     checkout = tmp_path / "checkout"
     checkout.mkdir()
-    subprocess.run(["git", "init", "--quiet", str(checkout)], check=True)
+    subprocess.run(["git", "init", "--quiet", str(checkout)], check=True)  # noqa: S603, S607 fixed git arguments, git on PATH
     with pytest.raises(ValueError, match="inside"):
         run_model.check_private_directories(tmp_path, checkout / out)
 

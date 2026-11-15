@@ -74,7 +74,7 @@ def test_e1_verdict_rejects_a_non_positive_time(seconds):
 
 
 def test_invariant_threshold_crossed_iff_above_ten_seconds():
-    rng = random.Random(20261111)
+    rng = random.Random(20261111)  # noqa: S311 seeded on purpose, so the same input is drawn on every run
     for _ in range(GENERATED_CASES):
         seconds = rng.uniform(0.001, 30)
         assert (latency.verdict(seconds) == "threshold_crossed") is (seconds > 10)

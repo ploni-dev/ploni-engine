@@ -97,11 +97,11 @@ if __name__ == "__main__":
     model_dir = parser.parse_args().model_dir
 
     ner_only = predictions(model_dir, all_heads=False)
-    for sentence, entities in zip(SENTENCES, ner_only):
+    for sentence, entities in zip(SENTENCES, ner_only, strict=True):
         print(sentence)
         for start, end, label in entities:
             print(f"    {label:<6} {start:>3}:{end:<3} {sentence[start:end]}")
-    aligned = all(entities_on_token_boundaries(s, e) for s, e in zip(SENTENCES, ner_only))
+    aligned = all(entities_on_token_boundaries(s, e) for s, e in zip(SENTENCES, ner_only, strict=True))
     same = ner_only == predictions(model_dir, all_heads=True)
     finds = finds_people_only_where_named(ner_only)
     print(f"offsets on token boundaries: {aligned}")

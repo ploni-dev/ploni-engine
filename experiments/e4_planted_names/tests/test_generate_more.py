@@ -83,7 +83,7 @@ def test_ec19_ec20_names_of_one_person_share_an_origin():
     template = parse_template(header + "{A:given} {A:surname} {B:given}")
     seen = set()
     for seed in range(80):
-        _, gold = fill(template, ORIGIN_BANK, random.Random(seed))
+        _, gold = fill(template, ORIGIN_BANK, random.Random(seed))  # noqa: S311 seeded on purpose, so the same input is drawn on every run
         a_given, a_surname, b_given = (origin(item.classes) for item in gold)
         assert a_given == a_surname == b_given
         seen.add(a_given)
@@ -93,10 +93,10 @@ def test_ec19_ec20_names_of_one_person_share_an_origin():
 def test_a1_cited_and_firm_names_over_50_seeds():
     template = parse_template(HEADER + "{A:full} {B:full} {*:cited} {*:firm} {*:cited}")
     for seed in range(50):
-        paragraphs, gold = fill(template, ORIGIN_BANK, random.Random(seed))
+        paragraphs, gold = fill(template, ORIGIN_BANK, random.Random(seed))  # noqa: S311 seeded on purpose, so the same input is drawn on every run
         names = [paragraphs[item.paragraph][item.start : item.end] for item in gold]
-        people = {name.split(" ")[1] for name, item in zip(names, gold) if item.counted}
-        others = {name for name, item in zip(names, gold) if not item.counted}
+        people = {name.split(" ")[1] for name, item in zip(names, gold, strict=True) if item.counted}
+        others = {name for name, item in zip(names, gold, strict=True) if not item.counted}
         assert len(people) == 2 and not people & others
 
 
@@ -224,7 +224,7 @@ def test_c9_classes_of_the_bank():
 def test_ec24_a_full_name_carries_the_classes_of_both_names():
     template = parse_template("% kind letter\n@ A m title=מר\n{A:full} {A:title_full} {A:given} {A:surname} {A:initial_surname}")
     for seed in range(40):
-        _, gold = fill(template, ORIGIN_BANK, random.Random(seed))
+        _, gold = fill(template, ORIGIN_BANK, random.Random(seed))  # noqa: S311 seeded on purpose, so the same input is drawn on every run
         full, title_full, given, surname, initial = (entry.classes for entry in gold)
         assert full == title_full == given | surname
         assert initial == surname

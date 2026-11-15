@@ -158,7 +158,7 @@ def random_text(rng: random.Random) -> str:
 
 
 def test_p1_windows_partition_the_words():
-    rng = random.Random(SEED)
+    rng = random.Random(SEED)  # noqa: S311 seeded on purpose, so the same input is drawn on every run
     for _ in range(GENERATED_CASES):
         text = random_text(rng)
         budget = rng.randint(1, 12)
@@ -166,7 +166,7 @@ def test_p1_windows_partition_the_words():
         windows = split_into_windows(text, cost, budget)
 
         assert [w for t in window_texts(text, windows) for w in t.split()] == text.split()
-        for previous, current in zip(windows, windows[1:]):
+        for previous, current in zip(windows, windows[1:], strict=False):
             assert previous.end < current.start
         for window in windows:
             words = re.findall(r"\S+", text[window.start : window.end])

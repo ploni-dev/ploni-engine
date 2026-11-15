@@ -97,7 +97,7 @@ HEADER = "% kind letter\n@ A m title=מר\n@ B f title=השופטת\n"
 
 def one(body: str, header: str = HEADER, seed: int = 1):
     """Fill a one-off template and return (paragraphs, gold)."""
-    return fill(parse_template(header + body), BANK, random.Random(seed))
+    return fill(parse_template(header + body), BANK, random.Random(seed))  # noqa: S311 seeded on purpose, so the same input is drawn on every run
 
 
 def texts(paragraphs, gold):
@@ -237,13 +237,13 @@ def test_ec16_ec17_alone_on_a_line(body: str, alone: bool):
 )
 def test_e1_e2_e3_bad_template(template: str):
     with pytest.raises(TemplateError):
-        fill(parse_template(template), BANK, random.Random(1))
+        fill(parse_template(template), BANK, random.Random(1))  # noqa: S311 seeded on purpose, so the same input is drawn on every run
 
 
 def test_e4_bank_too_small():
     header = "% kind letter\n" + "".join(f"@ P{i} f title=גב'\n" for i in range(4))
     with pytest.raises(TemplateError):
-        fill(parse_template(header + "כך {P0:full}."), BANK, random.Random(1))
+        fill(parse_template(header + "כך {P0:full}."), BANK, random.Random(1))  # noqa: S311 seeded on purpose, so the same input is drawn on every run
 
 
 def test_ec18_same_seed_same_document():
@@ -259,7 +259,7 @@ FILLERS = ["ביום ראשון", "נטען כי", "לאחר מכן", "בהתא�
 
 
 def test_p1_gold_is_exact_on_500_generated_templates():
-    rng = random.Random(20261114)
+    rng = random.Random(20261114)  # noqa: S311 seeded on purpose, so the same input is drawn on every run
     for case in range(500):
         lines = []
         for _ in range(rng.randint(1, 4)):
@@ -274,7 +274,7 @@ def test_p1_gold_is_exact_on_500_generated_templates():
                 else:
                     parts.append(rng.choice(FILLERS))
             lines.append(" ".join(parts))
-        paragraphs, gold = fill(parse_template(HEADER + "\n".join(lines)), BANK, random.Random(case))
+        paragraphs, gold = fill(parse_template(HEADER + "\n".join(lines)), BANK, random.Random(case))  # noqa: S311 seeded on purpose, so the same input is drawn on every run
         by_paragraph: dict[int, list] = {}
         for item in gold:
             text = paragraphs[item.paragraph]
@@ -284,7 +284,7 @@ def test_p1_gold_is_exact_on_500_generated_templates():
             by_paragraph.setdefault(item.paragraph, []).append(item)
         for items in by_paragraph.values():
             items.sort(key=lambda item: item.start)
-            assert all(first.end <= second.start for first, second in zip(items, items[1:]))
+            assert all(first.end <= second.start for first, second in zip(items, items[1:], strict=False))
 
 
 @pytest.fixture(scope="module")

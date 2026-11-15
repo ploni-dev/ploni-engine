@@ -259,7 +259,7 @@ def read_checked(doc_id: str, path: Path) -> list[str]:
     """
     try:
         paragraphs = read_paragraphs(path)
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001 every reader error becomes DocumentReadError, so none carries text out
         raise DocumentReadError(f"{doc_id}: cannot be read ({type(error).__name__})") from None
     if not paragraphs:
         raise DocumentReadError(f"{doc_id}: no text was read")
@@ -278,5 +278,5 @@ def unread_checked(doc_id: str, path: Path) -> int:
     """
     try:
         return unread_characters(path)
-    except Exception as error:
+    except Exception as error:  # noqa: BLE001 every reader error becomes DocumentReadError, so none carries text out
         raise DocumentReadError(f"{doc_id}: cannot be read ({type(error).__name__})") from None
