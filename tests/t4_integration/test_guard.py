@@ -42,15 +42,13 @@ RED = {"__typename": "CheckRun", "name": "lint", "status": "COMPLETED", "conclus
 def stand_in_gh(folder: Path, answer: str, exit_code: int = 0) -> None:
     """Write a `gh` into folder that prints answer, leaves a mark and ends with exit_code."""
     (folder / "answer.json").write_text(answer, encoding="utf-8")
-    (folder / "gh.cmd").write_text(
-        f'@echo off\r\ntype "%~dp0answer.json"\r\necho x> "%~dp0started"\r\nexit /b {exit_code}\r\n', encoding="utf-8"
-    )
+    if os.name == "nt":
+        batch = f'@echo off\r\ntype "%~dp0answer.json"\r\necho x> "%~dp0started"\r\nexit /b {exit_code}\r\n'
+        (folder / "gh.cmd").write_text(batch, encoding="utf-8", newline="")
+        return
     script = folder / "gh"
-    script.write_text(
-        f'#!/bin/sh\ncat "$(dirname "$0")/answer.json"\ntouch "$(dirname "$0")/started"\nexit {exit_code}\n',
-        encoding="utf-8",
-        newline="\n",
-    )
+    shell = f'#!/bin/sh\ncat "$(dirname "$0")/answer.json"\ntouch "$(dirname "$0")/started"\nexit {exit_code}\n'
+    script.write_text(shell, encoding="utf-8", newline="\n")
     script.chmod(0o755)
 
 

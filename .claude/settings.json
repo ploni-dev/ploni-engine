@@ -1,0 +1,17 @@
+{
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash|PowerShell|Edit|Write",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "python \"$CLAUDE_PROJECT_DIR/scripts/guard.py\" || exit 2",
+            "timeout": 40,
+            "statusMessage": "Ploni guard"
+          }
+        ]
+      }
+    ]
+  }
+}

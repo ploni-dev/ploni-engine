@@ -1,5 +1,14 @@
 """Test matrix for scripts/guard.py, the script behind the Claude Code hooks.
 
+segments(command): the simple commands of a shell command, each as its words.
+  S1    one command                                 its words
+  S2    commands joined by && ; | & or a new line   one list for each
+  S3    a quoted text                               one word, without its quotes, separators kept
+  S4    a line continued with \\ or `, a backtick    joined; a backtick is read as a space
+  S5    a backslash or a # in a word                kept as written
+  S6    a quote that is never closed                every quote is read as a space
+  S7    nothing, or separators only                 no command
+
 merges(command): the `gh pr merge` commands in a shell command, as (number, repository).
   EC1   the plain form                              gh pr merge 80 -R o/r --squash
   EC2   the repository spelled --repo, --repo=, -Ro/r, or placed before `merge`
@@ -94,6 +103,28 @@ def commit_status(state: str, context: str = "other") -> dict[str, str]:
 def never_asked(number: str, repository: str) -> list[dict[str, str]]:
     """Stand in for GitHub in a test where GitHub must not be asked."""
     raise AssertionError(f"GitHub was asked about {number} in {repository}")
+
+
+@pytest.mark.parametrize(
+    ("command", "found"),
+    [
+        ("a b", [["a", "b"]]),  # S1
+        ("a && b; c | d\ne", [["a"], ["b"], ["c"], ["d"], ["e"]]),  # S2
+        ("a;b&c|d", [["a"], ["b"], ["c"], ["d"]]),
+        ("a $(b c) > d", [["a", "$"], ["b", "c"], ["d"]]),
+        ("a 'b c' \"d;e\" f'g h'", [["a", "b c", "d;e", "fg h"]]),  # S3
+        ("a \\\nb", [["a", "b"]]),  # S4
+        ("a `\nb", [["a", "b"]]),
+        ("a `b c`", [["a", "b", "c"]]),
+        ("a C:\\x\\y.exe # b", [["a", "C:\\x\\y.exe", "#", "b"]]),  # S5
+        ("a don't\nb \"c", [["a", "don", "t"], ["b", "c"]]),  # S6
+        ("", []),  # S7
+        (" ;; \n ", []),
+        ("a ''", [["a", ""]]),
+    ],
+)
+def test_segments_splits_a_command_into_simple_commands(command: str, found: list[list[str]]) -> None:
+    assert guard.segments(command) == found
 
 
 @pytest.mark.parametrize(
@@ -343,9 +374,26 @@ def test_ec25_a_merge_is_let_through_on_green_and_refused_on_red(tool: str) -> N
     assert "FAILURE" in reasons[0]
 
 
-@pytest.mark.parametrize("command", ["gh pr merge 80 --squash", "gh pr merge -R o/r --squash", "gh pr merge"])
-def test_ec26_a_merge_without_number_or_repository_is_refused_unasked(command: str) -> None:
-    assert len(guard.refusals({"tool_name": "Bash", "tool_input": {"command": command}}, never_asked)) == 1
+@pytest.mark.parametrize(
+    "command",
+    [
+        "gh pr merge 80 --squash",
+        "gh pr merge -R o/r --squash",
+        "gh pr merge",
+        "gh pr merge 80 -R o/r -R other/r --squash",
+    ],
+)
+def test_ec26_a_merge_without_number_or_one_repository_is_refused_unasked(command: str) -> None:
+    assert len(guard.merge_refusals(command, never_asked)) == 1
+
+
+def test_merge_refusals_judges_each_merge_of_a_command() -> None:
+    def by_number(number: str, repository: str) -> list[dict[str, str]]:
+        return [check_run("SUCCESS" if number == "80" else "FAILURE")]
+
+    reasons = guard.merge_refusals("gh pr merge 80 -R o/r && gh pr merge 81 -R o/r", by_number)
+    assert len(reasons) == 1
+    assert "PR 81 of o/r" in reasons[0]
 
 
 @pytest.mark.parametrize("command", ["git status", "gh pr view 80 -R o/r", "git push -u origin feat/x", ""])
@@ -383,9 +431,24 @@ def test_e1_a_merge_is_refused_when_the_checks_cannot_be_read(failure: Exception
     def failing(number: str, repository: str) -> list[dict[str, str]]:
         raise failure
 
-    reasons = guard.refusals({"tool_name": "Bash", "tool_input": {"command": PLAIN}}, failing)
+    reasons = guard.merge_refusals(PLAIN, failing)
     assert len(reasons) == 1
     assert "80" in reasons[0]
+
+
+def test_e1_the_refusal_carries_what_gh_wrote() -> None:
+    def failing(number: str, repository: str) -> list[dict[str, str]]:
+        raise subprocess.CalledProcessError(1, ["gh"], stderr="no pull requests found\n")
+
+    assert guard.merge_refusals(PLAIN, failing)[0].endswith("no pull requests found")
+
+
+def test_a_failure_outside_the_known_ones_is_not_swallowed() -> None:
+    def broken(number: str, repository: str) -> list[dict[str, str]]:
+        raise ZeroDivisionError
+
+    with pytest.raises(ZeroDivisionError):
+        guard.merge_refusals(PLAIN, broken)
 
 
 @pytest.mark.parametrize("payload", [{}, {"tool_name": "Bash"}, {"tool_input": None}, {"tool_input": "gh pr merge"}])
