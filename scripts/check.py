@@ -58,7 +58,7 @@ def run(chosen: list[Step], root: Path) -> list[str]:
             command starts in.
         Returns: the names of the steps whose command ended with a non-zero exit code, in
             the order they ran. Every step runs, whatever the ones before it did.
-        Raises: OSError if a command cannot be started.
+        Raises: OSError if a command cannot be started; the steps after it do not run.
 
     Known limits: the steps run one after another; their output is not captured.
     """
