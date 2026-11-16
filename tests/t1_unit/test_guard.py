@@ -302,6 +302,7 @@ def test_s10_a_long_run_of_digits_is_read_in_time() -> None:
         ("gh pr -R $(echo o/r) merge 80", [("80", "$")]),
         ("gh -R `echo o/r` pr merge 80", [("80", "echo")]),
         ("<# merge it #> " + PLAIN, [("80", "o/r")]),  # A12m: a PowerShell comment before it
+        ("<# merge it #>" + PLAIN, [("80", "o/r")]),  # the same, with no blank after the comment
         # A13m: the value of -R is a gh command of its own, with a `pr` in it
         ("gh -R $(gh pr view 76 --json headRepository -q .x) pr merge 76 --squash", [("76", "$")]),
         ("gh api pr merge 80 -R o/r", []),  # `pr` is not the first word of gh
@@ -385,20 +386,32 @@ def test_calls_gives_the_words_after_each_word_that_names_the_program() -> None:
     assert guard._calls(["/usr/bin/gh.bat"], "gh") == [[]]
     assert guard._calls(["git-credential", "!gh", "ghx", "exegh"], "gh") == []
     assert guard._calls([], "gh") == []
+    assert guard._calls(["#>gh", "pr"], "gh") == [["pr"]]
+    assert guard._calls(["<#x#>C:\\tools\\gh.exe", "pr"], "gh") == [["pr"]]
 
 
-def test_after_word_takes_a_word_that_leads_or_each_one_that_follows_an_option() -> None:
-    assert guard._after_word(["pr", "merge", "80"], "pr") == [["merge", "80"]]
-    assert guard._after_word(["pr", "view", "pr"], "pr") == [["view", "pr"]]
-    assert guard._after_word(["-R", "o/r", "pr", "merge"], "pr") == [["merge"]]
-    assert guard._after_word(["-R", "$", "gh", "pr", "view", "pr", "merge"], "pr") == [
-        ["view", "pr", "merge"],
-        ["merge"],
-    ]
-    assert guard._after_word(["pr"], "pr") == [[]]
-    assert guard._after_word(["api", "pr", "merge"], "pr") == []
-    assert guard._after_word(["--paginate", "api"], "pr") == []
-    assert guard._after_word([], "pr") == []
+@pytest.mark.parametrize(
+    ("words", "found"),
+    [
+        ("pr merge 80 --squash", ["80"]),  # `pr` leads, `merge` follows it
+        ("pr merge", [""]),
+        ("pr merge --squash 80", ["--squash"]),
+        ("pr -R o/r merge 80", ["80"]),  # an option after `pr`: every `merge` after it
+        ("pr -R o/r merge 80 merge 81", ["80", "81"]),
+        ("-R o/r pr merge 80", ["80"]),  # an option leads: every `pr`
+        ("-R $ gh pr view 76 pr merge 77", ["77"]),
+        ("-R o/r pr merge 80 pr merge 80", ["80"]),  # the same word once
+        ("-R o/r pr -x merge 80 pr merge 81", ["81", "80"]),
+        ("pr view 80", []),  # no merge
+        ("pr list --search merge", []),
+        ("pr create --title merge 80", []),
+        ("api pr merge 80", []),  # `pr` neither leads nor follows an option
+        ("--paginate api", []),
+        ("", []),
+    ],
+)
+def test_merge_words_gives_the_word_where_each_merge_has_its_number(words: str, found: list[str]) -> None:
+    assert guard._merge_words(words.split()) == found
 
 
 def test_repository_gives_the_one_repository_that_is_named() -> None:
@@ -500,6 +513,7 @@ def test_push_refusals_lets_through(command: str) -> None:
         "git push # ok",  # EC15: a comment is neither remote nor branch
         "git push #ok",
         "git push origin #x",  # a comment needs no blank after its sign
+        "<# note #>git push origin main",  # a command glued to the end of a PowerShell comment
         "git push origin *>&1",  # EC15r: no spelling of a redirection is a branch
         "git push origin *> $null",
         'git push origin > "push.log"',
@@ -542,6 +556,7 @@ def test_push_refusals_refuses(command: str) -> None:
         "git commit -m $(cat msg.txt) -n",
         "git commit -m x 2>&1 -n",  # S3
         "<# note #> git commit -m x 2>&1 -n",  # S3: the > that ends a comment takes no word along
+        "<# note #>git commit -n -m x",  # a command glued to the end of a PowerShell comment
         'git commit -m "fix: the `"fast`" suite" -n',  # a PowerShell escaped quote
         'OUT="$(git commit -m "fix: a" -n 2>&1)"',  # S6
         'git commit -m "fix: x\n\nbody" -n',  # S4
@@ -635,6 +650,16 @@ def test_ec25_a_merge_is_let_through_on_green_and_refused_on_red(tool: str) -> N
 )
 def test_ec26_a_merge_without_number_or_one_repository_is_refused_unasked(command: str) -> None:
     assert len(guard.merge_refusals(command, never_asked)) == 1
+
+
+@pytest.mark.parametrize("pair", ["pr merge ", "pr -x merge "])
+def test_merges_reads_a_line_of_a_thousand_pr_merge_pairs_in_time(pair: str) -> None:
+    # After an option every `pr` and every `merge` counts. Trying each `merge` again for
+    # each `pr`, and reading the repository again for each pair, took over five minutes
+    # for 1,000 pairs with an option between them; the hook has 40 seconds for everything.
+    started = time.perf_counter()
+    assert guard.merges("gh -R o/r pr comment 5 --body " + pair * 1000) == [("", "o/r")]
+    assert time.perf_counter() - started < 3
 
 
 def test_merge_refusals_judges_each_merge_of_a_command() -> None:
