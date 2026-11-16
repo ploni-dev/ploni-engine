@@ -170,3 +170,64 @@ Not decided. These were not put to Achia, and they stay as Claude's proposal in 
 - Whether E3 is run again with an amended pre-registration.
 
 The first three go to Achia before Phase 3 writes its prefix tests.
+
+### Decided on 2026-11-16
+
+Achia, 2026-11-16, in the Claude Code session. He asked to go through what waited on him one point at a time. Each question below is given as Claude asked it, word for word, and each answer as he wrote it.
+
+**How `לה` on a surname is scored** (first open point above). Claude asked:
+
+> Decided: lonely names are their own hard case from the start. I've also recorded your guiding principle: when in doubt, think of the purpose, because one wrong name can change how the whole document is understood.
+>
+> **Question 5: a Hebrew spelling point from the prefix test (E3).**
+>
+> Background: the product must keep prefixes like ל, ב, ו when it replaces a name. In the test, the word "להלוי" was scored as a mistake. The plan expected it to be read as the prefix "לה" plus the name "לוי". The model read it as "ל" plus the name "הלוי".
+>
+> In standard Hebrew spelling, ל together with "the" is written just ל, never "לה". So "להלוי" can only be ל plus a surname that starts with ה.
+>
+> **How should the test read "להלוי"?**
+>
+> 1. **As ל + הלוי.** The model was right, those two cases count as correct, and I correct the plan's list of prefixes in a small PR. I recommend this: it follows Hebrew spelling.
+> 2. **As לה + לוי,** as the plan says now. The two cases stay as known mistakes.
+
+Achia answered:
+
+> specifically -  in this case it was not a mistake: it could be or ללוי if the name is לוי, or הלוי again for ךוי as a name, but here the model recognized correctly the name is הלוי and the for - ל+ הלוי is the right decision
+
+So `להלוי` is read as ל on the surname `הלוי`, and f03 and f04 count as right in Phase 3's tests, as line 4 of the proposed decision has it. The E3 record of 94 of 100 stays as pre-registered. The plan's list of prefix combinations still has `לה`; taking it out is a PR to `build-plan.md`, not written yet.
+
+**A surname that begins with ה, and the forms that still fail** (second and third open points above). Claude asked:
+
+> Decided: "להלוי" is read as ל + הלוי, the model was right there, and I'll correct the plan's prefix list in a small PR.
+>
+> **Question 6: the two remaining prefix points from E3.**
+>
+> Background: both are about how the product treats a surname that starts with ה.
+> - The same surname can come out two ways in one document. For example "הכהן" was read as "the" + כהן in one place, and as the surname הכהן in another.
+> - Six prefix forms still fail or were never tested (like "כשמשה", where part of the name משה was taken for a prefix).
+>
+> Both depend on which method we end up with, and prefix handling is exactly the kind of "other method" the experiment series will compare.
+>
+> 1. **Move both into the experiment series.** I test the ways of handling them and bring them back to you with numbers. I recommend this: deciding now would be a guess.
+> 2. **Decide them now,** before any experiment.
+
+Achia answered:
+
+> just like הלוי - which could be its own name or ה+לוי - the same for הכהן
+
+He chose neither answer and stated the principle: either reading can be right, for `הכהן` as for `הלוי`. Claude put that back to him as a rule and asked:
+
+> Agreed: "הכהן", like "הלוי", can be a surname of its own or "the" + כהן. Neither reading is wrong in general; it depends on what that person's name really is.
+>
+> So I take this as the rule: the product must work out the real name from the rest of the document (for example, how the same person is written elsewhere), and then treat every mention of that person the same way.
+>
+> **Shall I put that into the experiment series, testing how well each method works out the real name, and bring you the numbers?**
+>
+> 1. **Yes.** I recommend this. It also covers the six prefix forms that still fail.
+> 2. **No,** you want to set a fixed rule now (for example: always treat ה as part of the name).
+
+Achia answered:
+
+> 1 - but a good model should recognize it from the context (especially when the name appears more than once)
+
+So no fixed rule is set for the letter ה. The product has to work out the real name from the rest of the document and treat every mention of that person alike, and the experiment series measures how well each method does that, with his expectation that a good model recognizes it from the context, above all where the name stands more than once. The forms that still fail (b14, b16, b19, d04) and the three the 100 did not hold go into the same series. How a test that is expected to fail is marked, and whether such tests count toward Phase 3's gate, was not asked and stays open. So do the last two points above: the cross-check in Phase 6, and whether E3 is run again.
