@@ -401,7 +401,7 @@ def test_calls_gives_the_words_after_each_word_that_names_the_program() -> None:
         ("-R o/r pr merge 80", ["80"]),  # an option leads: every `pr`
         ("-R $ gh pr view 76 pr merge 77", ["77"]),
         ("-R o/r pr merge 80 pr merge 80", ["80"]),  # the same word once
-        ("-R o/r pr -x merge 80 pr merge 81", ["81", "80"]),
+        ("-R o/r pr -x merge 80 pr merge 81", ["80", "81"]),  # in the order they stand
         ("pr view 80", []),  # no merge
         ("pr list --search merge", []),
         ("pr create --title merge 80", []),
