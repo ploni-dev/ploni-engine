@@ -436,3 +436,90 @@ What follows from it, as Claude reads it:
 2. The two weak kinds of mention become named test cases: a surname after a group word such as `משפחת` or `האחים`, and a given name alone that is an everyday word. Where each test sits in the plan is a PR to `build-plan.md`, which needs Achia's decision. That PR is not written yet, and nothing in Phase 0 waits on it.
 3. Not decided here: option 3, a test of a reader's own search, and the proposal in its place, that a name standing once with no title becomes a hard case of the Phase 5 corpus. The question named neither. Neither is done now, and nothing before Phase 5 waits on them.
 4. Not option 4 now: Phase 0 does not wait for a person's check of E1 or of E4. The question did not ask for one. Achia chose on 2026-11-14 not to spend that reading time (option 4, above).
+
+### Decided on 2026-11-16
+
+Achia, 2026-11-16, in the Claude Code session. He asked to go through what waited on him one point at a time. Each question below is given as Claude asked it, word for word, and each answer as he wrote it.
+
+**E4 stands in for a person's check of E1** (point 1 above). Claude asked:
+
+> **Question 1 of the list: is E4 enough as the check on E1?**
+>
+> Background in short: E1 ran on ten real court judgments and found 449 of 470 names (95.5%). I did that count myself, and no person ever checked it. You chose not to check it by reading, so I built E4: invented documents where a script knows where every name is. There the model found 1,084 of 1,145 (94.7%).
+>
+> 1. **Yes, E4 is enough.** Nobody reads E1 by hand. The E1 number stays in the records with its label "counted by Claude, not checked by a person". I recommend this: E4 has a known right answer, and the two numbers agree closely.
+> 2. **No.** A person still checks a sample of E1 by hand before we rely on it.
+>
+> One limit to know with option 1: E4's documents are invented, so they do not show every oddity of real judgments.
+
+Achia answered:
+
+> 1 - i work on it alone and cannot afford during the project to read it myself. so we have to trust u and the mechanism we build for checking and testing. now let me tell u something iportnat on the bigger picture -  ide like to have analytics, looking at every angel and with a dashboard to present them in a neat and nice way. this way, we will keep statistics and will get better and strive to better with proven numbers and not just guesses. i dont expect this to be built right now, but when we finish with the decisions here lets discuss it.
+
+So option 1 of this note is taken: E4 is the check that stands in for a person's check of E1, and nobody reads E1 by hand. E1's number stays recorded with its label, counted by Claude and not checked by a person. The limit the question named stays true: E4's documents are invented and do not show every oddity of a real judgment. His words about analytics and a dashboard are a separate matter and are not decided in this note.
+
+**The two weak kinds of mention** (point 2 above). Claude asked:
+
+> Understood, and thank you for the correction. So "it grows" means the test covers more as the product does more:
+>
+> - **Every new ability joins the test.** When we add, say, a layer for numbers, or a report that tells the user what was replaced, the held-out batch must check that too, from the PR that adds it.
+> - **Batch made of both kinds:** decided. Invented documents with exact answers on every PR, plus real public documents measured on this laptop.
+>
+> **Question 3: what should the tests demand for the two kinds of names the model is weak on?**
+>
+> Background: E4 showed two weak spots.
+> - A family name after "משפחת" or "האחים": found 22 of 55.
+> - A first name standing alone that is also an everyday word (like אור): found 151 of 169.
+>
+> 1. **Watch them, and never get worse.** Each weak kind gets its own line in the score shown in every PR. A PR that lowers either number fails. Improving them is a goal of Phase 3, with no fixed target yet. I recommend this: it matches what you decided for the prefix test (E3), and it does not block work on a number we cannot yet promise.
+> 2. **Set a hard target now.** For example, both must reach 90% before Phase 3 can close. Clear, but it could stop Phase 3 if the model cannot get there.
+
+Achia answered:
+
+> first -  ide like u to try a few models. lets run experiments to get the best model we can have on premis (not too big) and not only models, but other methods too. remember for this tool to be valuable and crediable we have to have accuracy about 100%!!! so what i want is a series of experiments to get the best most fit tools for that, and when we have it - if thats not enough we will have to re think of other methods to make it better. the importance of accuracy is all!
+
+He chose neither answer. So no target is set for the two weak kinds now, and the question comes back when the experiments he asks for have numbers. What he asks for, in his words: "a series of experiments to get the best most fit tools", to get "the best model we can have on premis (not too big)", and "not only models, but other methods too"; "we have to have accuracy about 100%"; and if that is not enough, "we will have to re think of other methods to make it better". The series is not in `build-plan.md` yet; putting it there is a PR to the plan. When it starts: Claude asked next:
+
+> Understood: accuracy comes first, and you want it proven by experiments, not assumed. I've recorded that as the project's top priority.
+>
+> How I read your request:
+>
+> - **A series of experiments** comparing several models that run on the laptop, offline and not too big.
+> - **Not only models:** other methods too, and combinations of them. For example: two finders together, rules for the known weak kinds, and "a name found once is replaced everywhere in the document".
+> - **All scored on the held-out batch** you just decided, so the numbers are comparable and honest.
+> - **If the best is still not enough,** we stop and rethink the method.
+>
+> Two honest points:
+>
+> - **No single model reaches 100%.** Ours found about 95% in both tests so far. Getting close to 100% will come from layering methods, and the experiments will show how close each layer gets us.
+> - **Each new model needs your yes** before I download it. I'll bring you a short candidate list with size and license; some models cannot be used commercially.
+>
+> This also parks question 3: targets for the weak kinds of names should wait for the experiment results.
+>
+> **Question: when should the experiment series start?**
+>
+> 1. **Right after the gate is complete.** Four small pieces are left (#18, #19, #24, #25). Then the experiments are the next big thing, and every result passes through working gates. I recommend this: by our rules, only those four pieces and text-only PRs may merge until the gate is complete.
+> 2. **Now, before those four pieces.** The experiments run on a side branch and only their written results merge until the gate is complete. Faster start, but the gate stays incomplete longer.
+
+Achia answered:
+
+> 1
+
+So the series starts once the merge gate works, as `PROMOTION.md` section 11 says what "works" means, and not before.
+
+**A name standing once with no title** (point 3 above). Claude asked:
+
+> Decided: the experiment series starts right after the gate is complete.
+>
+> **Question 4: should a "lonely name" become its own hard case in the held-out batch?**
+>
+> Background: one more weak spot was suspected in E4. A name that appears only once in a document, with no title before it (no "מר", "עו"ד" or similar), gives the model very little to go on. The earlier idea was to test this only in Phase 5.
+>
+> 1. **Yes, as its own line from the start.** The held-out batch gets a group of such lonely names, and every PR shows the score for them, like for the two weak kinds. I recommend this: it is exactly the kind of case where a name slips through.
+> 2. **No, leave it for Phase 5** as first planned.
+
+Achia answered:
+
+> 1  - the guide princopal for u is to think of our purpose of project. the whole doc could get a different and mistaken understanding even by a lonely name who gets wring, so yeah it is important to have accuracy as perfect a possible
+
+So such a name is a hard case of its own in the held-out batch from the start, with a line of its own, and every PR shows the score for it; it is not left for Phase 5. The answer he chose ends "like for the two weak kinds": that the two weak kinds have such a line in every PR was part of an answer he did not choose (above), so it is not decided by this. Option 3 of this note in its own words, a test of whether a reader session finds a missed name that nothing points to, was not put to him on 2026-11-16. It is not done and stays not decided. His first answer of this section closes a person's check of E1, which is option 4, not option 3. The held-out batch itself is decided in `docs/findings/2026-11-13-e1-hebrew-recall.md`, "Decided on 2026-11-16".

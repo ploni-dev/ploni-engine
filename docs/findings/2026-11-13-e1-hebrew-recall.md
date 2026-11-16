@@ -431,3 +431,54 @@ What follows from it, as Claude reads it:
 2. Not option 4 now: Phase 0 does not wait for a person's count. The question said that no person checked the count, and the answer was yes. Achia chose on 2026-11-14 not to spend that reading time ("What is not done", above). Whether E4 stands in for that count, as point 4 of the Recommendation above has it, is not decided (`docs/findings/2026-11-14-e4-planted-names.md`, Decision, point 1).
 3. A surname after a group word becomes a named test case. The shared surname of `doc10` is the case of it in E1, and option 3 proposes Phase 6 for it. Where the test sits in the plan and what it asserts is a PR to `build-plan.md`, which needs Achia's decision. That PR is not written yet, and nothing in Phase 0 waits on it. The other weak kind the question named, a given name alone that is an everyday word, is in the E4 note (Decision, point 2).
 4. Not decided here: option 2, running E1 again on documents closer to the ones the product is for, before Phase 3 records its baseline. The question did not ask it. Which documents, and from where, stays Achia's to say (issue #4). Nothing before Phase 3 waits on it.
+
+### Decided on 2026-11-16
+
+Achia, 2026-11-16, in the Claude Code session. He asked to go through what waited on him one point at a time. Each question below is given as Claude asked it, word for word, and each answer as he wrote it.
+
+**E1 on other real documents** (point 4 above, option 2). Claude asked:
+
+> Noted, both things:
+>
+> - **Question 1 is decided:** E4 stands as the check on E1, and nobody reads E1 by hand. I'll write all of today's decisions into the project files in one PR when we finish the list.
+> - **The analytics dashboard:** saved as a topic. We discuss it right after the last decision here.
+>
+> **Question 2: should the name-finding test run again on other real documents before Phase 3?**
+>
+> Background: E1 used real Supreme Court judgments only. A lawyer's own papers (contracts, letters) look different. E4 already covers that ground with invented documents: it has contracts, letters and judgments, and the model found 93% of names in the contracts and 95% in the letters.
+>
+> 1. **No, not again.** Phase 3 sets its starting numbers from E1 (real judgments) and E4 (invented contracts, letters, judgments). I recommend this: E4 has a known right answer, and real client papers may never enter the project anyway.
+> 2. **Yes.** I collect other real public documents (for example lower-court rulings and published contracts) and run the test again. The count would again be mine alone, with no person checking it.
+
+Achia answered:
+
+> 2 - basically what i want is to have data "new" a testing batch to test on it before any merge. and the more the project advance -  the demand is bigger. so think of it like training a new model ai -  we have to have a testing batch that the algorithm did not learn and its like "new" to it -  and test on it to see if we harm something or keep it safe or even getting better, and it has to be part of the tags in each pr that going in so we know where we at in each step
+
+So option 2 is taken: other real public documents are collected and the test runs on them, and the count is again Claude's alone. With his answer he asked for more than the question held: a batch of documents that is new to the algorithm, tested before any merge, with its result shown in each PR. Claude put that back to him in four points, one of them that the batch grows and the bar rises, and asked what the batch is made of:
+
+
+
+> Understood, and it fits something you already decided: a small name-finding check on every PR, planned for Phase 3. Your idea makes it stronger. Here is how I read it:
+>
+> - **A held-out batch.** A set of documents that I never use while building or tuning. I only measure on it.
+> - **Before every merge.** Each PR runs it, and the PR must not make the numbers worse.
+> - **It grows.** As the project advances, the batch gets bigger and the bar gets higher.
+> - **Shown in every PR.** A fixed line in each PR with the score before and after, so we always see where we stand.
+>
+> Tell me if any of that is not what you meant.
+>
+> One fact about timing: the name-finding model only enters the product in Phase 3, so the scores start then. I can prepare the batch earlier.
+>
+> **Question: what should the held-out batch be made of?**
+>
+> 1. **Both kinds.** I recommend this.
+>    - Invented documents where a script knows every name. The score is exact, and it runs automatically on every PR.
+>    - Real public documents, as you chose just now. They are more lifelike, but the "right answers" are my own labels, and they can only run on this laptop because real documents stay out of the repository.
+> 2. **Invented only.** Exact and fully automatic, but less lifelike.
+> 3. **Real only.** Lifelike, but every score rests on my labels, and nothing runs automatically on GitHub.
+
+Achia answered:
+
+> It grows. As the project advances, the batch gets bigger and the bar gets higher. -  not accurate, but i meant the demand ios growing, for example -  if we just tried to mark any name, when the stage comes and we also want to tell the user what we managed, it has to be part of the test, or if we add layer for numbers (example) - then it has to be too in the test u understand?    and to the question -  i agree
+
+So, as he corrected it: the batch is held out, never used while building or tuning; it is measured before every merge and its result is shown in every PR; and what grows is what the test covers, every ability the product has at that stage, not the size of the batch or the bar by themselves. Claude's second point also said that a PR "must not make the numbers worse". He did not speak to that; his own words are "to see if we harm something or keep it safe or even getting better". So whether a PR that makes a number worse fails is not decided here, and it goes to him as a question with the rules PR. It is made of both kinds: invented documents where a script knows every name, which run on every PR, and real public documents, which stay outside the repository and are measured on the laptop with Claude's labels. Three things follow that are not done and not decided in detail here. Which real documents, and from where, is still his to say when they are collected (issue #4). The small recall check on every PR that he decided on 2026-11-15 (`PROMOTION.md` section 11) is the nearest thing in the rules; bringing the rules and `build-plan.md` in line with this decision is a PR to each, not written yet. And that E4 stands in for a person's check of E1 is decided in `docs/findings/2026-11-14-e4-planted-names.md`, "Decided on 2026-11-16".
