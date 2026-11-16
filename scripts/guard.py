@@ -19,21 +19,21 @@ The settings file sets `"onFailure": "block"`, so a script that fails, cannot st
 runs out of time refuses as well. That needs Claude Code 2.1.295 or later.
 
 Known limits: this reads commands as text and stops an honest mistake, not an agent that
-goes around it (PROMOTION.md section 11, "What it does not do"). It does not read a
-command handed to another program as text (`bash -c`, `eval`, `cmd /c`), an alias or a
-variable that holds the words of a merge, a quote escaped with a backslash, a command
-that quote signs hide in both readings of `segments` at once, or a file written by a
-shell command and not by Edit or Write. It refuses too much in these known cases, and then the text goes in a
-file, or the command is typed another way:
-  - the words of a refused command on a line of their own in a here-document, in a
-    quoted text of several lines, or inside `$( )` or backticks;
-  - a merge whose -R stands after a quoted text of several lines: read line by line,
-    the first line names no repository;
+goes around it (PROMOTION.md section 11, "What it does not do"). It does not see an
+alias or a variable that holds the words of a command, a command that every reading of
+`segments` breaks, or a file written by a shell command and not by Edit or Write. It
+errs to the side of refusing, and refuses too much in these known cases; then the text
+goes in a file, or the command is typed another way:
+  - the words of a refused command in a text of the same call: a commit message or a PR
+    comment that quotes `gh pr merge 80 -R o/r` or `git push origin main`, in quotes or
+    in a here-document, also as the text of `bash -c` or of `grep`;
+  - a merge whose -R stands after a quoted text of several lines, or beside a second -R
+    in a quoted text;
   - a push that names no branch, or names it through a variable, although it would not
     reach main;
   - `--no-verify` as a search word (`grep -- --no-verify`);
-  - `push`, `commit` or `merge` as a plain word of another git or `gh pr` command
-    (`git log --grep push`, `git commit -m push`, `gh pr list --search merge`);
+  - `push` or `commit` as a plain word of another git command (`git log --grep push`,
+    `git commit -m push`);
   - a short flag with an n in it after `commit` (`git commit -m x -uno`).
 A commit pushed between the gate's look and the merge is not seen; `--match-head-commit`
 on the merge closes that, and the gate does not ask for it.
@@ -42,7 +42,6 @@ on the merge closes that, and the gate does not ask for it.
 import json
 import posixpath
 import re
-import shlex
 import shutil
 import subprocess
 import sys
@@ -59,83 +58,90 @@ GATE_CHECK = "fast-suite"
 GH_TIMEOUT_SECONDS = 30
 # PROCESS.md section 12 item 8: the waiver file, and the files that hold the hooks.
 PROTECTED = (".claude/settings.json", ".claude/settings.local.json", "docs/WAIVERS.md", "scripts/guard.py")
-# What ends a simple command. Curly brackets: PowerShell chains commands as
-# `if ($?) {...}`. A backtick: it opens and closes a command inside a command.
-SEPARATORS = "();<>|&{}`\n"
+# One shell word, with the quoted texts that touch it; or one run of the signs that end a
+# simple command. There are two ways to read a bracket or a backtick, and each sees what
+# the other misses. As a blank: what stands after `$(pwd)` stays in its command
+# (`git -C $(pwd) push origin main`). As an end: what stands after `}` does not join the
+# command inside (`try { git push } catch { throw }`).
+WORD = r"""(?:"[^"]*"|'[^']*'|[^\s;|&"'(){}`])+"""
+BRACKETS_BLANK = re.compile(WORD + r"|[;|&\n]+")
+BRACKETS_END = re.compile(WORD + r"|[;|&\n(){}`]+")
+# A redirection with its target: `2>&1`, `> file`, `2>$null`, `<<`. It is dropped before
+# reading: `2>&1` holds a separator sign, and a target is no word of the command.
+REDIRECTION = re.compile(r"""\d*[<>]+(?:&\d+|[ \t]*[^\s;|&()"']*)""")
+QUOTE_SIGN = re.compile("[\"']")
 EVERY_BRANCH = frozenset(("--all", "--mirror", "--branches"))
 # A target the hook cannot name counts as main: it does not know the branch that is checked out.
 MAIN = frozenset(("main", "HEAD", "@"))
 UNREADABLE = (OSError, subprocess.SubprocessError, ValueError, LookupError, TypeError, AttributeError)
 
 
-def _words(text: str) -> list[str]:
-    """Split text into shell words, with each run of separator signs as a word of its own."""
-    lexer = shlex.shlex(text, posix=True, punctuation_chars=SEPARATORS)
-    # A new line is a separator, not a blank, but for one inside a quoted text.
-    lexer.whitespace = " \t\r"
-    lexer.whitespace_split = True
-    # Windows paths hold backslashes, so a backslash escapes nothing here. Text after
-    # a hash sign is read like the rest and not dropped as a comment.
-    lexer.commenters = ""
-    lexer.escape = ""
-    return list(lexer)
+def _commands(text: str, tokens: re.Pattern[str] = BRACKETS_BLANK) -> list[list[str]]:
+    """Return the words of each simple command of text, read once, with quotes followed."""
+    found: list[list[str]] = [[]]
+    for token in tokens.findall(text):
+        if token[0] in ";|&\n(){}`":
+            found.append([])
+        else:
+            found[-1].append(QUOTE_SIGN.sub("", token))
+    return [words for words in found if words]
 
 
 def segments(command: str) -> list[list[str]]:
-    """Split a shell command into its simple commands, each a list of words.
+    """Return the simple commands of a shell command, in every reading of its text.
 
     Why: a hook sees the whole text of a tool call, and the command to judge may stand
-    after `cd x &&`, on a later line, or in a pipe.
+    after `cd x &&`, on a later line, in brackets, or inside a quoted `$( )`. Following
+    quotes and brackets as a shell does was tried and failed three reviews in a row:
+    every fix for one shape lost another. So the text is read in several simple ways,
+    and a rule refuses when any reading shows it a refused command.
 
     Contract:
         Args: command, the text given to Bash or PowerShell.
-        Returns: the words between separators (`;`, `&`, `|`, round and curly brackets,
-            redirections, a backtick, a new line), quotes removed. A line continued with a
-            backslash or a backtick is joined to the next. A quoted text is one word of
-            its command, whatever it holds; where it holds `$(` or a backtick, the simple
-            commands inside it follow. A command of several lines is read twice, as one
-            text and line by line, and each simple command is returned once, those of the
-            first reading first.
-        Raises: nothing. Where a quote is never closed, every quote sign of that reading
-            is read as a space, so the words after it are still found.
+        Returns: the words of each simple command (ended by `;`, `&`, `|` or a new line),
+            quote signs removed, for each of these readings, one after another:
+            the whole text, where a quoted text is one word even over several lines;
+            each line by itself, so that an apostrophe in a comment hides no other line;
+            the whole text with every quote sign as a blank, so that a command inside a
+            quoted text is read as well.
+            Each of the three is read twice: with brackets and backticks as blanks, and
+            with each of them as the end of a command. A backtick before a new line is
+            read both ways too: as PowerShell's sign that the line goes on, and as the
+            end of a command in sh. In every reading a line continued with a backslash is
+            joined to the next, and a redirection is dropped with its target. The same
+            command may be given more than once.
+        Raises: nothing.
 
-    Known limits: this is not a shell. The two readings exist because each alone is
-    blind: read as one text, an apostrophe in a comment hides the lines up to the next
-    apostrophe; read line by line, a line that ends one quoted text and opens another
-    hides what stands between them. A command that both hide at once is not found. It
-    follows the quoting of sh, without backslash escapes; PowerShell differs in details.
+    Known limits: this is not a shell, and it errs to the side of refusing. In the third
+    reading the words of a quoted text join the command they stand in, so a message that
+    holds the words of a refused command is refused. A command is missed only when every
+    reading breaks it: a separator sign in a quoted text between its words, and a stray
+    quote sign that hides that quoted text from the first two readings.
     """
-    text = re.sub(r"[\\`]\r?\n", " ", command)
-    found: list[list[str]] = []
-    for reading in (text, *text.split("\n")):
-        for segment in _reading(reading):
-            if segment and segment not in found:
-                found.append(segment)
-    return found
+    joined = re.sub(r"\\\r?\n", " ", command)
+    texts = [REDIRECTION.sub(" ", text) for text in (joined, re.sub(r"`\r?\n", " ", joined))]
+    readings = dict.fromkeys(
+        reading for text in texts for reading in (text, *text.split("\n"), QUOTE_SIGN.sub(" ", text))
+    )
+    return [
+        words
+        for tokens in (BRACKETS_BLANK, BRACKETS_END)
+        for reading in readings
+        for words in _commands(reading, tokens)
+    ]
 
 
-def _reading(text: str) -> list[list[str]]:
-    """Return the simple commands of text, read once; those inside a quoted word come last."""
-    try:
-        words = _words(text)
-    except ValueError:
-        words = _words(text.replace("'", " ").replace('"', " "))
-    found: list[list[str]] = [[]]
-    inside: list[list[str]] = []
-    for word in words:
-        if word and set(word) <= set(SEPARATORS):
-            found.append([])
-            continue
-        found[-1].append(word)
-        if "$(" in word or "`" in word:
-            inside += segments(word)
-    return [*found, *inside]
-
-
-def _after(words: list[str], program: str) -> list[str]:
-    """Return the words after the first one that names program, or nothing without one."""
+def _calls(words: list[str], program: str) -> list[list[str]]:
+    """Return, for each word of a command that names program, the words after it."""
     names = [re.sub(r"\.(exe|cmd|bat)$", "", re.split(r"[\\/]", word)[-1].lower()) for word in words]
-    return words[names.index(program) + 1 :] if program in names else []
+    return [words[index + 1 :] for index, name in enumerate(names) if name == program]
+
+
+def _past_options(words: list[str]) -> list[str]:
+    """Return words from the first one that is no option; -R and --repo take their value along."""
+    while words and words[0].startswith("-"):
+        words = words[2:] if words[0] in ("-R", "--repo") else words[1:]
+    return words
 
 
 def _repository(words: list[str]) -> str | None:
@@ -156,21 +162,24 @@ def merges(command: str) -> list[tuple[str, str | None]]:
 
     Contract:
         Args: command, the text given to Bash or PowerShell.
-        Returns: one (number, repository) pair for each simple command that holds a `gh`
-            program followed by the words `pr` and, later, `merge`; the same pair is given
-            once. number is the word right after `merge` when it is made of digits, else
-            "". repository is the one value of -R or --repo, else None.
+        Returns: one (number, repository) pair for each `gh` program, in any reading of
+            `segments`, whose first word that is no option is `pr` and whose next such
+            word is `merge`; the same pair is given once. number is the word right after
+            `merge` when it is made of digits, else "". repository is the one value of -R
+            or --repo after that `gh`, else None.
         Raises: nothing.
 
-    Known limits: a `gh pr` command with `merge` as a plain word of another kind, such as
-    a search word, is returned too. See the module docstring for what is not read.
+    Known limits: `merge` as a word of another `gh pr` command (a title, a search word)
+    is no merge. The words `gh pr merge` in a quoted text are one: see `segments`.
     """
     found = []
     for words in segments(command):
-        rest = _after(words, "gh")
-        if "pr" in rest and "merge" in rest[rest.index("pr") :]:
-            number = "".join(rest[rest.index("merge", rest.index("pr")) + 1 :][:1])
-            found.append((number if re.fullmatch("[0-9]+", number) else "", _repository(rest)))
+        for rest in _calls(words, "gh"):
+            group = _past_options(rest)
+            action = _past_options(group[1:])
+            if group[:1] == ["pr"] and action[:1] == ["merge"]:
+                number = "".join(action[1:2])
+                found.append((number if re.fullmatch("[0-9]+", number) else "", _repository(rest)))
     return list(dict.fromkeys(found))
 
 
@@ -273,17 +282,17 @@ def no_verify_refusals(command: str) -> list[str]:
 
     Contract:
         Args: command, the text given to Bash or PowerShell.
-        Returns: one line when a simple command holds the word `--no-verify`, or
-            `git ... commit` followed by a short-flag word with an n in it (-n, -nm, -anm).
-            Empty otherwise.
+        Returns: one line when a simple command, in any reading of `segments`, holds the
+            word `--no-verify`, or `git ... commit` followed by a short-flag word with an
+            n in it (-n, -nm, -anm). Empty otherwise.
         Raises: nothing.
 
     Known limits: -n means something else on other git commands and is let through
     there. `core.hooksPath` and other ways around the git hooks are not looked for.
+    `commit` is looked for anywhere after `git`, not as its subcommand only.
     """
     for words in segments(command):
-        rest = _after(words, "git")
-        flags = rest[rest.index("commit") :] if "commit" in rest else []
+        flags = [flag for rest in _calls(words, "git") if "commit" in rest for flag in rest[rest.index("commit") :]]
         if "--no-verify" in words or any(re.fullmatch("-[A-Za-z]*n[A-Za-z]*", flag) for flag in flags):
             return ["--no-verify and `git commit -n` are refused: the git hooks run on every commit"]
     return []
@@ -297,30 +306,32 @@ def push_refusals(command: str) -> list[str]:
 
     Contract:
         Args: command, the text given to Bash or PowerShell.
-        Returns: one line when a simple command holds `git ... push` (not
-            `git stash push`) and names main as a target (main, x:main, +main, :main,
-            refs/heads/main, heads/main), names no target, names HEAD or a target with a
-            `$` in it, or carries --all, --mirror or --branches. Empty otherwise.
+        Returns: one line when a simple command, in any reading of `segments`, holds
+            `git ... push` (not `git stash push`) and names main as a target (main,
+            x:main, +main, :main, refs/heads/main, heads/main), names no target, names
+            HEAD or a target with a `$` in it, or carries --all, --mirror or --branches.
+            Empty otherwise.
         Raises: nothing.
 
     Known limits: the first word after `push` that is no flag is taken as the remote and
     every later one as a branch, so the value of a flag such as `-o` can be mistaken for
-    the remote. A word of digits only is not taken as a branch: it is the 2 of `2>&1`.
-    A push with no branch named is refused wherever it would go.
+    the remote. `push` is looked for anywhere after `git`, not as its subcommand only:
+    the options of git before it can hold a quoted text with blanks, which one reading
+    takes apart. A push with no branch named is refused wherever it would go.
     """
     for words in segments(command):
-        rest = _after(words, "git")
-        if "push" not in rest or rest[: rest.index("push")][-1:] == ["stash"]:
-            continue
-        given = rest[rest.index("push") + 1 :]
-        named = [word for word in given if not word.startswith("-") and not word.isdigit()][1:]
-        targets = {
-            word.rsplit(":", 1)[-1].lstrip("+").removeprefix("refs/").removeprefix("heads/") for word in named
-        }
-        # A variable is checked in the whole word: PowerShell writes `$env:NAME`, with a colon.
-        unknown = any("$" in word for word in named)
-        if not targets or unknown or targets & MAIN or EVERY_BRANCH & set(given):
-            return ["a push must name its remote and its branches, and none of them may be main"]
+        for rest in _calls(words, "git"):
+            if "push" not in rest or rest[: rest.index("push")][-1:] == ["stash"]:
+                continue
+            given = rest[rest.index("push") + 1 :]
+            named = [word for word in given if not word.startswith("-")][1:]
+            targets = {
+                word.rsplit(":", 1)[-1].lstrip("+").removeprefix("refs/").removeprefix("heads/") for word in named
+            }
+            # A variable is looked for in the whole word: PowerShell writes `$env:NAME`, with a colon.
+            unknown = any("$" in word for word in named)
+            if not targets or unknown or targets & MAIN or EVERY_BRANCH & set(given):
+                return ["a push must name its remote and its branches, and none of them may be main"]
     return []
 
 
