@@ -15,15 +15,23 @@ refuses it, and stderr gives one line for each reason. Refused are:
   - `--no-verify` on any command, and `git commit -n`;
   - `git push` that names main, names no branch, or pushes every branch;
   - an edit of one of the PROTECTED files.
-The settings file turns every other exit code into 2, so a script that fails refuses.
+The settings file sets `"onFailure": "block"`, so a script that fails, cannot start or
+runs out of time refuses as well. That needs Claude Code 2.1.295 or later.
 
 Known limits: this reads commands as text and stops an honest mistake, not an agent that
 goes around it (PROMOTION.md section 11, "What it does not do"). It does not read a
-command handed to another program as text (`bash -c`, `eval`, `cmd /c`), a variable or
-an alias that holds the words, a quote escaped with a backslash, or a file written by a
-shell command and not by Edit or Write. It refuses too much in three known cases: the
-words of a refused command on a line of their own in a here-document, a push that names
-no branch although it would not reach main, and `gh pr` with `merge` as a search word.
+command handed to another program as text (`bash -c`, `eval`, `cmd /c`), an alias or a
+variable that holds the words of a merge, a quote escaped with a backslash, or a file
+written by a shell command and not by Edit or Write. It refuses too much in these known cases, and then the text goes in a
+file, or the command is typed another way:
+  - the words of a refused command on a line of their own in a here-document, in a
+    quoted text of several lines, or inside `$( )`;
+  - a push that names no branch, or names it through a variable, although it would not
+    reach main;
+  - `--no-verify` as a search word (`grep -- --no-verify`);
+  - `push`, `commit` or `merge` as a plain word of another git or `gh pr` command
+    (`git log --grep push`, `git commit -m push`, `gh pr list --search merge`);
+  - a short flag with an n in it after `commit` (`git commit -m x -uno`).
 A commit pushed between the gate's look and the merge is not seen; `--match-head-commit`
 on the merge closes that, and the gate does not ask for it.
 """
@@ -43,11 +51,13 @@ Fetch = Callable[[str, str], list[Check] | None]
 # The job of .github/workflows/fast.yml that CLAUDE.md, "Merging", asks for by name.
 GATE_CHECK = "fast-suite"
 # Under the 40 seconds that .claude/settings.json gives the hook, so that a slow GitHub
-# is a refusal with a reason and not a hook that was cut off.
+# is as a rule a refusal with a reason. A hook that is cut off all the same refuses too
+# (`onFailure` in the settings file), without a reason.
 GH_TIMEOUT_SECONDS = 30
 # PROCESS.md section 12 item 8: the waiver file, and the files that hold the hooks.
 PROTECTED = (".claude/settings.json", ".claude/settings.local.json", "docs/WAIVERS.md", "scripts/guard.py")
-SEPARATORS = frozenset("();<>|&")
+# Curly brackets too: PowerShell chains commands as `if ($?) {...}`.
+SEPARATORS = "();<>|&{}"
 EVERY_BRANCH = frozenset(("--all", "--mirror", "--branches"))
 # A target the hook cannot name counts as main: it does not know the branch that is checked out.
 MAIN = frozenset(("main", "HEAD", "@"))
@@ -56,7 +66,7 @@ UNREADABLE = (OSError, subprocess.SubprocessError, ValueError, LookupError, Type
 
 def _words(text: str) -> list[str]:
     """Split text into shell words, with each run of separator signs as a word of its own."""
-    lexer = shlex.shlex(text, posix=True, punctuation_chars=True)
+    lexer = shlex.shlex(text, posix=True, punctuation_chars=SEPARATORS)
     lexer.whitespace_split = True
     # Windows paths hold backslashes, so a backslash escapes nothing here. Text after
     # a hash sign is read like the rest and not dropped as a comment.
@@ -73,32 +83,39 @@ def segments(command: str) -> list[list[str]]:
 
     Contract:
         Args: command, the text given to Bash or PowerShell.
-        Returns: the words between separators (`;`, `&`, `|`, brackets, redirections, a new
-            line), quotes removed, in order. A line continued with a backslash or a backtick
-            is joined to the next. A quoted text is one word, whatever it holds.
-        Raises: nothing. Where a quote is never closed, every quote sign is read as a
-            space, so the words after it are still found.
+        Returns: the words between separators (`;`, `&`, `|`, round and curly brackets,
+            redirections, a new line), quotes removed, in order. A line continued with a
+            backslash or a backtick is joined to the next. A quoted text on one line is
+            one word, whatever it holds, but for one that holds `$(`: that is a command
+            inside the text, and its simple commands are returned as well.
+        Raises: nothing. Where a quote is not closed on its line, every quote sign of that
+            line is read as a space, so the words after it are still found.
 
-    Known limits: this is not a shell. It follows the quoting of sh, without backslash
-    escapes; PowerShell differs in details.
+    Known limits: this is not a shell. Each line is read by itself, so a quoted text of
+    several lines is read as commands, line by line: an apostrophe in a comment must not
+    hide the lines after it. It follows the quoting of sh, without backslash escapes;
+    PowerShell differs in details.
     """
-    text = re.sub(r"[\\`]\r?\n", " ", command).replace("`", " ").replace("\n", " ; ")
-    try:
-        words = _words(text)
-    except ValueError:
-        words = _words(text.replace("'", " ").replace('"', " "))
-    found: list[list[str]] = [[]]
-    for word in words:
-        if word and SEPARATORS.issuperset(word):
-            found.append([])
-        else:
-            found[-1].append(word)
+    found: list[list[str]] = []
+    for line in re.sub(r"[\\`]\r?\n", " ", command).replace("`", " ").split("\n"):
+        try:
+            words = _words(line)
+        except ValueError:
+            words = _words(line.replace("'", " ").replace('"', " "))
+        found.append([])
+        for word in words:
+            if word and set(word) <= set(SEPARATORS):
+                found.append([])
+            elif "$(" in word:
+                found += [*segments(word), []]
+            else:
+                found[-1].append(word)
     return [segment for segment in found if segment]
 
 
 def _after(words: list[str], program: str) -> list[str]:
     """Return the words after the first one that names program, or nothing without one."""
-    names = [re.split(r"[\\/]", word)[-1].lower().removesuffix(".exe") for word in words]
+    names = [re.sub(r"\.(exe|cmd|bat)$", "", re.split(r"[\\/]", word)[-1].lower()) for word in words]
     return words[names.index(program) + 1 :] if program in names else []
 
 
@@ -113,7 +130,7 @@ def _repository(words: list[str]) -> str | None:
 
 
 def merges(command: str) -> list[tuple[str, str | None]]:
-    """Return the PR and the repository of each `gh pr merge` in a shell command.
+    """Return the target of each `gh pr merge` in a shell command.
 
     Why: the gate must ask GitHub about the same PR that the command would merge. So it
     takes the number and the repository from the command and from nowhere else.
@@ -139,7 +156,7 @@ def merges(command: str) -> list[tuple[str, str | None]]:
 
 
 def _state(check: Check) -> tuple[object, object]:
-    """Return the name of a check and where it stands; SUCCESS only when it finished so."""
+    """Return a check as (name, state); the state is SUCCESS only when it finished so."""
     if check.get("__typename") == "CheckRun":
         finished = check.get("status") == "COMPLETED"
         return check.get("name"), (check.get("conclusion") if finished else check.get("status")) or "UNKNOWN"
@@ -264,13 +281,14 @@ def push_refusals(command: str) -> list[str]:
         Args: command, the text given to Bash or PowerShell.
         Returns: one line for each simple command that holds `git ... push` (not
             `git stash push`) and that names main as a target (main, x:main, +main, :main,
-            refs/heads/main), names no target or HEAD, or carries --all, --mirror or
-            --branches. Empty otherwise.
+            refs/heads/main, heads/main), names no target, names HEAD or a target that
+            starts with `$`, or carries --all, --mirror or --branches. Empty otherwise.
         Raises: nothing.
 
     Known limits: the first word after `push` that is no flag is taken as the remote and
     every later one as a branch, so the value of a flag such as `-o` can be mistaken for
-    the remote. A push with no branch named is refused wherever it would go.
+    the remote. A word of digits only is not taken as a branch: it is the 2 of `2>&1`.
+    A push with no branch named is refused wherever it would go.
     """
     reasons = []
     for words in segments(command):
@@ -278,9 +296,12 @@ def push_refusals(command: str) -> list[str]:
         if "push" not in rest or rest[: rest.index("push")][-1:] == ["stash"]:
             continue
         given = rest[rest.index("push") + 1 :]
-        named = [word for word in given if not word.startswith("-")][1:]
-        targets = {word.rsplit(":", 1)[-1].lstrip("+").removeprefix("refs/heads/") for word in named}
-        if not targets or targets & MAIN or EVERY_BRANCH & set(given):
+        named = [word for word in given if not word.startswith("-") and not word.isdigit()][1:]
+        targets = {
+            word.rsplit(":", 1)[-1].lstrip("+").removeprefix("refs/").removeprefix("heads/") for word in named
+        }
+        unknown = any(target.startswith("$") for target in targets)
+        if not targets or unknown or targets & MAIN or EVERY_BRANCH & set(given):
             reasons.append("a push must name its remote and its branches, and none of them may be main")
     return reasons
 
@@ -297,10 +318,12 @@ def edit_refusals(file_path: str) -> list[str]:
             path parts, in this checkout or in any other. Empty otherwise.
         Raises: nothing.
 
-    Known limits: the path is compared as text after `..` is resolved. A link, a short
-    Windows name or a file written by a shell command is not seen.
+    Known limits: the path is compared as text after `..` is resolved and dots and
+    spaces at its end, which Windows drops, are cut. A link, a short Windows name or a
+    file written by a shell command is not seen. A file of the same name in another
+    project, or in the user's own `.claude` folder, is refused too.
     """
-    path = "/" + posixpath.normpath(file_path.replace("\\", "/")).lower()
+    path = "/" + posixpath.normpath(file_path.replace("\\", "/").rstrip(". ")).lower()
     return [
         f"{name} is not edited by Claude: only Achia writes docs/WAIVERS.md, and a change to a hook file "
         "is a script that Claude writes and Achia runs (PROCESS.md section 12 item 8)"
@@ -347,8 +370,8 @@ def main() -> int:
     Contract:
         Returns: 0 when the call may run; 2 when it is refused, with one line for each
             reason on stderr, in ASCII. Stdin that is not a JSON object is refused.
-        Raises: whatever `refusals` lets through; the settings file turns that into a
-            refusal.
+        Raises: whatever `refusals` lets through; Claude Code then refuses the call,
+            because the settings file says `"onFailure": "block"`.
 
     Known limits: stdin is read as JSON in UTF-8, whatever the console encoding is.
     """

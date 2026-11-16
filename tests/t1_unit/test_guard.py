@@ -6,8 +6,11 @@ segments(command): the simple commands of a shell command, each as its words.
   S3    a quoted text                               one word, without its quotes, separators kept
   S4    a line continued with \\ or `, a backtick    joined; a backtick is read as a space
   S5    a backslash or a # in a word                kept as written
-  S6    a quote that is never closed                every quote is read as a space
+  S6    a quote that is not closed on its line      every quote of the line is read as a space;
+                                                    two apostrophes in two comments hide nothing
   S7    nothing, or separators only                 no command
+  S8    PowerShell curly brackets                   separators, with or without a space
+  S9    a quoted text that holds $( )               the command inside is returned as well
 
 merges(command): the `gh pr merge` commands in a shell command, as (number, repository).
   EC1   the plain form                              gh pr merge 80 -R o/r --squash
@@ -21,10 +24,14 @@ merges(command): the `gh pr merge` commands in a shell command, as (number, repo
   B3    an empty command                            nothing
   A1    a line continued with \\ or with `           the repository on the next line is found
   A2    an unclosed quote earlier in the command    the merge after it is still found
-  A3    the words on a line of their own in a here-document    found: the gate does not
-        know where a here-document ends, and refuses rather than lets through
-  A4    the words inside a quoted text, on one line or several    not found: an argument
-  A5    upper case GH.EXE                           found
+  A3    the words on a line of their own in a here-document or in a quoted text of several
+        lines    found: the gate does not know where such a text ends, and refuses rather
+        than lets through
+  A4    the words inside a quoted text on one line  not found: an argument
+  A5    upper case GH.EXE, gh.cmd                   found
+  A6m   a merge between two comment lines that each hold an apostrophe    found
+  A7m   a merge in PowerShell curly brackets, or inside "$( )"            found
+  A8m   a number with a letter (80x); `merge` before `pr`                 no number; no merge
 
 red(checks): why the checks of a PR's last commit are not green.
   EC7   two green fast-suite runs                   green
@@ -66,11 +73,20 @@ refusals(payload, fetch): one hook payload.
   B5    a payload without tool_input                refused
 
 rollup(number, repository):
+  EC30  gh is installed                             it is asked for the rollup of that PR in
+                                                    that repository, with the time limit, and
+                                                    its answer is read as UTF-8
   E2    gh is not installed                         OSError
 
+main(), with stdin swapped:
+  EC31  a call that may run                         0, nothing written
+  EC32  a refused call                              2, one line for each reason on stderr
+  EC33  Hebrew in the payload                       read as UTF-8, written as ASCII
+  E3    stdin that is not a JSON object             2
+
 The settings file:
-  EC29  .claude/settings.json runs the script before Bash, PowerShell, Edit and Write, and
-        turns any failure of the script into a refusal
+  EC29  .claude/settings.json runs the script before Bash, PowerShell, Edit and Write, in
+        bash, and a script that fails, cannot start or is cut off refuses the call
 
 The script run as a program, with a stand-in for gh, is in tests/t4_integration/test_guard.py.
 
@@ -78,8 +94,10 @@ The Hebrew and document-structure axes of the test-matrix skill do not apply: th
 handles commands and paths, no document.
 """
 
+import io
 import json
 import subprocess
+import types
 from pathlib import Path
 
 import pytest
@@ -118,6 +136,12 @@ def never_asked(number: str, repository: str) -> list[dict[str, str]]:
         ("a `b c`", [["a", "b", "c"]]),
         ("a C:\\x\\y.exe # b", [["a", "C:\\x\\y.exe", "#", "b"]]),  # S5
         ("a don't\nb \"c", [["a", "don", "t"], ["b", "c"]]),  # S6
+        ("a 'b\nc' d", [["a", "b"], ["c", "d"]]),
+        ("# don't\na b\n# it's", [["#", "don", "t"], ["a", "b"], ["#", "it", "s"]]),
+        ("if ($?) {a b}", [["if"], ["$?"], ["a", "b"]]),  # S8
+        ("if ($?) { a b }", [["if"], ["$?"], ["a", "b"]]),
+        ('x="$(a b)"; c', [["x=$"], ["a", "b"], ["c"]]),  # S9
+        ("echo \"$(a 'b c')\" d", [["echo"], ["$"], ["a", "b c"], ["d"]]),
         ("", []),  # S7
         (" ;; \n ", []),
         ("a ''", [["a", ""]]),
@@ -161,8 +185,15 @@ def test_segments_splits_a_command_into_simple_commands(command: str, found: lis
         ("echo don't\n" + PLAIN, [("80", "o/r")]),  # A2
         ("git commit -q -F - <<'EOF'\nfix: x\n\n" + PLAIN + "\nEOF", [("80", "o/r")]),  # A3
         ('gh pr comment 5 -R o/r --body "tried gh pr merge 80 -R o/r"', []),  # A4
-        ('gh pr comment 5 -R o/r --body "first line\n' + PLAIN + '\nlast line"', []),
+        ('gh pr comment 5 -R o/r --body "first line\n' + PLAIN + '\nlast line"', [("80", "o/r")]),  # A3
         ("GH.EXE pr merge 80 -R o/r", [("80", "o/r")]),  # A5
+        ("gh.cmd pr merge 80 -R o/r", [("80", "o/r")]),
+        ("# don't merge before the checks\ngh pr checks 80 -R o/r\n" + PLAIN + "\n# that's it", [("80", "o/r")]),  # A6m
+        ("if ($?) {" + PLAIN + "}", [("80", "o/r")]),  # A7m
+        ("if ($?) { " + PLAIN + " }", [("80", "o/r")]),
+        ('OUT="$(' + PLAIN + ' 2>&1)"; echo "$OUT"', [("80", "o/r")]),
+        ("gh pr merge 80x -R o/r", [("", "o/r")]),  # A8m
+        ("gh merge pr 80 -R o/r", []),
     ],
 )
 def test_merges_finds_each_merge_command(command: str, found: list[tuple[str, str | None]]) -> None:
@@ -245,6 +276,9 @@ GIT = "git -c credential.helper= -c credential.helper='!gh auth git-credential' 
         "git fetch origin main",
         "git checkout main && git pull",
         "git commit -m 'refuse a push to main'",
+        "git push origin feat/x 2>&1",  # EC13r
+        "git push -u origin feat/x 2>&1 | tail -3",
+        "git push origin feat/x 2>/dev/null",
         "",
     ],
 )
@@ -282,6 +316,21 @@ def test_push_refusals_lets_through(command: str) -> None:
         "git -C ../other push origin main",
         "cd x && git push origin main",
         "git status\ngit push origin main",
+        "git push origin heads/main",
+        "git push origin 2>&1",  # EC15r: the 2 of a redirection is no branch
+        "git push -u origin 2>&1 | tail -3",
+        "git push origin 2>/dev/null",
+        "git push origin 2>$null",
+        "git push origin $(git branch --show-current)",  # EC15v: a branch the hook cannot read
+        "git push origin $BRANCH",
+        "git push origin ${BRANCH}",
+        "git push origin feat/x:$TARGET",
+        "git push --all -o x origin",  # EC16: only the flag gives these away
+        "git push --mirror -o x origin",
+        "git push --branches -o x origin",
+        "if ($?) {git push origin main}",  # S8
+        "if ($?) { git push origin main}",
+        'echo "$(git push origin main 2>&1)"',  # S9
     ],
 )
 def test_push_refusals_refuses(command: str) -> None:
@@ -300,6 +349,9 @@ def test_push_refusals_refuses(command: str) -> None:
         "git commit -anm x",
         "git commit -m x -n",
         GIT + "commit -n -m x",
+        "pre-commit run --no-verify",  # EC19: any command, not git alone
+        "if ($?) {git commit -n -m x}",  # S8
+        "if ($?) {git commit -m x --no-verify}",
     ],
 )
 def test_no_verify_refusals_refuses(command: str) -> None:
@@ -331,7 +383,9 @@ def test_no_verify_refusals_lets_through(command: str) -> None:
         "C:/Users/a/ploni-engine/scripts/guard.py",
         "C:\\Users\\a\\ploni-engine\\docs\\WAIVERS.md",  # EC23
         "c:/users/a/ploni-engine/DOCS/waivers.MD",
-        "C:/Users/a/ploni-engine/docs/../docs/WAIVERS.md",
+        "C:/Users/a/ploni-engine/docs/x/../WAIVERS.md",
+        "C:/Users/a/ploni-engine/docs/WAIVERS.md.",
+        "C:/Users/a/ploni-engine/docs/WAIVERS.md ",
         "C:/Temp/another-checkout/.claude/settings.json",
         "docs/WAIVERS.md",
         "/home/a/ploni-engine/scripts/guard.py",
@@ -462,11 +516,79 @@ def test_e2_rollup_raises_oserror_when_gh_is_not_installed(monkeypatch: pytest.M
         guard.rollup("80", "o/r")
 
 
+def test_rollup_asks_gh_for_the_checks_of_that_pr_with_a_time_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+
+    def fake_run(argv: list[str], **options: object) -> subprocess.CompletedProcess[str]:
+        calls.append((argv, options))
+        return subprocess.CompletedProcess(argv, 0, stdout='{"statusCheckRollup": [{"name": "\u05e4"}]}')
+
+    monkeypatch.setattr(guard.shutil, "which", lambda name: "X:/tools/gh.exe")
+    monkeypatch.setattr(guard.subprocess, "run", fake_run)
+    assert guard.rollup("80", "o/r") == [{"name": "\u05e4"}]
+    ((argv, options),) = calls
+    assert argv == ["X:/tools/gh.exe", "pr", "view", "80", "-R", "o/r", "--json", "statusCheckRollup"]
+    assert options == {
+        "capture_output": True,
+        "encoding": "utf-8",
+        "timeout": guard.GH_TIMEOUT_SECONDS,
+        "check": True,
+    }
+
+
+def stdin_of(monkeypatch: pytest.MonkeyPatch, payload: bytes) -> None:
+    """Give `main` these bytes as its stdin."""
+    monkeypatch.setattr(guard.sys, "stdin", types.SimpleNamespace(buffer=io.BytesIO(payload)))
+
+
+def test_main_returns_0_and_writes_nothing_for_a_call_that_may_run(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    stdin_of(monkeypatch, b'{"tool_name": "Bash", "tool_input": {"command": "git status"}}')
+    assert guard.main() == 0
+    assert capsys.readouterr() == ("", "")
+
+
+def test_main_returns_2_with_each_reason_on_stderr_for_a_refused_call(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    stdin_of(monkeypatch, b'{"tool_name": "Bash", "tool_input": {"command": "git push --no-verify origin main"}}')
+    assert guard.main() == 2
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert len(err.splitlines()) == 2
+    assert all(line.startswith("guard: ") for line in err.splitlines())
+
+
+@pytest.mark.parametrize("payload", [b"", b"not json", b"[]", b"\xff\xfe"])
+def test_main_refuses_stdin_that_is_no_payload(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str], payload: bytes
+) -> None:
+    stdin_of(monkeypatch, payload)
+    assert guard.main() == 2
+    assert capsys.readouterr().err.startswith("guard: ")
+
+
+def test_main_reads_the_payload_as_utf8_and_writes_ascii(
+    monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]
+) -> None:
+    command = "gh pr merge 80 -R \u05e4\u05dc\u05d5\u05e0\u05d9/r --squash"
+    stdin_of(monkeypatch, json.dumps({"tool_input": {"command": command}}, ensure_ascii=False).encode("utf-8"))
+    monkeypatch.setattr(guard.shutil, "which", lambda name: None)
+    assert guard.main() == 2
+    err = capsys.readouterr().err
+    assert "PR 80 of \\u05e4\\u05dc\\u05d5\\u05e0\\u05d9/r" in err
+    assert err.isascii()
+
+
 def test_ec29_the_settings_file_runs_the_script_before_the_four_tools() -> None:
     settings = json.loads((REPOSITORY / ".claude" / "settings.json").read_text(encoding="utf-8"))
     (entry,) = settings["hooks"]["PreToolUse"]
     (hook,) = entry["hooks"]
     assert set(entry["matcher"].split("|")) == {"Bash", "PowerShell", "Edit", "Write"}
     assert hook["type"] == "command"
+    assert hook["shell"] == "bash"
     assert hook["command"] == 'python "$CLAUDE_PROJECT_DIR/scripts/guard.py" || exit 2'
     assert hook["timeout"] > guard.GH_TIMEOUT_SECONDS
+    # A hook that is cut off, or cannot start, refuses the call (Claude Code 2.1.295 or later).
+    assert hook["onFailure"] == "block"

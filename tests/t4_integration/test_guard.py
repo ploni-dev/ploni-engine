@@ -18,7 +18,12 @@ a fixed exit code, so no test reaches GitHub):
   M9  an edit of docs/WAIVERS.md              exit code 2, stderr names the file
   M10 an edit of another file                 exit code 0
   M11 stdin that is not JSON, or not an object    exit code 2
-  M12 a command with Hebrew text in it        exit code 0: the payload is read as UTF-8
+  M12 Hebrew text in the payload              read as UTF-8: a harmless command is let
+                                              through, and a refusal names a Hebrew
+                                              repository letter for letter, in ASCII
+
+Every refusal is told from a script that never ran by its stderr: each line starts with
+`guard: `. Python itself ends with 2 when it cannot open the script.
 
 Known limits: the stand-in is a .cmd file on Windows and a shell script elsewhere. The
 real `gh` and the real hook call of Claude Code are tried by hand on a red PR
@@ -68,6 +73,19 @@ def rollup(*checks: dict[str, str]) -> str:
     return json.dumps({"statusCheckRollup": list(checks)})
 
 
+def refused(done: subprocess.CompletedProcess[bytes]) -> bytes:
+    """Return the stderr of a run, after checking that the script itself refused the call.
+
+    Python too ends with 2 when it cannot open the script, so the exit code alone does not
+    tell a refusal from a script that never ran. Every line of a refusal starts with `guard: `.
+    """
+    assert done.returncode == 2
+    lines = done.stderr.splitlines()
+    assert lines
+    assert all(line.startswith(b"guard: ") for line in lines)
+    return done.stderr
+
+
 def test_m1_a_merge_with_every_check_green_is_let_through(tmp_path: Path) -> None:
     stand_in_gh(tmp_path, rollup(GREEN, GREEN))
     done = hook(payload("Bash", command=MERGE), tmp_path)
@@ -79,11 +97,8 @@ def test_m1_a_merge_with_every_check_green_is_let_through(tmp_path: Path) -> Non
 @pytest.mark.parametrize("tool", ["Bash", "PowerShell"])  # M2, M6
 def test_m2_a_merge_with_a_red_check_is_refused(tmp_path: Path, tool: str) -> None:
     stand_in_gh(tmp_path, rollup(GREEN, RED))
-    done = hook(payload(tool, command=MERGE), tmp_path)
-    assert done.returncode == 2
-    assert b"80" in done.stderr
-    assert b"lint" in done.stderr
-    assert b"FAILURE" in done.stderr
+    stderr = refused(hook(payload(tool, command=MERGE), tmp_path))
+    assert b"PR 80 of o/r: check lint is FAILURE" in stderr
 
 
 @pytest.mark.parametrize(
@@ -92,9 +107,7 @@ def test_m2_a_merge_with_a_red_check_is_refused(tmp_path: Path, tool: str) -> No
 )
 def test_a_merge_is_refused_when_gh_does_not_show_green_checks(tmp_path: Path, answer: str, exit_code: int) -> None:
     stand_in_gh(tmp_path, answer, exit_code)
-    done = hook(payload("Bash", command=MERGE), tmp_path)
-    assert done.returncode == 2
-    assert b"80" in done.stderr
+    assert b"PR 80 of o/r" in refused(hook(payload("Bash", command=MERGE), tmp_path))
 
 
 def test_m7_a_command_that_is_no_merge_does_not_start_gh(tmp_path: Path) -> None:
@@ -106,13 +119,12 @@ def test_m7_a_command_that_is_no_merge_does_not_start_gh(tmp_path: Path) -> None
 
 @pytest.mark.parametrize("command", ["git push origin main", "git commit --no-verify -m x"])
 def test_m8_a_push_to_main_and_a_no_verify_are_refused(tmp_path: Path, command: str) -> None:
-    assert hook(payload("PowerShell", command=command), tmp_path).returncode == 2
+    refused(hook(payload("PowerShell", command=command), tmp_path))
 
 
 def test_m9_an_edit_of_the_waiver_file_is_refused(tmp_path: Path) -> None:
     done = hook(payload("Edit", file_path="C:\\r\\docs\\WAIVERS.md", old_string="a", new_string="b"), tmp_path)
-    assert done.returncode == 2
-    assert b"docs/WAIVERS.md" in done.stderr
+    assert b"docs/WAIVERS.md" in refused(done)
 
 
 def test_m10_an_edit_of_another_file_is_let_through(tmp_path: Path) -> None:
@@ -121,10 +133,19 @@ def test_m10_an_edit_of_another_file_is_let_through(tmp_path: Path) -> None:
 
 @pytest.mark.parametrize("stdin", [b"", b"not json", b"[]", b'"gh pr merge"', b"\xff\xfe"])
 def test_m11_stdin_that_is_no_payload_is_refused(tmp_path: Path, stdin: bytes) -> None:
-    assert hook(stdin, tmp_path).returncode == 2
+    refused(hook(stdin, tmp_path))
 
 
 def test_m12_a_command_with_hebrew_text_is_read_as_utf8(tmp_path: Path) -> None:
     done = hook(payload("Bash", command="echo 'פלוני אלמוני'"), tmp_path)
     assert done.returncode == 0
     assert done.stderr == b""
+
+
+def test_m12_a_refusal_names_a_hebrew_repository_letter_for_letter(tmp_path: Path) -> None:
+    stand_in_gh(tmp_path, rollup(GREEN, RED))
+    repository = "פלוני/r"
+    stderr = refused(hook(payload("Bash", command=f"gh pr merge 80 -R {repository} --squash"), tmp_path))
+    written = repository.encode("ascii", "backslashreplace")
+    assert written.isascii()
+    assert b"PR 80 of " + written + b": check lint is FAILURE" in stderr
