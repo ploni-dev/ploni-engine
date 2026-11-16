@@ -309,7 +309,9 @@ def test_s10_a_long_run_of_digits_is_read_in_time() -> None:
         ("<# merge it #>" + PLAIN, [("80", "o/r")]),  # the same, with no blank after the comment
         ("gh <# note #> pr merge 80 -R o/r", [("80", "o/r")]),  # S11: a comment inside the command
         ("gh pr <# note #> merge 80 -R o/r", [("80", "o/r")]),
-        ("gh pr merge<# note #> 80 -R o/r", [("80", "o/r")]),
+        # Read with the redirection `<#` dropped, the word after `merge` is `note`: a second
+        # merge, with no number. So this spelling is refused whatever the checks say.
+        ("gh pr merge<# note #> 80 -R o/r", [("80", "o/r"), ("", "o/r")]),
         # A13m: the value of -R is a gh command of its own, with a `pr` in it
         ("gh -R $(gh pr view 76 --json headRepository -q .x) pr merge 76 --squash", [("76", "$")]),
         ("gh api pr merge 80 -R o/r", []),  # `pr` is not the first word of gh
