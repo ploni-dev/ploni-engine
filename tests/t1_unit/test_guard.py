@@ -4,13 +4,20 @@ segments(command): the simple commands of a shell command, each as its words.
   S1    one command                                 its words
   S2    commands joined by && ; | & or a new line   one list for each
   S3    a quoted text                               one word, without its quotes, separators kept
-  S4    a line continued with \\ or `, a backtick    joined; a backtick is read as a space
+  S4    a line continued with \\ or `, a backtick    joined; a backtick is a separator, and a
+                                                    quoted text that holds one is read again
   S5    a backslash or a # in a word                kept as written
   S6    a quote that is not closed on its line      every quote of the line is read as a space;
                                                     two apostrophes in two comments hide nothing
   S7    nothing, or separators only                 no command
   S8    PowerShell curly brackets                   separators, with or without a space
-  S9    a quoted text that holds $( )               the command inside is returned as well
+  S9    a quoted text that holds $( )               it stays a word of its command, and the
+                                                    command inside is returned after it
+  S10   a command of several lines                  read twice, as one text and line by line:
+                                                    a quote that spans lines hides nothing in
+                                                    the second reading, a line that ends one
+                                                    quoted text and opens another hides nothing
+                                                    in the first; the same command is given once
 
 merges(command): the `gh pr merge` commands in a shell command, as (number, repository).
   EC1   the plain form                              gh pr merge 80 -R o/r --squash
@@ -133,15 +140,18 @@ def never_asked(number: str, repository: str) -> list[dict[str, str]]:
         ("a 'b c' \"d;e\" f'g h'", [["a", "b c", "d;e", "fg h"]]),  # S3
         ("a \\\nb", [["a", "b"]]),  # S4
         ("a `\nb", [["a", "b"]]),
-        ("a `b c`", [["a", "b", "c"]]),
+        ("a `b c`", [["a"], ["b", "c"]]),
+        ('a "`b c`" d', [["a", "`b c`", "d"], ["b", "c"]]),
         ("a C:\\x\\y.exe # b", [["a", "C:\\x\\y.exe", "#", "b"]]),  # S5
         ("a don't\nb \"c", [["a", "don", "t"], ["b", "c"]]),  # S6
-        ("a 'b\nc' d", [["a", "b"], ["c", "d"]]),
-        ("# don't\na b\n# it's", [["#", "don", "t"], ["a", "b"], ["#", "it", "s"]]),
+        ("a 'b\nc' d", [["a", "b\nc", "d"], ["a", "b"], ["c", "d"]]),  # S10
+        ("# don't\na b\n# it's", [["#", "dont\na b\n# its"], ["#", "don", "t"], ["a", "b"], ["#", "it", "s"]]),
+        ('a "b\n\nc" && d "e\nf"', [["a", "b\n\nc"], ["d", "e\nf"], ["a", "b"], ["c && d e"], ["f"]]),
+        ("a b\na b\nc", [["a", "b"], ["c"]]),
         ("if ($?) {a b}", [["if"], ["$?"], ["a", "b"]]),  # S8
         ("if ($?) { a b }", [["if"], ["$?"], ["a", "b"]]),
-        ('x="$(a b)"; c', [["x=$"], ["a", "b"], ["c"]]),  # S9
-        ("echo \"$(a 'b c')\" d", [["echo"], ["$"], ["a", "b c"], ["d"]]),
+        ('x="$(a b)"; c', [["x=$(a b)"], ["c"], ["x=$"], ["a", "b"]]),  # S9
+        ("echo \"$(a 'b c')\" d", [["echo", "$(a 'b c')", "d"], ["$"], ["a", "b c"]]),
         ("", []),  # S7
         (" ;; \n ", []),
         ("a ''", [["a", ""]]),
@@ -188,6 +198,11 @@ def test_segments_splits_a_command_into_simple_commands(command: str, found: lis
         ('gh pr comment 5 -R o/r --body "first line\n' + PLAIN + '\nlast line"', [("80", "o/r")]),  # A3
         ("GH.EXE pr merge 80 -R o/r", [("80", "o/r")]),  # A5
         ("gh.cmd pr merge 80 -R o/r", [("80", "o/r")]),
+        ("gh.bat pr merge 80 -R o/r", [("80", "o/r")]),
+        ('git commit -m "subject\n\nbody" && ' + PLAIN + ' --body "line1\nline2"', [("80", "o/r")]),  # S10
+        (PLAIN + ' --body "line1\nline2"', [("80", "o/r")]),
+        ("git status\n" + PLAIN + "\n" + PLAIN, [("80", "o/r")]),
+        ('OUT="`' + PLAIN + '`"; echo "$OUT"', [("80", "o/r")]),  # S4
         ("# don't merge before the checks\ngh pr checks 80 -R o/r\n" + PLAIN + "\n# that's it", [("80", "o/r")]),  # A6m
         ("if ($?) {" + PLAIN + "}", [("80", "o/r")]),  # A7m
         ("if ($?) { " + PLAIN + " }", [("80", "o/r")]),
@@ -331,6 +346,10 @@ def test_push_refusals_lets_through(command: str) -> None:
         "if ($?) {git push origin main}",  # S8
         "if ($?) { git push origin main}",
         'echo "$(git push origin main 2>&1)"',  # S9
+        'git -C "$(pwd)" push origin main',
+        "git push origin $env:BRANCH",  # EC15v, PowerShell
+        "git push origin feat/x:$env:TARGET",
+        'git commit -m "s\n\nb" && git push origin main && gh pr create --title "t" --body "one\ntwo"',  # S10
     ],
 )
 def test_push_refusals_refuses(command: str) -> None:
@@ -350,6 +369,10 @@ def test_push_refusals_refuses(command: str) -> None:
         "git commit -m x -n",
         GIT + "commit -n -m x",
         "pre-commit run --no-verify",  # EC19: any command, not git alone
+        "git commit -m \"$(cat <<'EOF'\nfix: x\nEOF\n)\" -n",  # S9: the flag after the quoted text
+        'git commit -m "$(cat msg.txt)" -n',
+        'git commit -m "fix: x\n\nbody" -n',  # S10
+        'echo "a\nb" && git commit --no-verify -m "t" -m "c\nd"',
         "if ($?) {git commit -n -m x}",  # S8
         "if ($?) {git commit -m x --no-verify}",
     ],
