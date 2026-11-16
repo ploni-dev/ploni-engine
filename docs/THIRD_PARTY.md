@@ -112,15 +112,15 @@ Updating is a PR of its own: replace `guides/` from a newer commit, and update t
 
 ## Tools of the fast suite
 
-None is shipped, and no code under `ploni/` imports one. They run on the laptop and in the GitHub workflow, and their result decides whether a PR may merge. Each is pinned to one version in `requirements-dev.txt`, with the SHA-256 of its Windows and of its Linux wheel for CPython 3.13, and is installed with `pip install --require-hashes`, which refuses any other file. `requirements-dev.txt` and the workflow come with the PR of issues #17 and #22.
+None is shipped. They come from PyPI, pip's default index. They run on the laptop and in the GitHub workflow, and a PR merges only when their run on its last commit is green (`CLAUDE.md`, Merging). Each is pinned to one version in `requirements-dev.txt`, with the SHA-256 of its Windows and of its Linux wheel for CPython 3.13, and is installed with `pip install --require-hashes`, which refuses any other file. `requirements-dev.txt` and the workflow come with the PR of issues #17 and #22.
 
 Where they come from: Achia asked on 2026-11-15 for tests on every merge, "like a pytest and jenkins (but whatever fits here)". ruff and mypy are named in `PROCESS.md` section 4.5.
 
 | Package | Version | License, as the package declares it | Why it is there |
 |---|---|---|---|
-| pytest | 9.2.0 | MIT | asked for by name: runs the tests |
-| ruff | 0.17.5 | MIT | asked for by name: the linter |
-| mypy | 2.4.1 | MIT | asked for by name: the type check |
+| pytest | 9.2.0 | MIT | named by Achia: runs the tests |
+| ruff | 0.17.5 | MIT | named in `PROCESS.md` section 4.5: the linter |
+| mypy | 2.4.1 | MIT | named in `PROCESS.md` section 4.5: the type check |
 | ast-serialize | 0.13.1 | MIT | needed by mypy |
 | librt | 0.16.0 | MIT | needed by mypy |
 | mypy-extensions | 1.2.0 | MIT | needed by mypy |
@@ -143,7 +143,8 @@ The workflow uses two GitHub actions, each pinned by commit:
 
 Known limits:
 
-- The licenses are what each package declares in its installed metadata, read on 2026-11-16 (for colorama and pathspec a classifier, for the others the license field), and what GitHub reports for the two action repositories. No license text was read.
+- The licenses are what each package declares in its installed metadata, read on 2026-11-16 (for colorama and pathspec a classifier, for pluggy the `License` field, for the other ten `License-Expression`), and what GitHub reports for the two action repositories. No license text was read.
 - The workflow runs on GitHub's `ubuntu-24.04` image. That is a name, not a pin: GitHub changes what the image holds.
-- `actions/setup-python` installs Python 3.13.5 and pip. In the run of 2026-11-16 it first upgraded to the newest pip (26.3) and used that once to install the pinned pip 25.1.1; the packages above were then installed by 25.1.1 with hash checking. The workflow cannot change that step.
+- `actions/setup-python` installs Python 3.13.5 and pip. In the run of 2026-11-16 it first upgraded to the newest pip (26.3) and used that once to install the pinned pip 25.1.1; the twelve packages above that Linux needs were then installed by 25.1.1 with hash checking. Nothing in the workflow asks for that upgrade; it is the action's own step.
+- Python and pip are not in the hashed set. `actions/setup-python` downloads Python 3.13.5 at run time from the repository `actions/python-versions`, found by version through a list on that repository's `main` branch; the log shows no hash check. pip 26.3 and pip 25.1.1 come from PyPI by version, with no hash: the tool that checks the hashes is itself not hashed.
 - The two actions run their own code, with what they bundle, at the pinned commit. That code was not read.
