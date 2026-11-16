@@ -19,6 +19,11 @@ Sample: len(REFUSED) * len(SHAPES) cases for I1 one deep, the same times len(SHA
 deep, and len(ALLOWED) * len(SHAPES) for I2. The test at the end holds the counts over
 the 500 that CLAUDE.md, Tests, asks of an invariant.
 
+Not held, and listed: I1 fails for a command whose own quoted text holds a separator sign
+(`git commit -m "a; b" -n`) in the shapes that put it inside another quoted text. Those
+commands are in KNOWN_MISSED with the exact shapes, not in REFUSED. It is a commit that
+skips the git hooks; no merge and no push is known to get through that way.
+
 Known limits: the shapes are a fixed list, not a grammar of two shells. A shape that is
 not in the list is not tested. Nothing here starts a shell: that a shell really runs the
 command in each shape was looked at by hand in the review of this branch, not here.
@@ -52,8 +57,38 @@ REFUSED = [
     "git commit -m x 2>&1 -n",
 ]
 
+# Each is refused alone, and each is let through in the shapes listed with it. The words of
+# these commands are split by a separator sign inside their own quoted text (`;`, a new
+# line), and the shapes are the ones that hide that quoted text from the readings that
+# follow quotes (`segments`, Known limits). Listed exactly, so that a change in either
+# direction shows: a shape that starts to catch one, or a new shape that misses one.
+KNOWN_MISSED = {
+    'git commit -m "a; b" -n': [
+        'OUT="$({c})"',
+        'OUT="$({c} 2>&1)"; echo "$OUT"',
+        'OUT="`{c}`"',
+        'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"',
+        'OUT="$(cd "/c/my dir" && {c})"',
+        'Write-Output "it`"s done"; {c}',
+    ],
+    'git commit -m "s\n\nb" -n': [
+        'OUT="$({c})"',
+        'OUT="$({c} 2>&1)"; echo "$OUT"',
+        'OUT="`{c}`"',
+        'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"',
+        'OUT="$(cd "/c/my dir" && {c})"',
+        "# don't run this before the checks\n{c}\n# that's it",
+        'Write-Output "it`"s done"; {c}',
+    ],
+}
+
 ALLOWED = [
     "git status",
+    "git log --oneline -5",
+    "git diff --stat main..HEAD",
+    "git add -A",
+    "git fetch origin main",
+    "gh pr checks 80 -R o/r",
     "git push -u origin feat/x",
     GIT + "push -q -u origin feat/x",
     "gh pr view 80 -R o/r --json statusCheckRollup",
@@ -145,8 +180,14 @@ def test_i2_an_allowed_command_is_let_through_in_every_shape(shape: str) -> None
     assert [command for command in ALLOWED if refused(shape.format(c=command))] == []
 
 
+@pytest.mark.parametrize("command", KNOWN_MISSED)
+def test_the_known_misses_are_exactly_the_listed_shapes(command: str) -> None:
+    assert refused(command)
+    assert [shape for shape in SHAPES if not refused(shape.format(c=command))] == KNOWN_MISSED[command]
+
+
 def test_the_sample_is_over_the_minimum_for_an_invariant() -> None:
     # CLAUDE.md, Tests: an invariant is held over 500 generated cases.
     assert len(REFUSED) * len(SHAPES) >= 500
     assert len(REFUSED) * len(SHAPES) * len(SHAPES) >= 5000
-    assert len(ALLOWED) * len(SHAPES) >= 300
+    assert len(ALLOWED) * len(SHAPES) >= 500

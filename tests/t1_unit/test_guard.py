@@ -24,6 +24,8 @@ more than once; no caller counts them.
   S6    a command inside "$( )", with a quoted text before it    given, by the reading that
                                                     takes every quote sign as a blank
   S7    nothing                                     no command
+  S9    a name in curly brackets, ${NAME}           read as $NAME, one word
+  S10   a run of 20,000 digits                      read in under two seconds
   S8    a command in brackets, with words after the bracket    given twice: with those words
                                                     (`git -C $(pwd) push`) and without them
                                                     (`try { git push } catch { throw }`)
@@ -117,6 +119,7 @@ handles commands and paths, no document.
 import io
 import json
 import subprocess
+import time
 import types
 from pathlib import Path
 
@@ -205,6 +208,7 @@ def test_s2_a_backtick_at_a_line_end_is_read_both_as_a_joint_and_as_the_end_of_a
         ('a "b\n\nc" && d "e\nf" g', [["a", "b\n\nc"], ["d", "e\nf", "g"]]),  # S4
         ("# don't\na \"b;c\" d\n# it's", [["a", "b;c", "d"]]),  # S5
         ('x="$(a "b c" && d e)" f', [["d", "e", "f"]]),  # S6
+        ("a -R ${B} c", [["a", "-R", "$B", "c"]]),  # S9
     ],
 )
 def test_segments_gives_each_of_these_commands(command: str, given: list[list[str]]) -> None:
@@ -215,6 +219,15 @@ def test_segments_gives_each_of_these_commands(command: str, given: list[list[st
 def test_s7_segments_of_nothing_is_nothing() -> None:
     assert guard.segments("") == []
     assert guard.segments(" ;\n; ") == []
+
+
+def test_s10_a_long_run_of_digits_is_read_in_time() -> None:
+    # A redirection may start with digits (`2>&1`). Tried from every digit of a long run,
+    # the pattern took 28 seconds for 20,000 digits; the hook has 40 for everything.
+    digits = "1" * 20000
+    started = time.perf_counter()
+    assert ["a", digits] in guard.segments("a " + digits)
+    assert time.perf_counter() - started < 2
 
 
 @pytest.mark.parametrize(
@@ -269,6 +282,9 @@ def test_s7_segments_of_nothing_is_nothing() -> None:
         ("if ($?) {" + PLAIN + "}", [("80", "o/r")]),  # A7m
         ("if ($?) { " + PLAIN + " }", [("80", "o/r")]),
         ('OUT="$(' + PLAIN + ' 2>&1)"; echo "$OUT"', [("80", "o/r")]),
+        ("gh -R ${REPO} pr merge 80 --squash", [("80", "$REPO")]),  # A10m: the name in curly brackets
+        ("gh --repo o/r pr merge 80", [("80", "o/r")]),  # the option before `pr` takes its value along
+        ("gh api pr merge 80 -R o/r", []),  # `pr` is not the first word of gh
         ("gh pr merge 80x -R o/r", [("", "o/r")]),  # A8m
         ("gh merge pr 80 -R o/r", []),
     ],
@@ -356,6 +372,7 @@ GIT = "git -c credential.helper= -c credential.helper='!gh auth git-credential' 
         "git push origin 2026",
         "git push origin feat/x 2>$null",
         "git push origin feat/x > push.log",
+        "git push -u origin feat/x # main is protected",  # a comment is no branch
         "git push origin feat/x 2>&1",  # EC13r
         "git push -u origin feat/x 2>&1 | tail -3",
         "git push origin feat/x 2>/dev/null",
@@ -412,6 +429,8 @@ def test_push_refusals_lets_through(command: str) -> None:
         "if ($?) { git push origin main}",
         'echo "$(git push origin main 2>&1)"',  # S9
         'git -C "$(pwd)" push origin main',
+        "git push # ok",  # EC15: a comment is neither remote nor branch
+        "git push origin # x",
         "git push origin $A feat/x",
         "git -C ${REPO_DIR} push origin main",  # C4: brackets are blanks
         "git -C $(pwd) push origin main",
@@ -562,6 +581,20 @@ def test_ec28_an_edit_is_refused_for_a_protected_file_only(tool: str) -> None:
 
     assert len(guard.refusals(payload("C:/r/docs/WAIVERS.md"), never_asked)) == 1
     assert guard.refusals(payload("C:/r/docs/STATUS.md"), never_asked) == []
+
+
+def test_a_refusal_says_which_words_it_read_as_the_command() -> None:
+    # The words of a refused command in a text are refused on purpose. The reason has to
+    # show what was taken for the command, or a wrong refusal costs several tries.
+    assert "git commit -m fix the push" in guard.push_refusals("git commit -m 'fix the push'")[0]
+    assert "git commit -m use the -n flag" in guard.no_verify_refusals('git commit -m "use the -n flag"')[0]
+    assert "grep --no-verify docs" in guard.no_verify_refusals("grep --no-verify docs")[0]
+    unplain = guard.merge_refusals("gh pr merge 80 --squash", never_asked)[0]
+    assert "number 80" in unplain
+    assert "no repository" in unplain
+    assert "no number" in guard.merge_refusals("gh pr merge -R o/r", never_asked)[0]
+    long = guard.push_refusals("git push origin main " + "x" * 500)[0]
+    assert len(long) < 250
 
 
 def test_refusals_gives_every_reason_of_one_command() -> None:
