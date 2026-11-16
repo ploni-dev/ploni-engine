@@ -1,23 +1,29 @@
 """Test matrix for scripts/guard.py, the script behind the Claude Code hooks.
 
-segments(command): the simple commands of a shell command, each as its words.
-  S1    one command                                 its words
-  S2    commands joined by && ; | & or a new line   one list for each
-  S3    a quoted text                               one word, without its quotes, separators kept
-  S4    a line continued with \\ or `, a backtick    joined; a backtick is a separator, and a
-                                                    quoted text that holds one is read again
-  S5    a backslash or a # in a word                kept as written
-  S6    a quote that is not closed on its line      every quote of the line is read as a space;
-                                                    two apostrophes in two comments hide nothing
-  S7    nothing, or separators only                 no command
-  S8    PowerShell curly brackets                   separators, with or without a space
-  S9    a quoted text that holds $( )               it stays a word of its command, and the
-                                                    command inside is returned after it
-  S10   a command of several lines                  read twice, as one text and line by line:
-                                                    a quote that spans lines hides nothing in
-                                                    the second reading, a line that ends one
-                                                    quoted text and opens another hides nothing
-                                                    in the first; the same command is given once
+_commands(text): one reading of a text, as the words of each simple command.
+  C1    one command                                 its words
+  C2    commands joined by && ; | & or a new line   one list for each
+  C3    a quoted text                               one word, without its quotes, separators and
+                                                    new lines kept; joined to what touches it
+  C4    round and curly brackets, backticks         read as blanks: what follows a bracket stays
+                                                    in its command
+  C5    a backslash or a # in a word                kept as written
+  C6    a quote sign that is never closed           skipped; the words after it are still read
+  C7    nothing, or separators only                 no command
+
+segments(command): every reading of a shell command. The same simple command may be given
+more than once; no caller counts them.
+  S1    a command on one line                       its simple commands
+  S2    a line continued with \\ or `               joined to the next
+  S3    a redirection, with its target              dropped: `2>&1` holds a separator sign, and
+                                                    what follows a redirection stays in its command
+  S4    a quoted text of several lines              the command it belongs to is given whole
+  S5    apostrophes in two comment lines            the line between them is given by itself
+  S6    a command inside "$( )", with a quoted text before it    given, by the reading that
+                                                    takes every quote sign as a blank
+  S7    nothing                                     no command
+
+The same holds for commands put together by rule and not by hand: tests/t2_property/test_guard.py.
 
 merges(command): the `gh pr merge` commands in a shell command, as (number, repository).
   EC1   the plain form                              gh pr merge 80 -R o/r --squash
@@ -34,7 +40,9 @@ merges(command): the `gh pr merge` commands in a shell command, as (number, repo
   A3    the words on a line of their own in a here-document or in a quoted text of several
         lines    found: the gate does not know where such a text ends, and refuses rather
         than lets through
-  A4    the words inside a quoted text on one line  not found: an argument
+  A4    the words inside a quoted text on one line  found, for the same reason: one reading
+                                                    takes every quote sign as a blank
+  A9m   `merge` as a word of another `gh pr` command (a title, a search word)    no merge
   A5    upper case GH.EXE, gh.cmd                   found
   A6m   a merge between two comment lines that each hold an apostrophe    found
   A7m   a merge in PowerShell curly brackets, or inside "$( )"            found
@@ -133,32 +141,50 @@ def never_asked(number: str, repository: str) -> list[dict[str, str]]:
 @pytest.mark.parametrize(
     ("command", "found"),
     [
-        ("a b", [["a", "b"]]),  # S1
-        ("a && b; c | d\ne", [["a"], ["b"], ["c"], ["d"], ["e"]]),  # S2
+        ("a b", [["a", "b"]]),  # C1
+        ("a && b; c | d\ne", [["a"], ["b"], ["c"], ["d"], ["e"]]),  # C2
         ("a;b&c|d", [["a"], ["b"], ["c"], ["d"]]),
-        ("a $(b c) > d", [["a", "$"], ["b", "c"], ["d"]]),
-        ("a 'b c' \"d;e\" f'g h'", [["a", "b c", "d;e", "fg h"]]),  # S3
-        ("a \\\nb", [["a", "b"]]),  # S4
-        ("a `\nb", [["a", "b"]]),
-        ("a `b c`", [["a"], ["b", "c"]]),
-        ('a "`b c`" d', [["a", "`b c`", "d"], ["b", "c"]]),
-        ("a C:\\x\\y.exe # b", [["a", "C:\\x\\y.exe", "#", "b"]]),  # S5
-        ("a don't\nb \"c", [["a", "don", "t"], ["b", "c"]]),  # S6
-        ("a 'b\nc' d", [["a", "b\nc", "d"], ["a", "b"], ["c", "d"]]),  # S10
-        ("# don't\na b\n# it's", [["#", "dont\na b\n# its"], ["#", "don", "t"], ["a", "b"], ["#", "it", "s"]]),
-        ('a "b\n\nc" && d "e\nf"', [["a", "b\n\nc"], ["d", "e\nf"], ["a", "b"], ["c && d e"], ["f"]]),
-        ("a b\na b\nc", [["a", "b"], ["c"]]),
-        ("if ($?) {a b}", [["if"], ["$?"], ["a", "b"]]),  # S8
-        ("if ($?) { a b }", [["if"], ["$?"], ["a", "b"]]),
-        ('x="$(a b)"; c', [["x=$(a b)"], ["c"], ["x=$"], ["a", "b"]]),  # S9
-        ("echo \"$(a 'b c')\" d", [["echo", "$(a 'b c')", "d"], ["$"], ["a", "b c"]]),
-        ("", []),  # S7
-        (" ;; \n ", []),
+        ("a 'b c' \"d;e\" f'g h'", [["a", "b c", "d;e", "fg h"]]),  # C3
+        ('a "b\n\nc" d', [["a", "b\n\nc", "d"]]),
+        ("a -c x='!b c' d", [["a", "-c", "x=!b c", "d"]]),
         ("a ''", [["a", ""]]),
+        ("a $(b c) d", [["a", "$", "b", "c", "d"]]),  # C4
+        ("if ($?) {a b}", [["if", "$?", "a", "b"]]),
+        ("a `b c` d", [["a", "b", "c", "d"]]),
+        ("a ${B} c", [["a", "$", "B", "c"]]),
+        ("a C:\\x\\y.exe # b", [["a", "C:\\x\\y.exe", "#", "b"]]),  # C5
+        ("a don't b; c", [["a", "don", "t", "b"], ["c"]]),  # C6
+        ("", []),  # C7
+        (" ;; \n ", []),
     ],
 )
-def test_segments_splits_a_command_into_simple_commands(command: str, found: list[list[str]]) -> None:
-    assert guard.segments(command) == found
+def test_commands_reads_a_text_once(command: str, found: list[list[str]]) -> None:
+    assert guard._commands(command) == found
+
+
+@pytest.mark.parametrize(
+    ("command", "given"),
+    [
+        ("a b; c", [["a", "b"], ["c"]]),  # S1
+        ("a \\\nb", [["a", "b"]]),  # S2
+        ("a `\r\nb", [["a", "b"]]),
+        ("a 2>&1 b", [["a", "b"]]),  # S3
+        ("a > out.txt b; c", [["a", "b"], ["c"]]),
+        ("a 2>$null | b", [["a"], ["b"]]),
+        ("a <<'EOF'\nb\nEOF", [["a", "EOF"], ["b"]]),
+        ('a "b\n\nc" && d "e\nf" g', [["a", "b\n\nc"], ["d", "e\nf", "g"]]),  # S4
+        ("# don't\na \"b;c\" d\n# it's", [["a", "b;c", "d"]]),  # S5
+        ('x="$(a "b c" && d e)" f', [["d", "e", "f"]]),  # S6
+    ],
+)
+def test_segments_gives_each_of_these_commands(command: str, given: list[list[str]]) -> None:
+    found = guard.segments(command)
+    assert [words for words in given if words not in found] == []
+
+
+def test_s7_segments_of_nothing_is_nothing() -> None:
+    assert guard.segments("") == []
+    assert guard.segments(" ;\n; ") == []
 
 
 @pytest.mark.parametrize(
@@ -194,7 +220,11 @@ def test_segments_splits_a_command_into_simple_commands(command: str, found: lis
         ("gh pr merge 80 `\r\n  -R o/r --squash", [("80", "o/r")]),
         ("echo don't\n" + PLAIN, [("80", "o/r")]),  # A2
         ("git commit -q -F - <<'EOF'\nfix: x\n\n" + PLAIN + "\nEOF", [("80", "o/r")]),  # A3
-        ('gh pr comment 5 -R o/r --body "tried gh pr merge 80 -R o/r"', []),  # A4
+        ('gh pr comment 5 -R o/r --body "tried gh pr merge 80 -R o/r"', [("80", "o/r")]),  # A4
+        ('gh pr create -R o/r --title "the merge gate" --body-file f', []),  # A9m
+        ("gh pr list -R o/r --search merge", []),
+        ('OUT="$(echo "all green" && ' + PLAIN + ' 2>&1)"; echo "$OUT"', [("80", "o/r")]),  # A7m
+        ('gh pr view 5 -R o/r --json title --jq "$(' + PLAIN + ')"', [("80", "o/r")]),
         ('gh pr comment 5 -R o/r --body "first line\n' + PLAIN + '\nlast line"', [("80", "o/r")]),  # A3
         ("GH.EXE pr merge 80 -R o/r", [("80", "o/r")]),  # A5
         ("gh.cmd pr merge 80 -R o/r", [("80", "o/r")]),
@@ -290,7 +320,10 @@ GIT = "git -c credential.helper= -c credential.helper='!gh auth git-credential' 
         "git push origin main:scratch/gate-test",
         "git fetch origin main",
         "git checkout main && git pull",
-        "git commit -m 'refuse a push to main'",
+        "git commit -m 'the pushes are refused'",
+        "git push origin 2026",
+        "git push origin feat/x 2>$null",
+        "git push origin feat/x > push.log",
         "git push origin feat/x 2>&1",  # EC13r
         "git push -u origin feat/x 2>&1 | tail -3",
         "git push origin feat/x 2>/dev/null",
@@ -347,6 +380,12 @@ def test_push_refusals_lets_through(command: str) -> None:
         "if ($?) { git push origin main}",
         'echo "$(git push origin main 2>&1)"',  # S9
         'git -C "$(pwd)" push origin main',
+        "git push origin $A feat/x",
+        "git -C ${REPO_DIR} push origin main",  # C4: brackets are blanks
+        "git -C $(pwd) push origin main",
+        'OUT="$(cd "/c/my dir" && git push origin main 2>&1)"',  # S6
+        'OUT="$(echo "all green" && ' + GIT + 'push origin main 2>&1)"',
+        "git commit -m 'refuse a push to main'",  # a known wrong refusal: the words in a message
         "git push origin $env:BRANCH",  # EC15v, PowerShell
         "git push origin feat/x:$env:TARGET",
         'git commit -m "s\n\nb" && git push origin main && gh pr create --title "t" --body "one\ntwo"',  # S10
@@ -371,6 +410,12 @@ def test_push_refusals_refuses(command: str) -> None:
         "pre-commit run --no-verify",  # EC19: any command, not git alone
         "git commit -m \"$(cat <<'EOF'\nfix: x\nEOF\n)\" -n",  # S9: the flag after the quoted text
         'git commit -m "$(cat msg.txt)" -n',
+        "git -C ${REPO_DIR} commit -n -m x",  # C4: brackets are blanks
+        "git commit -m ${MSG} -n",
+        "git commit -m $(cat msg.txt) -n",
+        "git commit -m x 2>&1 -n",  # S3
+        'git commit -m "fix: the `"fast`" suite" -n',  # a PowerShell escaped quote
+        'OUT="$(git commit -m "fix: a" -n 2>&1)"',  # S6
         'git commit -m "fix: x\n\nbody" -n',  # S10
         'echo "a\nb" && git commit --no-verify -m "t" -m "c\nd"',
         "if ($?) {git commit -n -m x}",  # S8
