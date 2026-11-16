@@ -16,8 +16,12 @@ Boundaries:
   B1  run with no steps               nothing failed
   B2  ploni exists but is a file      as EC1: it is not a package folder
 
-Error paths: none documented. Every step starts the interpreter that runs the script, so
-"command not found" cannot happen.
+Error paths:
+  E1  run, a command that cannot be started    OSError, and the steps after it do not run.
+      The steps of the fast suite all start the interpreter that runs the script, so
+      there it cannot happen.
+
+The script run as a program, from end to end, is in tests/t4_integration/test_check.py.
 
 Adversarial:
   A1  a failing step that also writes to stderr and exits with a code other than 1
@@ -119,6 +123,13 @@ def test_a1_a_loud_failure_with_another_exit_code_is_one_failure(tmp_path: Path)
     failed = check.run([("loud", FAIL_LOUDLY), ("after", touch(marker))], tmp_path)
     assert failed == ["loud"]
     assert marker.exists()
+
+
+def test_e1_a_command_that_cannot_be_started_raises_oserror(tmp_path: Path) -> None:
+    marker = tmp_path / "ran"
+    with pytest.raises(OSError):
+        check.run([("missing", ["no-such-program-of-ploni"]), ("after", touch(marker))], tmp_path)
+    assert not marker.exists()
 
 
 def test_ec9_run_starts_each_step_in_the_given_folder(tmp_path: Path) -> None:
