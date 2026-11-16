@@ -10,6 +10,8 @@ _commands(text): one reading of a text, as the words of each simple command.
   C5    a backslash or a # in a word                kept as written
   C6    a quote sign that is never closed           skipped; the words after it are still read
   C7    nothing, or separators only                 no command
+  C8    asked to take brackets as ends              a bracket or a backtick ends a command,
+                                                    but for one inside a quoted text
 
 segments(command): every reading of a shell command. The same simple command may be given
 more than once; no caller counts them.
@@ -22,6 +24,9 @@ more than once; no caller counts them.
   S6    a command inside "$( )", with a quoted text before it    given, by the reading that
                                                     takes every quote sign as a blank
   S7    nothing                                     no command
+  S8    a command in brackets, with words after the bracket    given twice: with those words
+                                                    (`git -C $(pwd) push`) and without them
+                                                    (`try { git push } catch { throw }`)
 
 The same holds for commands put together by rule and not by hand: tests/t2_property/test_guard.py.
 
@@ -160,6 +165,24 @@ def never_asked(number: str, repository: str) -> list[dict[str, str]]:
 )
 def test_commands_reads_a_text_once(command: str, found: list[list[str]]) -> None:
     assert guard._commands(command) == found
+
+
+@pytest.mark.parametrize(
+    ("command", "found"),
+    [
+        ("a $(b c) d", [["a", "$"], ["b", "c"], ["d"]]),  # C8
+        ("try { a b } catch { c }", [["try"], ["a", "b"], ["catch"], ["c"]]),
+        ("a `b c` d", [["a"], ["b", "c"], ["d"]]),
+        ('a "(b)" c; d', [["a", "(b)", "c"], ["d"]]),
+    ],
+)
+def test_c8_commands_can_take_brackets_as_the_end_of_a_command(command: str, found: list[list[str]]) -> None:
+    assert guard._commands(command, guard.BRACKETS_END) == found
+
+
+def test_s8_segments_gives_a_command_in_brackets_without_what_follows_the_bracket() -> None:
+    assert ["a", "b"] in guard.segments("try { a b } catch { c }")
+    assert ["a", "b", "catch", "c"] in guard.segments("try { a b } catch { c }")
 
 
 @pytest.mark.parametrize(
