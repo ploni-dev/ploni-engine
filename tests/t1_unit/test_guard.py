@@ -55,6 +55,8 @@ merges(command): the `gh pr merge` commands in a shell command, as (number, repo
   A9m   `merge` as a word of another `gh pr` command (a title, a search word)    no merge
   A11m  an option before `pr` or before `merge` whose value is several words ($( ), backticks)
         found: after an option, `pr` and `merge` are looked for anywhere
+  A13m  an option before `pr` whose value holds a `pr` of its own    found: after an option,
+        every `pr` is tried, not the first only
   A12m  a PowerShell comment <# ... #> before the merge    found: its > is no redirection that
         takes the next word along, in the reading that leaves redirections in
   A5    upper case GH.EXE, gh.cmd                   found
@@ -300,6 +302,8 @@ def test_s10_a_long_run_of_digits_is_read_in_time() -> None:
         ("gh pr -R $(echo o/r) merge 80", [("80", "$")]),
         ("gh -R `echo o/r` pr merge 80", [("80", "echo")]),
         ("<# merge it #> " + PLAIN, [("80", "o/r")]),  # A12m: a PowerShell comment before it
+        # A13m: the value of -R is a gh command of its own, with a `pr` in it
+        ("gh -R $(gh pr view 76 --json headRepository -q .x) pr merge 76 --squash", [("76", "$")]),
         ("gh api pr merge 80 -R o/r", []),  # `pr` is not the first word of gh
         ("gh pr merge 80x -R o/r", [("", "o/r")]),  # A8m
         ("gh merge pr 80 -R o/r", []),
@@ -383,14 +387,18 @@ def test_calls_gives_the_words_after_each_word_that_names_the_program() -> None:
     assert guard._calls([], "gh") == []
 
 
-def test_after_word_takes_a_word_that_leads_or_that_follows_an_option() -> None:
-    assert guard._after_word(["pr", "merge", "80"], "pr") == ["merge", "80"]
-    assert guard._after_word(["-R", "o/r", "pr", "merge"], "pr") == ["merge"]
-    assert guard._after_word(["-R", "$", "echo", "o/r", "pr", "merge"], "pr") == ["merge"]
-    assert guard._after_word(["pr"], "pr") == []
-    assert guard._after_word(["api", "pr", "merge"], "pr") is None
-    assert guard._after_word(["--paginate", "api"], "pr") is None
-    assert guard._after_word([], "pr") is None
+def test_after_word_takes_a_word_that_leads_or_each_one_that_follows_an_option() -> None:
+    assert guard._after_word(["pr", "merge", "80"], "pr") == [["merge", "80"]]
+    assert guard._after_word(["pr", "view", "pr"], "pr") == [["view", "pr"]]
+    assert guard._after_word(["-R", "o/r", "pr", "merge"], "pr") == [["merge"]]
+    assert guard._after_word(["-R", "$", "gh", "pr", "view", "pr", "merge"], "pr") == [
+        ["view", "pr", "merge"],
+        ["merge"],
+    ]
+    assert guard._after_word(["pr"], "pr") == [[]]
+    assert guard._after_word(["api", "pr", "merge"], "pr") == []
+    assert guard._after_word(["--paginate", "api"], "pr") == []
+    assert guard._after_word([], "pr") == []
 
 
 def test_repository_gives_the_one_repository_that_is_named() -> None:
@@ -491,6 +499,7 @@ def test_push_refusals_lets_through(command: str) -> None:
         'git -C "$(pwd)" push origin main',
         "git push # ok",  # EC15: a comment is neither remote nor branch
         "git push #ok",
+        "git push origin #x",  # a comment needs no blank after its sign
         "git push origin *>&1",  # EC15r: no spelling of a redirection is a branch
         "git push origin *> $null",
         'git push origin > "push.log"',
@@ -532,6 +541,7 @@ def test_push_refusals_refuses(command: str) -> None:
         "git commit -m ${MSG} -n",
         "git commit -m $(cat msg.txt) -n",
         "git commit -m x 2>&1 -n",  # S3
+        "<# note #> git commit -m x 2>&1 -n",  # S3: the > that ends a comment takes no word along
         'git commit -m "fix: the `"fast`" suite" -n',  # a PowerShell escaped quote
         'OUT="$(git commit -m "fix: a" -n 2>&1)"',  # S6
         'git commit -m "fix: x\n\nbody" -n',  # S4
@@ -694,6 +704,12 @@ def test_e1_a_merge_is_refused_when_the_checks_cannot_be_read(failure: Exception
     assert "80" in reasons[0]
 
 
+def test_e1_a_merge_is_refused_when_an_entry_of_the_checks_is_no_mapping() -> None:
+    reasons = guard.merge_refusals(PLAIN, lambda number, repository: ["fast-suite"])  # type: ignore[list-item]
+    assert len(reasons) == 1
+    assert "could not be read" in reasons[0]
+
+
 def test_e1_the_refusal_carries_what_gh_wrote() -> None:
     def failing(number: str, repository: str) -> list[dict[str, str]]:
         raise subprocess.CalledProcessError(1, ["gh"], stderr="no pull requests found\n")
@@ -785,7 +801,7 @@ def test_main_reads_the_payload_as_utf8_and_writes_ascii(
     assert err.isascii()
 
 
-def test_ec29_the_settings_file_runs_the_script_before_the_four_tools() -> None:
+def test_ec29_the_settings_file_runs_the_script_before_the_five_tools() -> None:
     settings = json.loads((REPOSITORY / ".claude" / "settings.json").read_text(encoding="utf-8"))
     (entry,) = settings["hooks"]["PreToolUse"]
     (hook,) = entry["hooks"]
