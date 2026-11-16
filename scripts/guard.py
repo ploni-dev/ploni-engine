@@ -83,8 +83,9 @@ BRACKETS_END = re.compile(WORD + r"|[;|&\n(){}`]+")
 # A redirection with its target: `2>&1`, `> file`, `2>$null`, `<<`. It is dropped before
 # reading: `2>&1` holds a separator sign, and a target is no word of the command.
 # It starts at the first digit of a run only: tried from every digit, a long run of
-# digits took the pattern half a minute.
-REDIRECTION = re.compile(r"""(?<!\d)\d*[<>]+(?:&\d+|[ \t]*[^\s;|&()"']*)""")
+# digits took the pattern half a minute. And it does not start after a #: the `#>`
+# that ends a PowerShell comment is no redirection, and took the next word along.
+REDIRECTION = re.compile(r"""(?<![\d#])\d*[<>]+(?:&\d+|[ \t]*[^\s;|&()"']*)""")
 # `${NAME}`, which is read as `$NAME`: with its brackets as blanks the name would stand
 # apart, as a word of its own.
 BRACED_NAME = re.compile(r"\$\{([^{}\s]*)\}")
@@ -172,17 +173,18 @@ def _calls(words: list[str], program: str) -> list[list[str]]:
     return [words[index + 1 :] for index, name in enumerate(names) if name == program]
 
 
-def _after_word(words: list[str], name: str) -> list[str] | None:
-    """Return the words after name where it leads words or follows an option; else None.
+def _after_word(words: list[str], name: str) -> list[list[str]]:
+    """Return the words after name: where it leads words, or after each one that follows an option.
 
-    After an option, name is looked for anywhere: the value of an option can be several
-    words (`-R $(echo o/r)`), and how many is not known here.
+    After an option, name is looked for anywhere and every one is given: the value of
+    an option can be several words (`-R $(gh pr view ...)`), how many is not known
+    here, and a name among them is not the one that is meant.
     """
     if words[:1] == [name]:
-        return words[1:]
-    if words[:1] and words[0].startswith("-") and name in words:
-        return words[words.index(name) + 1 :]
-    return None
+        return [words[1:]]
+    if words[:1] and words[0].startswith("-"):
+        return [words[index + 1 :] for index, word in enumerate(words) if word == name]
+    return []
 
 
 def _repository(words: list[str]) -> str | None:
@@ -204,24 +206,25 @@ def merges(command: str) -> list[tuple[str, str | None]]:
     Contract:
         Args: command, the text given to Bash or PowerShell.
         Returns: one (number, repository) pair for each `gh` program, in any reading of
-            `segments`, whose first word is `pr`, or an option with `pr` after it, and
-            where `merge` follows that `pr` in the same way; the same pair is given
+            `segments`, whose first word is `pr`, or an option with a `pr` after it, and
+            where `merge` follows such a `pr` in the same way; the same pair is given
             once. number is the word right after
             `merge` when it is made of digits, else "". repository is the one value of -R
             or --repo after that `gh`, else None.
         Raises: nothing.
 
     Known limits: `merge` as a word of another `gh pr` command (a title, a search word)
-    is no merge. The words `gh pr merge` in a quoted text are one: see `segments`.
+    is no merge, unless an option stands before that command's own word:
+    `gh pr -R o/r list --search merge` is read as a merge with no number, and refused.
+    The words `gh pr merge` in a quoted text are a merge: see `segments`.
     """
     found = []
     for words in segments(command):
         for rest in _calls(words, "gh"):
-            group = _after_word(rest, "pr")
-            action = _after_word(group, "merge") if group is not None else None
-            if action is not None:
-                number = "".join(action[:1])
-                found.append((number if re.fullmatch("[0-9]+", number) else "", _repository(rest)))
+            for group in _after_word(rest, "pr"):
+                for action in _after_word(group, "merge"):
+                    number = "".join(action[:1])
+                    found.append((number if re.fullmatch("[0-9]+", number) else "", _repository(rest)))
     return list(dict.fromkeys(found))
 
 
