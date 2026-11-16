@@ -29,6 +29,8 @@ more than once; no caller counts them.
   S7    nothing                                     no command
   S9    a name in curly brackets, ${NAME}           read as $NAME, one word
   S10   a run of 20,000 digits                      read in under two seconds
+  S11   a PowerShell comment <# ... #>              given twice: as it stands, and as a blank,
+                                                    wherever it stands in a command
   S8    a command in brackets, with words after the bracket    given twice: with those words
                                                     (`git -C $(pwd) push`) and without them
                                                     (`try { git push } catch { throw }`)
@@ -222,6 +224,8 @@ def test_s2_a_backtick_at_a_line_end_is_read_both_as_a_joint_and_as_the_end_of_a
         ("a -R ${env:B} c", [["a", "-R", "$env:B", "c"]]),
         ('a b > "c d"', [["a", "b", ">", "c d"]]),  # S3, left in
         ("<# x #> a b", [["<#", "x", "#>", "a", "b"]]),
+        ("a <# x #> b<# y; z #>c", [["a", "b", "c"]]),  # S11
+        ("a <# never closed", [["a"]]),
     ],
 )
 def test_segments_gives_each_of_these_commands(command: str, given: list[list[str]]) -> None:
@@ -303,6 +307,9 @@ def test_s10_a_long_run_of_digits_is_read_in_time() -> None:
         ("gh -R `echo o/r` pr merge 80", [("80", "echo")]),
         ("<# merge it #> " + PLAIN, [("80", "o/r")]),  # A12m: a PowerShell comment before it
         ("<# merge it #>" + PLAIN, [("80", "o/r")]),  # the same, with no blank after the comment
+        ("gh <# note #> pr merge 80 -R o/r", [("80", "o/r")]),  # S11: a comment inside the command
+        ("gh pr <# note #> merge 80 -R o/r", [("80", "o/r")]),
+        ("gh pr merge<# note #> 80 -R o/r", [("80", "o/r")]),
         # A13m: the value of -R is a gh command of its own, with a `pr` in it
         ("gh -R $(gh pr view 76 --json headRepository -q .x) pr merge 76 --squash", [("76", "$")]),
         ("gh api pr merge 80 -R o/r", []),  # `pr` is not the first word of gh
@@ -514,6 +521,9 @@ def test_push_refusals_lets_through(command: str) -> None:
         "git push #ok",
         "git push origin #x",  # a comment needs no blank after its sign
         "<# note #>git push origin main",  # a command glued to the end of a PowerShell comment
+        "git push origin feat/x <# note #> main",  # S11: a comment inside the command
+        "git <# note #>push origin main",
+        "git push <# a #> origin <# b #> main",
         "git push origin *>&1",  # EC15r: no spelling of a redirection is a branch
         "git push origin *> $null",
         'git push origin > "push.log"',
@@ -557,6 +567,8 @@ def test_push_refusals_refuses(command: str) -> None:
         "git commit -m x 2>&1 -n",  # S3
         "<# note #> git commit -m x 2>&1 -n",  # S3: the > that ends a comment takes no word along
         "<# note #>git commit -n -m x",  # a command glued to the end of a PowerShell comment
+        "git commit -m x <# note #>-n",  # S11: a comment inside the command
+        "git commit <# note #> --no-verify -m x",
         'git commit -m "fix: the `"fast`" suite" -n',  # a PowerShell escaped quote
         'OUT="$(git commit -m "fix: a" -n 2>&1)"',  # S6
         'git commit -m "fix: x\n\nbody" -n',  # S4
