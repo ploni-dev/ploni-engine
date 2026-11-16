@@ -135,8 +135,11 @@ def segments(command: str) -> list[list[str]]:
             dropped, because `2>&1` holds a separator sign and a flag may follow a
             redirection; left in, because the pattern does not know every spelling
             (`*>&1`, a quoted target, the `>` that ends a PowerShell comment), and what
-            it leaves or takes by mistake must not pass for a word of the command. The
-            same command may be given more than once.
+            it leaves or takes by mistake must not pass for a word of the command. A
+            text that holds a PowerShell comment `<# ... #>` is read as it stands, and
+            again with each such comment as a blank: PowerShell drops it wherever it
+            stands, also between the words of a command. The same command may be given
+            more than once.
         Raises: nothing.
 
     Known limits: this is not a shell, and it errs to the side of refusing. In the third
@@ -149,6 +152,8 @@ def segments(command: str) -> list[list[str]]:
     """
     joined = BRACED_NAME.sub(r"$\1", re.sub(r"\\\r?\n", " ", command))
     kept = (joined, re.sub(r"`\r?\n", " ", joined))
+    if "<#" in joined:
+        kept += tuple(_without_comments(text) for text in kept)
     texts = (*kept, *(REDIRECTION.sub(" ", text) for text in kept))
     readings = dict.fromkeys(
         reading for text in texts for reading in (text, *text.split("\n"), QUOTE_SIGN.sub(" ", text))
@@ -159,6 +164,12 @@ def segments(command: str) -> list[list[str]]:
         for reading in readings
         for words in _commands(reading, tokens)
     ]
+
+
+def _without_comments(text: str) -> str:
+    """Return text with each PowerShell comment `<# ... #>` as a blank; one never closed runs to the end."""
+    first, *later = text.split("<#")
+    return first + "".join(" " + part.split("#>", 1)[1] if "#>" in part else " " for part in later)
 
 
 def _read(words: list[str]) -> str:
