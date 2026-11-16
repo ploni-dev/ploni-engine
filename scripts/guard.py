@@ -363,7 +363,8 @@ def no_verify_refusals(command: str) -> list[str]:
         Raises: nothing.
 
     Known limits: -n means something else on other git commands and is let through
-    there. `core.hooksPath` and other ways around the git hooks are not looked for.
+    there. `core.hooksPath` and other ways around the git hooks are not looked for,
+    nor is a shortened flag: git takes `--no-verif` for `--no-verify`.
     `commit` is looked for anywhere after `git`, not as its subcommand only.
     """
     for words in segments(command):
@@ -431,8 +432,9 @@ def edit_refusals(file_path: str) -> list[str]:
         Raises: nothing.
 
     Known limits: the path is compared as text after `..` is resolved and dots and
-    spaces at its end, which Windows drops, are cut. A link, a short Windows name or a
-    file written by a shell command is not seen. A file of the same name in another
+    spaces at its end, which Windows drops, are cut. A link, a short Windows name, a
+    name with a stream after it (`guard.py::$DATA`) or a file written by a shell
+    command is not seen. A file of the same name in another
     project, or in the user's own `.claude` folder, is refused too.
     """
     path = "/" + posixpath.normpath(file_path.replace("\\", "/").rstrip(". ")).lower()
@@ -447,7 +449,7 @@ def edit_refusals(file_path: str) -> list[str]:
 def refusals(payload: dict[str, object], fetch: Fetch = rollup) -> list[str]:
     """Return every reason to refuse the tool call of one hook payload.
 
-    Why: one hook entry serves four tools, so one place reads the payload and asks each
+    Why: one hook entry serves five tools, so one place reads the payload and asks each
     rule. Every reason is given at once; a refusal that names one of three costs two
     more tries.
 
