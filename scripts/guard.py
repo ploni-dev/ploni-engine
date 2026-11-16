@@ -31,14 +31,18 @@ goes in a file, or the command is typed another way:
     in a quoted text;
   - a push that names no branch, or names it through a variable, although it would not
     reach main;
+  - a merge that PowerShell continues on the next line with a backtick: read as sh,
+    the first line ends there and names no repository;
   - `--no-verify` as a search word (`grep -- --no-verify`);
   - `push` or `commit` as a plain word of another git command (`git log --grep push`,
-    `git commit -m push`);
+    `git commit -m push`, `git log --format="commit %h" -n 5`);
   - a short flag with an n in it after `commit` (`git commit -m x -uno`).
+Every refusal says which words it read as the command.
 A commit pushed between the gate's look and the merge is not seen; `--match-head-commit`
 on the merge closes that, and the gate does not ask for it.
 """
 
+import itertools
 import json
 import posixpath
 import re
@@ -68,7 +72,14 @@ BRACKETS_BLANK = re.compile(WORD + r"|[;|&\n]+")
 BRACKETS_END = re.compile(WORD + r"|[;|&\n(){}`]+")
 # A redirection with its target: `2>&1`, `> file`, `2>$null`, `<<`. It is dropped before
 # reading: `2>&1` holds a separator sign, and a target is no word of the command.
-REDIRECTION = re.compile(r"""\d*[<>]+(?:&\d+|[ \t]*[^\s;|&()"']*)""")
+# It starts at the first digit of a run only: tried from every digit, a long run of
+# digits took the pattern half a minute.
+REDIRECTION = re.compile(r"""(?<!\d)\d*[<>]+(?:&\d+|[ \t]*[^\s;|&()"']*)""")
+# `${NAME}`, which is read as `$NAME`: with its brackets as blanks the name would stand
+# apart, as a word of its own.
+BRACED_NAME = re.compile(r"\$\{([^{}\s]*)\}")
+# How much of a command a refusal quotes back.
+QUOTED_BACK = 80
 QUOTE_SIGN = re.compile("[\"']")
 EVERY_BRANCH = frozenset(("--all", "--mirror", "--branches"))
 # A target the hook cannot name counts as main: it does not know the branch that is checked out.
@@ -108,17 +119,19 @@ def segments(command: str) -> list[list[str]]:
             with each of them as the end of a command. A backtick before a new line is
             read both ways too: as PowerShell's sign that the line goes on, and as the
             end of a command in sh. In every reading a line continued with a backslash is
-            joined to the next, and a redirection is dropped with its target. The same
-            command may be given more than once.
+            joined to the next, `${NAME}` is `$NAME`, and a redirection is dropped with
+            its target. The same command may be given more than once.
         Raises: nothing.
 
     Known limits: this is not a shell, and it errs to the side of refusing. In the third
     reading the words of a quoted text join the command they stand in, so a message that
     holds the words of a refused command is refused. A command is missed only when every
-    reading breaks it: a separator sign in a quoted text between its words, and a stray
-    quote sign that hides that quoted text from the first two readings.
+    reading breaks it: a separator sign in a quoted text between its words, where that
+    quoted text is hidden from the first two readings, by a stray quote sign or by the
+    quotes of a `"$( )"` around the command (`OUT="$(git commit -m "a; b" -n)"`).
+    tests/t2_property/test_guard.py lists the shapes in which that is known to happen.
     """
-    joined = re.sub(r"\\\r?\n", " ", command)
+    joined = BRACED_NAME.sub(r"$\1", re.sub(r"\\\r?\n", " ", command))
     texts = [REDIRECTION.sub(" ", text) for text in (joined, re.sub(r"`\r?\n", " ", joined))]
     readings = dict.fromkeys(
         reading for text in texts for reading in (text, *text.split("\n"), QUOTE_SIGN.sub(" ", text))
@@ -129,6 +142,11 @@ def segments(command: str) -> list[list[str]]:
         for reading in readings
         for words in _commands(reading, tokens)
     ]
+
+
+def _read(words: list[str]) -> str:
+    """Return the end of a reason: the words that were read as the command, cut short."""
+    return f"; read as the command: {' '.join(words)[:QUOTED_BACK]}; a text that holds these words goes in a file"
 
 
 def _calls(words: list[str], program: str) -> list[list[str]]:
@@ -253,7 +271,8 @@ def merge_refusals(command: str, fetch: Fetch) -> list[str]:
     Contract:
         Args: command, the text given to Bash or PowerShell; fetch, called with the
             number and the repository of each merge, returns the checks as `rollup` does.
-        Returns: for each merge without a number or without one repository, one line; for
+        Returns: for each merge without a number or without one repository, one line
+            that says what was read; for
             each other merge, the lines of `red`, or one line when fetch raised one of
             UNREADABLE. Each line names the PR. Empty when there is no merge, or every
             merge is allowed.
@@ -264,7 +283,11 @@ def merge_refusals(command: str, fetch: Fetch) -> list[str]:
     reasons = []
     for number, repository in merges(command):
         if not number or not repository:
-            reasons.append("merge gate: write the merge as `gh pr merge <N> -R <owner>/<repo> --squash`")
+            read = f"{'number ' + number if number else 'no number'} and {'repository ' + repository if repository else 'no repository'}"
+            reasons.append(
+                f"merge gate: a `gh pr merge` was read with {read}; write the merge as "
+                "`gh pr merge <N> -R <owner>/<repo> --squash`, and put a text that holds these words in a file"
+            )
             continue
         try:
             found = red(fetch(number, repository))
@@ -294,7 +317,7 @@ def no_verify_refusals(command: str) -> list[str]:
     for words in segments(command):
         flags = [flag for rest in _calls(words, "git") if "commit" in rest for flag in rest[rest.index("commit") :]]
         if "--no-verify" in words or any(re.fullmatch("-[A-Za-z]*n[A-Za-z]*", flag) for flag in flags):
-            return ["--no-verify and `git commit -n` are refused: the git hooks run on every commit"]
+            return ["--no-verify and `git commit -n` are refused: the git hooks run on every commit" + _read(words)]
     return []
 
 
@@ -323,7 +346,8 @@ def push_refusals(command: str) -> list[str]:
         for rest in _calls(words, "git"):
             if "push" not in rest or rest[: rest.index("push")][-1:] == ["stash"]:
                 continue
-            given = rest[rest.index("push") + 1 :]
+            # What follows a # is a comment, not a remote and not a branch.
+            given = list(itertools.takewhile(lambda word: not word.startswith("#"), rest[rest.index("push") + 1 :]))
             named = [word for word in given if not word.startswith("-")][1:]
             targets = {
                 word.rsplit(":", 1)[-1].lstrip("+").removeprefix("refs/").removeprefix("heads/") for word in named
@@ -331,7 +355,7 @@ def push_refusals(command: str) -> list[str]:
             # A variable is looked for in the whole word: PowerShell writes `$env:NAME`, with a colon.
             unknown = any("$" in word for word in named)
             if not targets or unknown or targets & MAIN or EVERY_BRANCH & set(given):
-                return ["a push must name its remote and its branches, and none of them may be main"]
+                return ["a push must name its remote and its branches, and none of them may be main" + _read(words)]
     return []
 
 
