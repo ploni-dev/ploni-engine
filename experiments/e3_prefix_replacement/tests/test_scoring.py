@@ -105,7 +105,7 @@ def test_b1_replace_base_rejects_empty_seg():
 
 
 def test_invariant_replace_base_is_prefix_plus_surrogate():
-    rng = random.Random(SEED)
+    rng = random.Random(SEED)  # noqa: S311 seeded on purpose, so the same input is drawn on every run
     for _ in range(GENERATED_CASES):
         prefix, base, surrogate = rng.choice(PREFIXES), word(rng), word(rng)
         seg = (*prefix, base) if rng.random() < 0.5 else tuple(filter(None, (prefix, base)))
@@ -152,7 +152,7 @@ def test_is_correct(target, prefix, seg, suffix, expected):
 
 
 def test_invariant_is_correct_iff_same_prefix_and_no_suffix():
-    rng = random.Random(SEED)
+    rng = random.Random(SEED)  # noqa: S311 seeded on purpose, so the same input is drawn on every run
     for _ in range(GENERATED_CASES):
         gold, guess, base = rng.choice(PREFIXES), rng.choice(PREFIXES), word(rng)
         suffix = rng.choice([False, False, "PRON"])
@@ -182,7 +182,7 @@ def test_b5_verdict_rejects_an_empty_run():
         scoring.verdict(0, 0)
 
 
-# breaks_where_predicted
+# Tests of breaks_where_predicted.
 
 
 @pytest.mark.parametrize(

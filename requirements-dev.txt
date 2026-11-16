@@ -1,0 +1,45 @@
+# Development tools for the fast suite: pytest, ruff, mypy, with everything they pull in.
+# Every version is pinned and every wheel is hashed (CLAUDE.md, Hard constraints).
+# Install:  python -m pip install --require-hashes -r requirements-dev.txt
+#
+# Each package carries one hash per wheel: Windows (win_amd64) and Linux (manylinux
+# x86_64), both for CPython 3.13. The hashes are the sha256 of the wheels that these two
+# commands download; to change a pin, change it there, run both, and hash the wheels:
+#   python -m pip download pytest==9.2.0 ruff==0.17.5 mypy==2.4.1 -d win \
+#     --only-binary=:all: --platform win_amd64 \
+#     --python-version 3.13 --implementation cp --abi cp313
+#   python -m pip download pytest==9.2.0 ruff==0.17.5 mypy==2.4.1 -d linux \
+#     --only-binary=:all: --platform manylinux_2_28_x86_64 \
+#     --platform manylinux_2_17_x86_64 --platform manylinux2014_x86_64 \
+#     --python-version 3.13 --implementation cp --abi cp313
+# Asked for by name: pytest, ruff, mypy. The rest are their dependencies.
+ast-serialize==0.13.1 \
+    --hash=sha256:9f99786e0d62082a5b121b3437f3167562133711df22128de1e9886f57f0b226 \
+    --hash=sha256:ddf7cbc9c8abf70102c4a088efe154bb86bfb825b0a10e556d2b15972cf99bd7
+colorama==0.4.6 ; sys_platform == "win32" \
+    --hash=sha256:4f1d9991f5acc0ca119f9d443620b77f9d6b33703e51011c16baf57afb285fc6
+iniconfig==2.3.1 \
+    --hash=sha256:9121e2c1fdb355232495be3194c8dfe87ccc2d5dee45947b78e68f499790d7a7
+librt==0.16.0 \
+    --hash=sha256:14ed6ebe3e4f85f326d7920011ad30ff49ed9334e62cf88caef9ba973d9e3a92 \
+    --hash=sha256:17bac7f7a16b328fff77e440287693eb017abde913595b5827ebccbc21ecd8a6
+mypy==2.4.1 \
+    --hash=sha256:1fb70621535c22fd4b1a0450d37ed1d6c5eb39656a1cebfb189084c12de54ba7 \
+    --hash=sha256:acdd82cb3a2eb10720e87706a128d75785d005a8c47e36a4973221524f41fc56
+mypy-extensions==1.2.0 \
+    --hash=sha256:993e7a20aa5671eb41a7132cf555af30062da99729601601b9a8382b11cae768
+packaging==26.3 \
+    --hash=sha256:d7193f7c8e4e93f444fde0262bf90af30e16fa0ad0ad44cb553c87339b23cd1c
+pathspec==1.1.1 \
+    --hash=sha256:a00ce642f577bf7f473932318056212bc4f8bfdf53128c78bbd5af0b9b20b189
+pluggy==1.7.0 \
+    --hash=sha256:7dd7b0d8832ba3cb632c306926ded123429211b83641b35dc5c41ad2d34f9bec
+pygments==2.21.0 \
+    --hash=sha256:2363c69b61c4a97c838da3b130dcd6468f4848992b21a82f2a63ec34377137d9
+pytest==9.2.0 \
+    --hash=sha256:07acdcf88ec174f907dc01af70bf52d49b014bbab03faeeade31c96b18c2e588
+ruff==0.17.5 \
+    --hash=sha256:40ca8afaac309b41a5b2e09e4e7beb1f824826b93c25697c4d74f573324fba4e \
+    --hash=sha256:aa415d57c244299279901d776607fee3df7831c2a7435433fbfacde8632c6550
+typing-extensions==4.16.0 \
+    --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8

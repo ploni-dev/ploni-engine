@@ -233,7 +233,7 @@ def test_e10_total_of_zero():
 
 
 def test_p1_verdict_agrees_with_exact_fractions():
-    rng = random.Random(SEED)
+    rng = random.Random(SEED)  # noqa: S311 seeded on purpose, so the same input is drawn on every run
     for _ in range(GENERATED_CASES):
         total = rng.randint(1, 3000)
         found = rng.randint(0, total)

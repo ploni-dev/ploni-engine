@@ -264,8 +264,12 @@ def code_revision() -> dict[str, object]:
     """
 
     def git(*arguments: str) -> str:
-        return subprocess.run(
-            ["git", *arguments], cwd=REPO_ROOT, check=True, capture_output=True, text=True
+        return subprocess.run(  # noqa: S603 fixed git arguments, no shell
+            ["git", *arguments],  # noqa: S607 git is found on PATH, as for every git call here
+            cwd=REPO_ROOT,
+            check=True,
+            capture_output=True,
+            text=True,
         ).stdout.strip()
 
     return {"commit": git("rev-parse", "HEAD"), "dirty": bool(git("status", "--porcelain"))}

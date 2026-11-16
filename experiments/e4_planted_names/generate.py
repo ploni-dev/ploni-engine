@@ -402,7 +402,7 @@ def _fill_fresh(template: Template, bank: Bank, seed: str, taken: set[str]) -> t
     TemplateError after MAX_REDRAWS tries.
     """
     for attempt in range(MAX_REDRAWS):
-        paragraphs, gold = fill(template, bank, random.Random(f"{seed}:{attempt}" if attempt else seed))
+        paragraphs, gold = fill(template, bank, random.Random(f"{seed}:{attempt}" if attempt else seed))  # noqa: S311 seeded on purpose, so the corpus can be written again from its seed
         if not taken & {item.name for item in gold if item.counted and item.form in FULL_NAME_FORMS}:
             return paragraphs, gold
     raise TemplateError(f"no filling with new people after {MAX_REDRAWS} tries: {seed}")

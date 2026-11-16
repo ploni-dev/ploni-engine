@@ -101,7 +101,7 @@ def _checked_paragraph_entities(
         grouped[entity.paragraph].append(entity)
     for group in grouped:
         group.sort(key=lambda entity: entity.start)
-        for previous, current in zip(group, group[1:]):
+        for previous, current in zip(group, group[1:], strict=False):
             if current.start < previous.end:
                 raise ValueError(f"entities overlap in paragraph {current.paragraph}")
     return grouped
@@ -122,7 +122,7 @@ def render_document(doc_id: str, paragraphs: list[str], entities: list[Entity]) 
     """
     parts = [PAGE_HEAD.format(doc_id=html.escape(doc_id))]
     person_number = 0
-    for text, group in zip(paragraphs, _checked_paragraph_entities(paragraphs, entities)):
+    for text, group in zip(paragraphs, _checked_paragraph_entities(paragraphs, entities), strict=True):
         pieces = []
         cursor = 0
         for entity in group:
