@@ -526,6 +526,7 @@ def test_push_refusals_lets_through(command: str) -> None:
         "git push origin feat/x <# note #> main",  # S11: a comment inside the command
         "git <# note #>push origin main",
         "git push <# a #> origin <# b #> main",
+        "git push origin feat/x `" + LF + "<# note #> main",  # S11 with S2: a comment after a line joined by a backtick
         "git push origin *>&1",  # EC15r: no spelling of a redirection is a branch
         "git push origin *> $null",
         'git push origin > "push.log"',
