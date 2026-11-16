@@ -247,7 +247,9 @@ def test_s7_segments_of_nothing_is_nothing() -> None:
         ("gh pr merge 80 -R", [("80", None)]),
         ("", []),  # B3
         ("gh pr merge 80 \\\n  -R o/r --squash", [("80", "o/r")]),  # A1
-        ("gh pr merge 80 `\r\n  -R o/r --squash", [("80", "o/r")]),
+        # Read as sh too, where the backtick ends the command: that reading has no repository,
+        # so this spelling is refused. A known wrong refusal; the merge goes on one line.
+        ("gh pr merge 80 `\r\n  -R o/r --squash", [("80", None), ("80", "o/r")]),
         ("echo don't\n" + PLAIN, [("80", "o/r")]),  # A2
         ("git commit -q -F - <<'EOF'\nfix: x\n\n" + PLAIN + "\nEOF", [("80", "o/r")]),  # A3
         ('gh pr comment 5 -R o/r --body "tried gh pr merge 80 -R o/r"', [("80", "o/r")]),  # A4
