@@ -17,8 +17,11 @@ segments(command): every reading of a shell command. The same simple command may
 more than once; no caller counts them.
   S1    a command on one line                       its simple commands
   S2    a line continued with \\ or `               joined to the next
-  S3    a redirection, with its target              dropped: `2>&1` holds a separator sign, and
-                                                    what follows a redirection stays in its command
+  S3    a redirection, with its target              given twice: dropped, because `2>&1` holds a
+                                                    separator sign and what follows a redirection
+                                                    stays in its command; and left in, because a
+                                                    target the pattern does not know is no word
+                                                    of the command either
   S4    a quoted text of several lines              the command it belongs to is given whole
   S5    apostrophes in two comment lines            the line between them is given by itself
   S6    a command inside "$( )", with a quoted text before it    given, by the reading that
@@ -50,6 +53,10 @@ merges(command): the `gh pr merge` commands in a shell command, as (number, repo
   A4    the words inside a quoted text on one line  found, for the same reason: one reading
                                                     takes every quote sign as a blank
   A9m   `merge` as a word of another `gh pr` command (a title, a search word)    no merge
+  A11m  an option before `pr` or before `merge` whose value is several words ($( ), backticks)
+        found: after an option, `pr` and `merge` are looked for anywhere
+  A12m  a PowerShell comment <# ... #> before the merge    found: its > is no redirection that
+        takes the next word along, in the reading that leaves redirections in
   A5    upper case GH.EXE, gh.cmd                   found
   A6m   a merge between two comment lines that each hold an apostrophe    found
   A7m   a merge in PowerShell curly brackets, or inside "$( )"            found
@@ -107,7 +114,7 @@ main(), with stdin swapped:
   E3    stdin that is not a JSON object             2
 
 The settings file:
-  EC29  .claude/settings.json runs the script before Bash, PowerShell, Edit and Write, in
+  EC29  .claude/settings.json runs the script before Bash, PowerShell, Monitor, Edit and Write, in
         bash, and a script that fails, cannot start or is cut off refuses the call
 
 The script run as a program, with a stand-in for gh, is in tests/t4_integration/test_guard.py.
@@ -129,6 +136,7 @@ from scripts import guard
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 PLAIN = "gh pr merge 80 -R o/r --squash"
+LF = chr(10)
 
 
 def check_run(conclusion: str = "SUCCESS", status: str = "COMPLETED", name: str = "fast-suite") -> dict[str, str]:
@@ -209,6 +217,9 @@ def test_s2_a_backtick_at_a_line_end_is_read_both_as_a_joint_and_as_the_end_of_a
         ("# don't\na \"b;c\" d\n# it's", [["a", "b;c", "d"]]),  # S5
         ('x="$(a "b c" && d e)" f', [["d", "e", "f"]]),  # S6
         ("a -R ${B} c", [["a", "-R", "$B", "c"]]),  # S9
+        ("a -R ${env:B} c", [["a", "-R", "$env:B", "c"]]),
+        ('a b > "c d"', [["a", "b", ">", "c d"]]),  # S3, left in
+        ("<# x #> a b", [["<#", "x", "#>", "a", "b"]]),
     ],
 )
 def test_segments_gives_each_of_these_commands(command: str, given: list[list[str]]) -> None:
@@ -274,16 +285,21 @@ def test_s10_a_long_run_of_digits_is_read_in_time() -> None:
         ("GH.EXE pr merge 80 -R o/r", [("80", "o/r")]),  # A5
         ("gh.cmd pr merge 80 -R o/r", [("80", "o/r")]),
         ("gh.bat pr merge 80 -R o/r", [("80", "o/r")]),
-        ('git commit -m "subject\n\nbody" && ' + PLAIN + ' --body "line1\nline2"', [("80", "o/r")]),  # S10
+        ('git commit -m "subject\n\nbody" && ' + PLAIN + ' --body "line1\nline2"', [("80", "o/r")]),  # S4
         (PLAIN + ' --body "line1\nline2"', [("80", "o/r")]),
         ("git status\n" + PLAIN + "\n" + PLAIN, [("80", "o/r")]),
-        ('OUT="`' + PLAIN + '`"; echo "$OUT"', [("80", "o/r")]),  # S4
+        ('OUT="`' + PLAIN + '`"; echo "$OUT"', [("80", "o/r")]),  # C4, in a quoted text
         ("# don't merge before the checks\ngh pr checks 80 -R o/r\n" + PLAIN + "\n# that's it", [("80", "o/r")]),  # A6m
         ("if ($?) {" + PLAIN + "}", [("80", "o/r")]),  # A7m
         ("if ($?) { " + PLAIN + " }", [("80", "o/r")]),
         ('OUT="$(' + PLAIN + ' 2>&1)"; echo "$OUT"', [("80", "o/r")]),
         ("gh -R ${REPO} pr merge 80 --squash", [("80", "$REPO")]),  # A10m: the name in curly brackets
         ("gh --repo o/r pr merge 80", [("80", "o/r")]),  # the option before `pr` takes its value along
+        ("gh -R ${env:REPO} pr merge 80", [("80", "$env:REPO")]),  # the PowerShell name
+        ("gh -R $(echo o/r) pr merge 80 --squash", [("80", "$")]),  # A11m: a value of several words
+        ("gh pr -R $(echo o/r) merge 80", [("80", "$")]),
+        ("gh -R `echo o/r` pr merge 80", [("80", "echo")]),
+        ("<# merge it #> " + PLAIN, [("80", "o/r")]),  # A12m: a PowerShell comment before it
         ("gh api pr merge 80 -R o/r", []),  # `pr` is not the first word of gh
         ("gh pr merge 80x -R o/r", [("", "o/r")]),  # A8m
         ("gh merge pr 80 -R o/r", []),
@@ -346,6 +362,47 @@ def test_red_gives_one_reason_for_each_of_these(checks: list[dict[str, str]] | N
     assert len(guard.red(checks)) == 1
 
 
+def test_red_raises_attributeerror_for_an_entry_that_is_no_mapping() -> None:
+    with pytest.raises(AttributeError):
+        guard.red([check_run(), "fast-suite"])  # type: ignore[list-item]
+
+
+def test_state_gives_the_name_of_a_check_with_where_it_stands() -> None:
+    assert guard._state(check_run()) == ("fast-suite", "SUCCESS")
+    assert guard._state(check_run("FAILURE", name="lint")) == ("lint", "FAILURE")
+    assert guard._state(check_run("SUCCESS", "IN_PROGRESS")) == ("fast-suite", "IN_PROGRESS")
+    assert guard._state(commit_status("PENDING", "deploy")) == ("deploy", "PENDING")
+    assert guard._state({}) == (None, "UNKNOWN")
+
+
+def test_calls_gives_the_words_after_each_word_that_names_the_program() -> None:
+    assert guard._calls(["sudo", "-u", "git", "GIT.EXE", "push"], "git") == [["GIT.EXE", "push"], ["push"]]
+    assert guard._calls(["C:\\tools\\gh.cmd", "pr"], "gh") == [["pr"]]
+    assert guard._calls(["/usr/bin/gh.bat"], "gh") == [[]]
+    assert guard._calls(["git-credential", "!gh", "ghx", "exegh"], "gh") == []
+    assert guard._calls([], "gh") == []
+
+
+def test_after_word_takes_a_word_that_leads_or_that_follows_an_option() -> None:
+    assert guard._after_word(["pr", "merge", "80"], "pr") == ["merge", "80"]
+    assert guard._after_word(["-R", "o/r", "pr", "merge"], "pr") == ["merge"]
+    assert guard._after_word(["-R", "$", "echo", "o/r", "pr", "merge"], "pr") == ["merge"]
+    assert guard._after_word(["pr"], "pr") == []
+    assert guard._after_word(["api", "pr", "merge"], "pr") is None
+    assert guard._after_word(["--paginate", "api"], "pr") is None
+    assert guard._after_word([], "pr") is None
+
+
+def test_repository_gives_the_one_repository_that_is_named() -> None:
+    assert guard._repository(["pr", "merge", "80", "-R", "o/r"]) == "o/r"
+    assert guard._repository(["--repo", "o/r", "pr"]) == "o/r"
+    assert guard._repository(["--repo=o/r"]) == "o/r"
+    assert guard._repository(["-Ro/r"]) == "o/r"
+    assert guard._repository(["-R", "o/r", "-R", "o/r"]) is None
+    assert guard._repository(["pr", "merge", "80", "-R"]) is None
+    assert guard._repository(["pr", "merge", "80"]) is None
+
+
 GIT = "git -c credential.helper= -c credential.helper='!gh auth git-credential' "
 
 
@@ -373,6 +430,9 @@ GIT = "git -c credential.helper= -c credential.helper='!gh auth git-credential' 
         "git push origin feat/x 2>$null",
         "git push origin feat/x > push.log",
         "git push -u origin feat/x # main is protected",  # a comment is no branch
+        'git push origin feat/x > "push.log"',  # EC13r: a branch before any spelling of a redirection
+        "git push origin feat/x *>&1",
+        "git push origin feat/x 2> 'err.log'",
         "git push origin feat/x 2>&1",  # EC13r
         "git push -u origin feat/x 2>&1 | tail -3",
         "git push origin feat/x 2>/dev/null",
@@ -427,9 +487,16 @@ def test_push_refusals_lets_through(command: str) -> None:
         "git push --branches -o x origin",
         "if ($?) {git push origin main}",  # S8
         "if ($?) { git push origin main}",
-        'echo "$(git push origin main 2>&1)"',  # S9
+        'echo "$(git push origin main 2>&1)"',  # S6
         'git -C "$(pwd)" push origin main',
         "git push # ok",  # EC15: a comment is neither remote nor branch
+        "git push #ok",
+        "git push origin *>&1",  # EC15r: no spelling of a redirection is a branch
+        "git push origin *> $null",
+        'git push origin > "push.log"',
+        "git push origin 2> 'err.log'",
+        'git push origin <<< "y"',
+        "echo a >out.txt;git push origin main",  # a redirection target glued to the next command
         "git push origin # x",
         "git push origin $A feat/x",
         "git -C ${REPO_DIR} push origin main",  # C4: brackets are blanks
@@ -439,7 +506,7 @@ def test_push_refusals_lets_through(command: str) -> None:
         "git commit -m 'refuse a push to main'",  # a known wrong refusal: the words in a message
         "git push origin $env:BRANCH",  # EC15v, PowerShell
         "git push origin feat/x:$env:TARGET",
-        'git commit -m "s\n\nb" && git push origin main && gh pr create --title "t" --body "one\ntwo"',  # S10
+        'git commit -m "s\n\nb" && git push origin main && gh pr create --title "t" --body "one\ntwo"',  # S4
     ],
 )
 def test_push_refusals_refuses(command: str) -> None:
@@ -459,7 +526,7 @@ def test_push_refusals_refuses(command: str) -> None:
         "git commit -m x -n",
         GIT + "commit -n -m x",
         "pre-commit run --no-verify",  # EC19: any command, not git alone
-        "git commit -m \"$(cat <<'EOF'\nfix: x\nEOF\n)\" -n",  # S9: the flag after the quoted text
+        "git commit -m \"$(cat <<'EOF'\nfix: x\nEOF\n)\" -n",  # S4: the flag after the quoted text
         'git commit -m "$(cat msg.txt)" -n',
         "git -C ${REPO_DIR} commit -n -m x",  # C4: brackets are blanks
         "git commit -m ${MSG} -n",
@@ -467,7 +534,7 @@ def test_push_refusals_refuses(command: str) -> None:
         "git commit -m x 2>&1 -n",  # S3
         'git commit -m "fix: the `"fast`" suite" -n',  # a PowerShell escaped quote
         'OUT="$(git commit -m "fix: a" -n 2>&1)"',  # S6
-        'git commit -m "fix: x\n\nbody" -n',  # S10
+        'git commit -m "fix: x\n\nbody" -n',  # S4
         'echo "a\nb" && git commit --no-verify -m "t" -m "c\nd"',
         "if ($?) {git commit -n -m x}",  # S8
         "if ($?) {git commit -m x --no-verify}",
@@ -592,7 +659,11 @@ def test_a_refusal_says_which_words_it_read_as_the_command() -> None:
     unplain = guard.merge_refusals("gh pr merge 80 --squash", never_asked)[0]
     assert "number 80" in unplain
     assert "no repository" in unplain
-    assert "no number" in guard.merge_refusals("gh pr merge -R o/r", never_asked)[0]
+    no_number = guard.merge_refusals("gh pr merge -R o/r", never_asked)[0]
+    assert "no number" in no_number
+    assert "repository o/r" in no_number
+    two_lines = "git push origin # don't push main\ngit status # that's it"
+    assert LF not in guard.push_refusals(two_lines)[0]
     long = guard.push_refusals("git push origin main " + "x" * 500)[0]
     assert len(long) < 250
 
@@ -718,7 +789,7 @@ def test_ec29_the_settings_file_runs_the_script_before_the_four_tools() -> None:
     settings = json.loads((REPOSITORY / ".claude" / "settings.json").read_text(encoding="utf-8"))
     (entry,) = settings["hooks"]["PreToolUse"]
     (hook,) = entry["hooks"]
-    assert set(entry["matcher"].split("|")) == {"Bash", "PowerShell", "Edit", "Write"}
+    assert set(entry["matcher"].split("|")) == {"Bash", "PowerShell", "Monitor", "Edit", "Write"}
     assert hook["type"] == "command"
     assert hook["shell"] == "bash"
     assert hook["command"] == 'python "$CLAUDE_PROJECT_DIR/scripts/guard.py" || exit 2'

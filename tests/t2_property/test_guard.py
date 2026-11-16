@@ -21,8 +21,11 @@ the 500 that CLAUDE.md, Tests, asks of an invariant.
 
 Not held, and listed: I1 fails for a command whose own quoted text holds a separator sign
 (`git commit -m "a; b" -n`) in the shapes that put it inside another quoted text. Those
-commands are in KNOWN_MISSED with the exact shapes, not in REFUSED. It is a commit that
-skips the git hooks; no merge and no push is known to get through that way.
+commands are in KNOWN_MISSED with the exact shapes, not in REFUSED. Two more are let
+through alone and in every shape (KNOWN_MISSED_EVERYWHERE): their quoted text also holds
+a quote sign that does not close it. All but one are commits that skip the git hooks.
+The one push needs a separator sign in a quoted option of git before `push`
+(`git -c user.name="A; B" push origin main`); no merge is known to get through.
 
 Known limits: the shapes are a fixed list, not a grammar of two shells. A shape that is
 not in the list is not tested. Nothing here starts a shell: that a shell really runs the
@@ -57,30 +60,35 @@ REFUSED = [
     "git commit -m x 2>&1 -n",
 ]
 
-# Each is refused alone, and each is let through in the shapes listed with it. The words of
-# these commands are split by a separator sign inside their own quoted text (`;`, a new
-# line), and the shapes are the ones that hide that quoted text from the readings that
-# follow quotes (`segments`, Known limits). Listed exactly, so that a change in either
-# direction shows: a shape that starts to catch one, or a new shape that misses one.
+# Each is let through in the shapes listed with it, and refused in every other shape and
+# alone. The words of these commands are split by a separator sign inside their own quoted
+# text (`;`, a new line), and the shapes are the ones that hide that quoted text from the
+# readings that follow quotes (`segments`, Known limits). Listed exactly, so that a change
+# in either direction shows: a shape that starts to catch one, or a new shape that misses one.
+INSIDE_QUOTES = [
+    'OUT="$({c})"',
+    'OUT="$({c} 2>&1)"; echo "$OUT"',
+    'OUT="`{c}`"',
+    'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"',
+    'OUT="$(cd "/c/my dir" && {c})"',
+    'Write-Output "it`"s done"; {c}',
+]
 KNOWN_MISSED = {
-    'git commit -m "a; b" -n': [
-        'OUT="$({c})"',
-        'OUT="$({c} 2>&1)"; echo "$OUT"',
-        'OUT="`{c}`"',
-        'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"',
-        'OUT="$(cd "/c/my dir" && {c})"',
-        'Write-Output "it`"s done"; {c}',
-    ],
+    'git commit -m "a; b" -n': INSIDE_QUOTES,
+    'git -c user.name="A; B" push origin main': INSIDE_QUOTES,
     'git commit -m "s\n\nb" -n': [
-        'OUT="$({c})"',
-        'OUT="$({c} 2>&1)"; echo "$OUT"',
-        'OUT="`{c}`"',
-        'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"',
-        'OUT="$(cd "/c/my dir" && {c})"',
+        *INSIDE_QUOTES[:5],
         "# don't run this before the checks\n{c}\n# that's it",
-        'Write-Output "it`"s done"; {c}',
+        INSIDE_QUOTES[5],
     ],
 }
+# Each is let through alone and in every shape: its quoted text holds a separator sign and
+# also a quote sign that does not close it (escaped with a backslash, or inside a
+# here-document), so no reading keeps the command whole.
+KNOWN_MISSED_EVERYWHERE = [
+    'git commit -m "say \\"a; b\\"" -n',
+    "git commit -m \"$(cat <<'EOF'\nthe 5\" pipe | x\nEOF\n)\" -n",
+]
 
 ALLOWED = [
     "git status",
@@ -184,6 +192,11 @@ def test_i2_an_allowed_command_is_let_through_in_every_shape(shape: str) -> None
 def test_the_known_misses_are_exactly_the_listed_shapes(command: str) -> None:
     assert refused(command)
     assert [shape for shape in SHAPES if not refused(shape.format(c=command))] == KNOWN_MISSED[command]
+
+
+@pytest.mark.parametrize("command", KNOWN_MISSED_EVERYWHERE)
+def test_the_commands_known_to_be_missed_everywhere_are_missed_in_every_shape(command: str) -> None:
+    assert [shape for shape in SHAPES if refused(shape.format(c=command))] == []
 
 
 def test_the_sample_is_over_the_minimum_for_an_invariant() -> None:
