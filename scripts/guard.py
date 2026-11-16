@@ -168,23 +168,35 @@ def _read(words: list[str]) -> str:
 
 
 def _calls(words: list[str], program: str) -> list[list[str]]:
-    """Return, for each word of a command that names program, the words after it."""
-    names = [re.sub(r"\.(exe|cmd|bat)$", "", re.split(r"[\\/]", word)[-1].lower()) for word in words]
+    """Return, for each word of a command that names program, the words after it.
+
+    A word names a program by its last part, after a path and after the `#>` that ends a
+    PowerShell comment, which may stand right before it with no blank.
+    """
+    names = [re.sub(r"\.(exe|cmd|bat)$", "", re.split(r"[\\/]|#>", word)[-1].lower()) for word in words]
     return [words[index + 1 :] for index, name in enumerate(names) if name == program]
 
 
-def _after_word(words: list[str], name: str) -> list[list[str]]:
-    """Return the words after name: where it leads words, or after each one that follows an option.
+def _merge_words(words: list[str]) -> list[str]:
+    """Return, for each merge that the words after `gh` hold, the word where its number stands.
 
-    After an option, name is looked for anywhere and every one is given: the value of
-    an option can be several words (`-R $(gh pr view ...)`), how many is not known
-    here, and a name among them is not the one that is meant.
+    `pr` counts where it leads the words. Where an option leads them, every `pr` counts:
+    the value of an option can be several words (`-R $(gh pr view ...)`), how many is
+    not known here, and a `pr` among them is not the one that is meant. `merge` counts
+    right after such a `pr`; after a `pr` that an option follows, every later `merge`
+    counts. The same word is given once, "" where no word follows. The words are walked
+    once, however many `pr` and `merge` they hold.
     """
-    if words[:1] == [name]:
-        return [words[1:]]
-    if words[:1] and words[0].startswith("-"):
-        return [words[index + 1 :] for index, word in enumerate(words) if word == name]
-    return []
+    if words[:1] == ["pr"]:
+        starts = [0]
+    elif words[:1] and words[0].startswith("-"):
+        starts = [index for index, word in enumerate(words) if word == "pr"]
+    else:
+        starts = []
+    direct = [start + 2 for start in starts if words[start + 1 : start + 2] == ["merge"]]
+    loose = [start + 1 for start in starts if words[start + 1 : start + 2] and words[start + 1].startswith("-")]
+    later = [index + 1 for index in range(loose[0], len(words)) if words[index] == "merge"] if loose else []
+    return list(dict.fromkeys("".join(words[index : index + 1]) for index in sorted(direct + later)))
 
 
 def _repository(words: list[str]) -> str | None:
@@ -214,17 +226,19 @@ def merges(command: str) -> list[tuple[str, str | None]]:
         Raises: nothing.
 
     Known limits: `merge` as a word of another `gh pr` command (a title, a search word)
-    is no merge, unless an option stands before that command's own word:
-    `gh pr -R o/r list --search merge` is read as a merge with no number, and refused.
+    is no merge, unless an option stands before that command's own word, or gh's first
+    word is an option and the words `pr merge` stand in its text:
+    `gh pr -R o/r list --search merge` and `gh -R o/r pr create --title "pr merge rules"`
+    are read as a merge with no number, and refused. With -R after the command's own
+    word both pass.
     The words `gh pr merge` in a quoted text are a merge: see `segments`.
     """
     found = []
     for words in segments(command):
         for rest in _calls(words, "gh"):
-            for group in _after_word(rest, "pr"):
-                for action in _after_word(group, "merge"):
-                    number = "".join(action[:1])
-                    found.append((number if re.fullmatch("[0-9]+", number) else "", _repository(rest)))
+            numbers = _merge_words(rest)
+            repository = _repository(rest) if numbers else None
+            found += [(number if re.fullmatch("[0-9]+", number) else "", repository) for number in numbers]
     return list(dict.fromkeys(found))
 
 
