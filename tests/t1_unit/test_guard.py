@@ -182,7 +182,14 @@ def test_c8_commands_can_take_brackets_as_the_end_of_a_command(command: str, fou
 
 def test_s8_segments_gives_a_command_in_brackets_without_what_follows_the_bracket() -> None:
     assert ["a", "b"] in guard.segments("try { a b } catch { c }")
-    assert ["a", "b", "catch", "c"] in guard.segments("try { a b } catch { c }")
+    assert ["try", "a", "b", "catch", "c"] in guard.segments("try { a b } catch { c }")
+
+
+def test_s2_a_backtick_at_a_line_end_is_read_both_as_a_joint_and_as_the_end_of_a_command() -> None:
+    # PowerShell continues a line with a backtick; in sh the same sign closes a command.
+    found = guard.segments("OUT=`a b`\nc")
+    assert ["a", "b"] in found
+    assert ["a", "b", "c"] in found
 
 
 @pytest.mark.parametrize(
