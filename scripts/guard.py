@@ -6,7 +6,7 @@ is green. A settings file holds one command line, which cannot be tested, so the
 here and `.claude/settings.json` only starts this script (Achia, 2026-11-16). The small
 hooks of PROCESS.md section 12 item 8 are here as well, for the same reason.
 
-Contract: Claude Code starts the script before a Bash, PowerShell, Edit or Write call and
+Contract: Claude Code starts the script before a Bash, PowerShell, Monitor, Edit or Write call and
 writes the hook payload to stdin as JSON. Exit code 0 lets the call run. Exit code 2
 refuses it, and stderr gives one line for each reason. Refused are:
   - `gh pr merge`, unless it names the PR by number and one repository with -R, every
@@ -27,8 +27,10 @@ goes in a file, or the command is typed another way:
   - the words of a refused command in a text of the same call: a commit message or a PR
     comment that quotes `gh pr merge 80 -R o/r` or `git push origin main`, in quotes or
     in a here-document, also as the text of `bash -c` or of `grep`;
-  - a merge whose -R stands after a quoted text of several lines, or beside a second -R
-    in a quoted text;
+  - a merge whose -R stands after a quoted text of several lines, after a text with a
+    bracket or an `&` in it (`--subject "the gate (#77)" -R o/r`), or beside a second
+    -R in a quoted text: -R goes right after the number;
+  - `gh pr merge --help`, and any other `gh pr merge` that is no merge;
   - a push that names no branch, or names it through a variable, although it would not
     reach main;
   - a merge that PowerShell continues on the next line with a backtick: read as sh,
@@ -36,8 +38,16 @@ goes in a file, or the command is typed another way:
   - `--no-verify` as a search word (`grep -- --no-verify`);
   - `push` or `commit` as a plain word of another git command (`git log --grep push`,
     `git commit -m push`, `git log --format="commit %h" -n 5`);
-  - a short flag with an n in it after `commit` (`git commit -m x -uno`).
-Every refusal says which words it read as the command.
+  - a short flag with an n in it after `commit` (`git commit -m x -uno`);
+  - a comment after a git command, when it holds `push` or such a flag
+    (`git status # nothing to push yet`, `git commit -q -F msg.txt # -n is not used`).
+Every refusal says what it read: the words, or for a merge the number and the
+repository.
+The script is started from the working folder. A branch cut before the gate holds
+neither this file nor the settings file, so checking one out in the project folder
+either leaves every call refused, the checkout back included, or leaves no hook at
+all; which of the two depends on Claude Code. Such a branch is worked on in a second
+checkout (`git worktree`). If it happens all the same, Achia checks out main himself.
 A commit pushed between the gate's look and the merge is not seen; `--match-head-commit`
 on the merge closes that, and the gate does not ask for it.
 """
@@ -119,8 +129,13 @@ def segments(command: str) -> list[list[str]]:
             with each of them as the end of a command. A backtick before a new line is
             read both ways too: as PowerShell's sign that the line goes on, and as the
             end of a command in sh. In every reading a line continued with a backslash is
-            joined to the next, `${NAME}` is `$NAME`, and a redirection is dropped with
-            its target. The same command may be given more than once.
+            joined to the next and `${NAME}` is `$NAME`. And all of it is read with every
+            redirection left in, and again with each dropped together with its target:
+            dropped, because `2>&1` holds a separator sign and a flag may follow a
+            redirection; left in, because the pattern does not know every spelling
+            (`*>&1`, a quoted target, the `>` that ends a PowerShell comment), and what
+            it leaves or takes by mistake must not pass for a word of the command. The
+            same command may be given more than once.
         Raises: nothing.
 
     Known limits: this is not a shell, and it errs to the side of refusing. In the third
@@ -132,7 +147,8 @@ def segments(command: str) -> list[list[str]]:
     tests/t2_property/test_guard.py lists the shapes in which that is known to happen.
     """
     joined = BRACED_NAME.sub(r"$\1", re.sub(r"\\\r?\n", " ", command))
-    texts = [REDIRECTION.sub(" ", text) for text in (joined, re.sub(r"`\r?\n", " ", joined))]
+    kept = (joined, re.sub(r"`\r?\n", " ", joined))
+    texts = (*kept, *(REDIRECTION.sub(" ", text) for text in kept))
     readings = dict.fromkeys(
         reading for text in texts for reading in (text, *text.split("\n"), QUOTE_SIGN.sub(" ", text))
     )
@@ -146,7 +162,8 @@ def segments(command: str) -> list[list[str]]:
 
 def _read(words: list[str]) -> str:
     """Return the end of a reason: the words that were read as the command, cut short."""
-    return f"; read as the command: {' '.join(words)[:QUOTED_BACK]}; a text that holds these words goes in a file"
+    read = " ".join(" ".join(words).split())[:QUOTED_BACK]
+    return f"; read as the command: {read}; a text that holds these words goes in a file"
 
 
 def _calls(words: list[str], program: str) -> list[list[str]]:
@@ -155,11 +172,17 @@ def _calls(words: list[str], program: str) -> list[list[str]]:
     return [words[index + 1 :] for index, name in enumerate(names) if name == program]
 
 
-def _past_options(words: list[str]) -> list[str]:
-    """Return words from the first one that is no option; -R and --repo take their value along."""
-    while words and words[0].startswith("-"):
-        words = words[2:] if words[0] in ("-R", "--repo") else words[1:]
-    return words
+def _after_word(words: list[str], name: str) -> list[str] | None:
+    """Return the words after name where it leads words or follows an option; else None.
+
+    After an option, name is looked for anywhere: the value of an option can be several
+    words (`-R $(echo o/r)`), and how many is not known here.
+    """
+    if words[:1] == [name]:
+        return words[1:]
+    if words[:1] and words[0].startswith("-") and name in words:
+        return words[words.index(name) + 1 :]
+    return None
 
 
 def _repository(words: list[str]) -> str | None:
@@ -181,8 +204,9 @@ def merges(command: str) -> list[tuple[str, str | None]]:
     Contract:
         Args: command, the text given to Bash or PowerShell.
         Returns: one (number, repository) pair for each `gh` program, in any reading of
-            `segments`, whose first word that is no option is `pr` and whose next such
-            word is `merge`; the same pair is given once. number is the word right after
+            `segments`, whose first word is `pr`, or an option with `pr` after it, and
+            where `merge` follows that `pr` in the same way; the same pair is given
+            once. number is the word right after
             `merge` when it is made of digits, else "". repository is the one value of -R
             or --repo after that `gh`, else None.
         Raises: nothing.
@@ -193,10 +217,10 @@ def merges(command: str) -> list[tuple[str, str | None]]:
     found = []
     for words in segments(command):
         for rest in _calls(words, "gh"):
-            group = _past_options(rest)
-            action = _past_options(group[1:])
-            if group[:1] == ["pr"] and action[:1] == ["merge"]:
-                number = "".join(action[1:2])
+            group = _after_word(rest, "pr")
+            action = _after_word(group, "merge") if group is not None else None
+            if action is not None:
+                number = "".join(action[:1])
                 found.append((number if re.fullmatch("[0-9]+", number) else "", _repository(rest)))
     return list(dict.fromkeys(found))
 
@@ -321,6 +345,11 @@ def no_verify_refusals(command: str) -> list[str]:
     return []
 
 
+def _is_name(word: str) -> bool:
+    """Return whether a word after `push` can be an option, a remote or a branch."""
+    return not word.startswith("#") and "<" not in word and ">" not in word
+
+
 def push_refusals(command: str) -> list[str]:
     """Return why a shell command is refused for pushing to main.
 
@@ -332,7 +361,8 @@ def push_refusals(command: str) -> list[str]:
         Returns: one line when a simple command, in any reading of `segments`, holds
             `git ... push` (not `git stash push`) and names main as a target (main,
             x:main, +main, :main, refs/heads/main, heads/main), names no target, names
-            HEAD or a target with a `$` in it, or carries --all, --mirror or --branches.
+            HEAD, `@` or a target with a `$` in it, or carries --all, --mirror or
+            --branches. The names end at a comment (#) and at a redirection.
             Empty otherwise.
         Raises: nothing.
 
@@ -346,8 +376,9 @@ def push_refusals(command: str) -> list[str]:
         for rest in _calls(words, "git"):
             if "push" not in rest or rest[: rest.index("push")][-1:] == ["stash"]:
                 continue
-            # What follows a # is a comment, not a remote and not a branch.
-            given = list(itertools.takewhile(lambda word: not word.startswith("#"), rest[rest.index("push") + 1 :]))
+            # What follows a # is a comment, and a word with < or > is a redirection:
+            # neither it nor what follows it is a remote or a branch.
+            given = list(itertools.takewhile(_is_name, rest[rest.index("push") + 1 :]))
             named = [word for word in given if not word.startswith("-")][1:]
             targets = {
                 word.rsplit(":", 1)[-1].lstrip("+").removeprefix("refs/").removeprefix("heads/") for word in named
