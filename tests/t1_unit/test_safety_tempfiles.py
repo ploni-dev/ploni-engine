@@ -13,7 +13,9 @@ private_dir. Equivalence classes:
                                 standard tempfile calls land there; after the block, also one
                                 that ended in error, it is what it was before
   EC5  a block inside a block   two folders side by side under the root; the process's temp
-                                folder steps back one block at a time
+                                folder steps back one block at a time. Blocks that overlap and
+                                end in the order they began: the folder handed out is that of
+                                the newest block still open, and at the end what it was before
   EC6  the root                 made when it is missing, with the folders above it
   EC7  a read-only file, and a read-only folder with files in it    removed
   EC8  what is written over     every regular file holds only zeros, at its full length, at
@@ -21,12 +23,15 @@ private_dir. Equivalence classes:
   EC9  a file with a second name outside the folder (a hard link)    the name inside is
                                 removed; the bytes, which the outside name still shows, are
                                 kept; so too when the file is read-only
-  EC10 a link to a file outside the folder (a symbolic link)    the link is removed; the file
-                                outside is neither removed nor written over
+  EC10 a link to a file or a folder outside the folder: a symbolic link, and on Windows a
+                                junction, also one folder deeper, also to a read-only file and
+                                to nothing    the link is removed; nothing behind it is removed,
+                                written over or made writable
 
 sweep. Equivalence classes:
   EC11 folders left under the root    removed, overwritten like any other; their number is returned
-  EC12 other entries of the root      a folder with another name, a file with the prefix: left alone
+  EC12 other entries of the root      a folder with another name, a file with the prefix, a link
+                                with the prefix, a folder with the prefix one level deeper: left alone
   EC13 a root that does not exist, an empty root    0
 
 Boundaries:
@@ -41,7 +46,8 @@ Error paths:
                                 an error; and for real, with a file that a program still holds
                                 open, which Windows does not remove and a POSIX system does
   E2  the root is a file              the error of making the folder passes through (OSError)
-  E3  a file cannot be written over but can be removed    no error: it is gone
+  E3  a file cannot be written over but can be removed    no error: it is gone. One file that
+      cannot be opened, and one entry that cannot be made writable, do not stop the others
 
 Adversarial:
   A1  a file name in Hebrew, with spaces, and a very long one
@@ -57,11 +63,17 @@ import sys
 import tempfile
 from pathlib import Path
 
+if sys.platform == "win32":
+    import _winapi
+
 import pytest
 
 from ploni.safety import tempfiles
 
 TEXT = "יעקב כהן / John Smith"
+# The kinds of link to a folder that this system has. A junction is the folder link of Windows and needs no
+# special right there; no other system has one, so there the case does not exist.
+FOLDER_LINKS = ["symlink", "junction"] if sys.platform == "win32" else ["symlink"]
 
 
 def test_ec1_inside_the_block_there_is_a_new_empty_folder_under_the_root(tmp_path: Path) -> None:
@@ -168,15 +180,79 @@ def seen_at_removal(monkeypatch: pytest.MonkeyPatch) -> dict[str, bytes]:
 
 
 def test_ec8_every_file_holds_only_zeros_when_it_is_removed(tmp_path: Path, seen_at_removal: dict[str, bytes]) -> None:
-    sizes = {"empty": 0, "one": 1, "text": len(TEXT.encode("utf-8")), "large": 3 * tempfiles.CHUNK + 1}
+    size = len(TEXT.encode("utf-8"))
     with tempfiles.private_dir(tmp_path) as folder:
-        (folder / "deep").mkdir()
+        (folder / "deep" / "deeper").mkdir(parents=True)
+        for path in ("top", "deep/middle", "deep/deeper/bottom", "deep/locked"):
+            (folder / path).write_text(TEXT, encoding="utf-8")
+        (folder / "deep" / "locked").chmod(stat.S_IREAD)
+        os.link(folder / "top", folder / "deep" / "second-name")
+    names = {"top", "middle", "bottom", "locked", "second-name"}
+    assert {name: len(data) for name, data in seen_at_removal.items()} == dict.fromkeys(names, size)
+    assert all(set(data) == {0} for data in seen_at_removal.values())
+
+
+def test_b2_an_empty_file_one_byte_and_one_byte_more_than_three_chunks(tmp_path: Path, seen_at_removal: dict[str, bytes]) -> None:
+    sizes = {"empty": 0, "one": 1, "large": 3 * tempfiles.CHUNK + 1}
+    with tempfiles.private_dir(tmp_path) as folder:
         for name, size in sizes.items():
-            data = (TEXT.encode("utf-8") * (size // 20 + 1))[:size]
-            (folder / "deep" / name).write_bytes(data)
-        (folder / "deep" / "text").chmod(stat.S_IREAD)
+            (folder / name).write_bytes((TEXT.encode("utf-8") * (size // 20 + 1))[:size])
     assert {name: len(data) for name, data in seen_at_removal.items()} == sizes
     assert all(set(data) <= {0} for data in seen_at_removal.values())
+
+
+def test_ec8_every_file_is_flushed_to_the_disk_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    synced = []
+    real = os.fsync
+    monkeypatch.setattr(tempfiles.os, "fsync", lambda handle: (synced.append(handle), real(handle))[1])
+    with tempfiles.private_dir(tmp_path) as folder:
+        for name in ("one", "two", "three"):
+            (folder / name).write_text(TEXT, encoding="utf-8")
+    assert len(synced) == 3
+
+
+def test_e3_one_file_that_cannot_be_opened_does_not_stop_the_others(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seen_at_removal: dict[str, bytes]
+) -> None:
+    real = Path.open
+
+    def opening(self: Path, *arguments: object, **options: object) -> object:
+        # Only the opening for writing fails, as for a file that another handle holds; reading it stays possible.
+        if self.name == "b-held.txt" and "+" in str(arguments[:1]):
+            raise PermissionError(13, "The process cannot access the file")
+        return real(self, *arguments, **options)
+
+    with tempfiles.private_dir(tmp_path) as folder:
+        for name in ("a-first.txt", "b-held.txt", "c-last.txt"):
+            (folder / name).write_text(TEXT, encoding="utf-8")
+        (folder / "d-dir").mkdir()
+        (folder / "d-dir" / "inner.txt").write_text(TEXT, encoding="utf-8")
+        monkeypatch.setattr(Path, "open", opening)
+    monkeypatch.setattr(Path, "open", real)
+    assert list(tmp_path.iterdir()) == []
+    zeroed = {name for name, data in seen_at_removal.items() if set(data) == {0}}
+    assert zeroed == {"a-first.txt", "c-last.txt", "inner.txt"}
+    assert seen_at_removal["b-held.txt"] == TEXT.encode("utf-8")
+
+
+def test_e3_one_entry_that_cannot_be_made_writable_does_not_stop_the_others(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seen_at_removal: dict[str, bytes]
+) -> None:
+    real = Path.chmod
+
+    def changing(self: Path, mode: int, **options: object) -> None:
+        if self.name == "a-stubborn.txt":
+            raise PermissionError(13, "Access is denied")
+        real(self, mode, **options)
+
+    with tempfiles.private_dir(tmp_path) as folder:
+        for name in ("a-stubborn.txt", "b-locked.txt"):
+            (folder / name).write_text(TEXT, encoding="utf-8")
+        (folder / "b-locked.txt").chmod(stat.S_IREAD)
+        monkeypatch.setattr(Path, "chmod", changing)
+    monkeypatch.setattr(Path, "chmod", real)
+    assert list(tmp_path.iterdir()) == []
+    assert set(seen_at_removal["b-locked.txt"]) == {0}
 
 
 def test_ec9_a_file_with_a_second_name_outside_keeps_its_bytes(tmp_path: Path) -> None:
@@ -198,19 +274,62 @@ def test_ec9_a_read_only_file_with_a_second_name_outside_is_removed_and_keeps_it
     assert outside.read_text(encoding="utf-8") == TEXT
 
 
-def test_ec10_a_link_to_a_file_outside_is_removed_and_the_file_is_untouched(tmp_path: Path) -> None:
-    root, outside = tmp_path / "root", tmp_path / "outside"
-    outside.mkdir()
+def link(at: Path, target: Path, kind: str) -> None:
+    """Make a link of one kind at a path: a symbolic link, or a junction, the folder link of Windows."""
+    if kind == "junction":
+        _winapi.CreateJunction(str(target), str(at))
+    else:
+        at.symlink_to(target, target_is_directory=target.is_dir())
+
+
+def outside_tree(base: Path) -> Path:
+    """Make a folder that is not the helper's, with a file, a read-only file and a file one folder deeper."""
+    outside = base / "outside"
+    (outside / "sub").mkdir(parents=True)
     (outside / "kept.txt").write_text(TEXT, encoding="utf-8")
+    (outside / "sub" / "deep.txt").write_text(TEXT, encoding="utf-8")
+    (outside / "locked.txt").write_text(TEXT, encoding="utf-8")
+    (outside / "locked.txt").chmod(stat.S_IREAD)
+    return outside
+
+
+def untouched(outside: Path) -> bool:
+    """Say whether the outside folder is as `outside_tree` made it: every byte, and the read-only mark."""
+    files = [outside / "kept.txt", outside / "sub" / "deep.txt", outside / "locked.txt"]
+    same = all(file.read_text(encoding="utf-8") == TEXT for file in files)
+    return same and not os.access(outside / "locked.txt", os.W_OK) and os.access(outside / "kept.txt", os.W_OK)
+
+
+@pytest.mark.parametrize("kind", FOLDER_LINKS)
+def test_ec10_a_link_to_a_folder_outside_is_removed_and_nothing_behind_it_is_touched(tmp_path: Path, kind: str) -> None:
+    root, outside = tmp_path / "root", outside_tree(tmp_path)
     with tempfiles.private_dir(root) as folder:
-        try:
-            (folder / "link.txt").symlink_to(outside / "kept.txt")
-            (folder / "linked-folder").symlink_to(outside, target_is_directory=True)
-        except OSError:
-            # Windows gives the right to make a symbolic link only to some accounts (issue #90).
-            pytest.skip("this account may not make a symbolic link; see issue #90")
+        (folder / "inner").mkdir()
+        link(folder / "linked-folder", outside, kind)
+        link(folder / "inner" / "deeper-link", outside / "sub", kind)
+        (folder / "own.txt").write_text(TEXT, encoding="utf-8")
     assert list(root.iterdir()) == []
-    assert (outside / "kept.txt").read_text(encoding="utf-8") == TEXT
+    assert untouched(outside)
+
+
+def test_ec10_a_link_to_a_file_outside_is_removed_and_the_file_is_untouched(tmp_path: Path) -> None:
+    root, outside = tmp_path / "root", outside_tree(tmp_path)
+    with tempfiles.private_dir(root) as folder:
+        link(folder / "link.txt", outside / "kept.txt", "symlink")
+        link(folder / "locked-link.txt", outside / "locked.txt", "symlink")
+        link(folder / "nowhere.txt", outside / "missing.txt", "symlink")
+    assert list(root.iterdir()) == []
+    assert untouched(outside)
+
+
+@pytest.mark.parametrize("kind", FOLDER_LINKS)
+def test_ec12_sweep_leaves_a_link_with_the_prefix_and_what_lies_behind_it(tmp_path: Path, kind: str) -> None:
+    root, outside = tmp_path / "root", outside_tree(tmp_path)
+    leftover(root, "real")
+    link(root / f"{tempfiles.PREFIX}linked", outside, kind)
+    assert tempfiles.sweep(root) == 1
+    assert [path.name for path in root.iterdir()] == [f"{tempfiles.PREFIX}linked"]
+    assert untouched(outside)
 
 
 def leftover(root: Path, name: str) -> Path:
@@ -245,6 +364,58 @@ def test_ec13_sweep_of_a_missing_root_and_of_an_empty_one(tmp_path: Path) -> Non
     assert tempfiles.sweep(tmp_path / "missing") == 0
     assert tempfiles.sweep(tmp_path) == 0
     assert not (tmp_path / "missing").exists()
+
+
+def test_ec12_sweep_leaves_a_folder_with_the_prefix_that_is_not_directly_under_the_root(tmp_path: Path) -> None:
+    leftover(tmp_path / "other-folder", "nested")
+    assert tempfiles.sweep(tmp_path) == 0
+    assert (tmp_path / "other-folder" / f"{tempfiles.PREFIX}nested" / "inner" / "page.txt").read_text(encoding="utf-8") == TEXT
+
+
+def test_ec3_a_block_that_is_interrupted_leaves_nothing(tmp_path: Path) -> None:
+    before = tempfile.gettempdir()
+    for ending in (KeyboardInterrupt, SystemExit, GeneratorExit):
+        with pytest.raises(ending), tempfiles.private_dir(tmp_path) as folder:
+            (folder / "a.txt").write_text(TEXT, encoding="utf-8")
+            raise ending
+        assert list(tmp_path.iterdir()) == []
+        assert tempfile.gettempdir() == before
+
+
+def test_ec5_blocks_that_overlap_and_end_in_the_order_they_began(tmp_path: Path) -> None:
+    before = tempfile.gettempdir()
+    first, second, third = (tempfiles.private_dir(tmp_path) for _ in range(3))
+    one = first.__enter__()
+    two = second.__enter__()
+    assert Path(tempfile.gettempdir()) == two
+    first.__exit__(None, None, None)
+    assert not one.exists()
+    assert Path(tempfile.gettempdir()) == two
+    handle, name = tempfile.mkstemp()
+    os.close(handle)
+    assert Path(name).parent == two
+    three = third.__enter__()
+    assert Path(tempfile.gettempdir()) == three
+    second.__exit__(None, None, None)
+    assert Path(tempfile.gettempdir()) == three
+    third.__exit__(None, None, None)
+    assert tempfile.gettempdir() == before
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_ec6_a_root_that_the_helper_makes_is_for_its_owner_only(tmp_path: Path) -> None:
+    root = tmp_path / "made"
+    with tempfiles.private_dir(root):
+        if sys.platform != "win32":
+            assert stat.S_IMODE(root.stat().st_mode) == 0o700
+    assert root.is_dir()
+
+
+def test_ec7_the_private_folder_itself_read_only_is_removed(tmp_path: Path) -> None:
+    with tempfiles.private_dir(tmp_path) as folder:
+        (folder / "page.txt").write_text(TEXT, encoding="utf-8")
+        folder.chmod(stat.S_IREAD | stat.S_IEXEC)
+    assert list(tmp_path.iterdir()) == []
 
 
 def test_b1_a_block_that_makes_nothing(tmp_path: Path) -> None:
@@ -311,6 +482,30 @@ def test_e1_sweep_says_so_when_a_folder_cannot_be_removed(tmp_path: Path, stuck:
     folder = leftover(tmp_path, "one")
     with pytest.raises(tempfiles.NotRemoved, match=folder.name):
         tempfiles.sweep(tmp_path)
+
+
+def test_e1_sweep_tries_every_folder_before_it_says_that_one_could_not_be_removed(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    real = tempfiles.shutil.rmtree
+
+    def failing_for_one(folder: Path, **options: object) -> None:
+        if Path(folder).name.endswith("b-stuck"):
+            raise PermissionError(13, "The process cannot access the file")
+        real(folder, **options)
+
+    for name in ("a-first", "b-stuck", "c-stuck-too-b-stuck", "d-last"):
+        leftover(tmp_path, name)
+    monkeypatch.setattr(tempfiles.shutil, "rmtree", failing_for_one)
+    with pytest.raises(tempfiles.NotRemoved, match=f"{tempfiles.PREFIX}b-stuck could not"):
+        tempfiles.sweep(tmp_path)
+    assert sorted(path.name for path in tmp_path.iterdir()) == [f"{tempfiles.PREFIX}b-stuck", f"{tempfiles.PREFIX}c-stuck-too-b-stuck"]
+
+
+def test_e1_an_error_of_the_block_is_the_context_of_the_removal_error(tmp_path: Path, stuck: None) -> None:
+    with pytest.raises(tempfiles.NotRemoved) as raised, tempfiles.private_dir(tmp_path):
+        raise KeyError("the block's own")
+    assert isinstance(raised.value.__context__, KeyError)
 
 
 def test_e1_the_temp_folder_of_the_process_is_put_back_when_removal_fails(tmp_path: Path, stuck: None) -> None:

@@ -15,8 +15,9 @@ How the canary is written (WAYS):
   W3  a file in folders nested three deep   W4  the canary as the name of a file and of a folder
   W5  a file opened by tempfile.mkstemp     W6  tempfile.NamedTemporaryFile(delete=False)
   W7  tempfile.mkdtemp, a file inside       W8  tempfile.TemporaryDirectory that is never closed
-  W9  a read-only file                      W10 a file written in pieces and left unflushed in
-                                                a second handle that is then closed
+  W9  a read-only file                      W10 a file written in pieces through two handles
+  W11 a tempfile.TemporaryFile that is still open when the block ends, with files beside it
+  W12 a file with two names inside the folder
 How the block ends (ENDINGS):
   N1  normally       N2  with an error      N3  the process is killed inside the block, and
                                                 the next start calls sweep
@@ -121,6 +122,28 @@ def in_pieces(folder: Path) -> None:
         second.write(CANARY.encode("utf-16"))
 
 
+STILL_OPEN: list[object] = []
+
+
+def still_open(folder: Path) -> None:
+    """W11: a TemporaryFile that nobody closes before the block ends, and files that sort around it."""
+    (folder / "a-before.txt").write_text(CANARY, encoding="utf-8")
+    held = tempfile.TemporaryFile()
+    held.write(CANARY.encode("utf-8"))
+    held.flush()
+    STILL_OPEN.append(held)
+    (folder / "zz-after.txt").write_text(CANARY, encoding="utf-8")
+    (folder / "zz-dir").mkdir()
+    (folder / "zz-dir" / "inner.txt").write_text(CANARY, encoding="utf-8")
+
+
+def two_names(folder: Path) -> None:
+    """W12: one file under two names, both inside the folder."""
+    (folder / "first-name.txt").write_text(CANARY, encoding="utf-8")
+    (folder / "inner").mkdir()
+    os.link(folder / "first-name.txt", folder / "inner" / "second-name.txt")
+
+
 WAYS: dict[str, Callable[[Path], None]] = {
     "W1 W2 text files": text_files,
     "W3 nested": nested,
@@ -131,6 +154,8 @@ WAYS: dict[str, Callable[[Path], None]] = {
     "W8 TemporaryDirectory": by_temporary_directory,
     "W9 read-only": read_only,
     "W10 pieces": in_pieces,
+    "W11 still open": still_open,
+    "W12 two names": two_names,
 }
 
 
@@ -141,7 +166,11 @@ def leaks(root: Path) -> list[str]:
         if any(part in path.name for part in PARTS):
             found.append(f"name of {path.relative_to(root).as_posix()}")
         if path.is_file():
-            data = path.read_bytes()
+            try:
+                data = path.read_bytes()
+            except OSError:
+                # A file that a program holds open for itself alone cannot be read; it cannot be searched.
+                continue
             found += [
                 f"{part} as {encoding} in {path.relative_to(root).as_posix()}"
                 for part in PARTS
@@ -158,6 +187,27 @@ def test_n1_the_canary_is_gone_after_a_block_that_ends_normally(tmp_path: Path, 
         assert leaks(tmp_path) != [], "the way wrote the canary under the root"
     assert leaks(tmp_path) == []
     assert list(tmp_path.iterdir()) == []
+    while STILL_OPEN:
+        STILL_OPEN.pop().close()
+
+
+def test_n1_the_canary_is_written_over_before_a_file_goes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # What the search above cannot see: a file that is removed still holding the canary.
+    held = []
+    real = tempfiles.shutil.rmtree
+
+    def recording(folder: Path, **options: object) -> None:
+        held.extend(leaks(Path(folder)))
+        real(folder, **options)
+
+    monkeypatch.setattr(tempfiles.shutil, "rmtree", recording)
+    for name, way in WAYS.items():
+        if name in ("W4 names", "W11 still open"):
+            # A name is not written over, and a file that is still open cannot be: both are stated limits.
+            continue
+        with tempfiles.private_dir(tmp_path) as folder:
+            way(folder)
+    assert held == []
 
 
 @pytest.mark.parametrize("way", WAYS)
@@ -167,6 +217,8 @@ def test_n2_the_canary_is_gone_after_a_block_that_ends_with_an_error(tmp_path: P
         raise RuntimeError("stopped")
     assert leaks(tmp_path) == []
     assert list(tmp_path.iterdir()) == []
+    while STILL_OPEN:
+        STILL_OPEN.pop().close()
 
 
 KILLED = """
