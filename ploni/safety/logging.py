@@ -3,10 +3,10 @@
 Why: the product's promise is that a sensitive document never leaks, and a document surface
 in a log line is one of the loudest ways it could (ADR-0005; `CLAUDE.md`, Hard constraints:
 "No document text in logs or temp files"). A logger cannot tell document text from any
-other string. So this module writes no string of a caller's as it is. A line is made of the
-name of an event, which is a member of an enum; of fields whose values are numbers; and of
-a few words that stand for everything else. A name is written only when it has the shape of
-a name in code.
+other string. So this module writes no text of a caller's. A string of a caller's is
+written only where a name of code stands, and only when it has the shape of one. A line is
+made of the name of an event, which is a member of an enum; of fields whose values are
+numbers; and of a few words that stand for everything else.
 
 Contract: `install` puts one handler on the root logger, and from then on every record of
 the process goes through it, also the records of libraries that know nothing of this
@@ -25,18 +25,20 @@ Known limits:
   type, or of a source file, and, in lower case, as a field key. Code that builds a class,
   an enum member or a log record from document text could put a word such as `Jacob`
   there, and a call that spreads a mapping made from document text into the fields,
-  `event(member, **counts_by_word)`, writes every key that is a lower-case word. No plain
-  logging call does either. Field keys are written in the call, never taken from data.
+  `event(member, **counts_by_word)`, writes every key that is a lower-case identifier:
+  letters, digits and underscores after a first letter. No plain logging call does
+  either. The rule for product code: write a field key in the call; never take it from
+  data.
 - `install` holds for the process it is called in and from the moment it is called. A
   record logged before it, and a process started later, are outside it; the worker process
   calls `install` for itself.
 - Code that sets logging up again after `install` undoes it. Among the ways:
   `logging.basicConfig(force=True)`; `logging.config.dictConfig`; a handler that a library
   adds to its own logger; removing the handler from the root logger; setting
-  `logging.lastResort` back, or to `None`, after which the logging module prints the name
-  of a logger that has no handler; a caller that gives `warnings.showwarning` a stream of
-  its own; and the end of a `warnings.catch_warnings()` block that `install` was called
-  inside.
+  `logging.lastResort` back, after which the logging module prints the message of a
+  logger that has no handler and hands nothing up, or to `None`, after which it prints
+  that logger's name; a caller that gives `warnings.showwarning` a stream of its own; and
+  the end of a `warnings.catch_warnings()` block that `install` was called inside.
 - What is printed past the logging system, by `print` or by the interpreter for an uncaught
   error, is not seen here. `print` is banned under ploni/ by ruff.
 - A line that cannot be written leaves no trace: a stream that fails, and a record that
@@ -56,7 +58,7 @@ FIELDS = "ploni_fields"
 
 # What a field key may be. A key is meant to come from code, as a keyword of a call. The
 # shape keeps out a key with a space, a capital, a line break or a letter that is not ASCII;
-# it cannot keep out a lower-case word that was taken from data (module docstring).
+# it cannot keep out a lower-case identifier that was taken from data (module docstring).
 KEY = re.compile(r"[a-z][a-z0-9_]*")
 
 # What a name written in code looks like: the name of a class or of an enum member.
@@ -232,11 +234,12 @@ class Quiet(logging.StreamHandler[TextIO]):
 
     Contract: as `logging.StreamHandler`, but `handleError` does nothing.
 
-    Known limits: a log that cannot be written is silent about it. Two things are not
+    Known limits: a log that cannot be written is silent about it. Three things are not
     dropped: a `RecursionError` from the stream goes to the caller, as in the standard
-    handler; and when the stream fails to flush at the end of the process with an error
-    other than `OSError` or `ValueError`, the logging module prints that error, which holds
-    nothing of a record.
+    handler; so does an error that is no `Exception`, such as `KeyboardInterrupt`; and
+    when the stream fails to flush at the end of the process with an error other than
+    `OSError` or `ValueError`, the logging module prints that error, which holds nothing
+    of a record.
     """
 
     def handleError(self, record: logging.LogRecord) -> None:
@@ -309,7 +312,7 @@ def event(member: Event, /, *, level: int = logging.INFO, **fields: object) -> N
             only a call with `**` can cause. No error holds the offending value, and
             nothing is written.
 
-    Known limits: see the module docstring on numbers.
+    Known limits: see the module docstring on numbers and on field keys.
     """
     # The real type is asked, not the object: an object can say it is of any class.
     if not issubclass(type(member), Event):
