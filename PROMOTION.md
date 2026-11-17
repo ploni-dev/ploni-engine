@@ -101,6 +101,7 @@ Required status checks on the PR. Under five minutes. **Enforced by GitHub Actio
 | T3 golden | unintended output changes |
 | T8 privacy: network, eval isolation, log canary, temp canary | leak paths |
 | Per-PR recall check, from Phase 3 (section 11) | a name that was found before and is now missed |
+| Held-out batch, from Phase 3 (section 11) | an accuracy number that got worse |
 | Secret scan | credentials |
 | Docstring presence, a `Why:` section, and a `Contract:` section on public functions | undocumented public surface |
 | Ratchet checks (section 6) | weakened tests or fixtures |
@@ -430,6 +431,13 @@ Achia asked for tests that a PR has to pass in order to merge, and chose the fre
   - T3 golden already turns red when the detection output on a fixture changes, and the author may update a golden file in the same PR with an explanation. This check differs in one thing: its list of names found is a baseline, so a change to it needs a decision of Achia's and never shares a PR with code.
   - It guards against getting worse on a fixed set. It does not measure recall: T6 stays the measure.
   - It needs the model on the CI runner, and `PROCESS.md` section 5.4 found that slow and brittle for the metric gates. If it does not work there, the check runs locally with a committed results file that the gate reads, as section 5.4 does for metrics, and this section is changed to say so. A check that the gate cannot see is not this check. Its run time is measured when it is built.
+- **The held-out batch, decided 2026-11-16 and 2026-11-17.** Achia asked for more than the recall check above: "we have to have a testing batch that the algorithm did not learn and its like "new" to it -  and test on it to see if we harm something or keep it safe or even getting better, and it has to be part of the tags in each pr that going in so we know where we at in each step". `build-plan.md` section 7, "The held-out batch", says what the batch is. It is a row of Level 1.
+  - **A worse number blocks.** On 2026-11-17 he was asked what happens to a change that makes an accuracy number on the batch worse, and of two offered answers he picked "It is blocked": "The change does not go in. I bring you the numbers, before and after, in plain words, and you decide: fix it, drop it, or accept it for a reason you state." So such a PR does not merge until he has decided, and his decision is quoted in the PR with his reason (`CLAUDE.md`, "Merging").
+  - Two choices are Claude's and only narrow what Claude may do: any drop counts, however small, and every accuracy number measured on the batch counts by itself.
+  - Speed is not part of it. Time is measured and is not a gate for now (`build-plan.md` section 8.2).
+  - He was told that the scores start in Phase 3, with the first model that finds names. Whether the batch covers what Phase 1 and Phase 2 add, from their own PRs, was not asked and goes to him before the first detector PR of Phase 1 (`build-plan.md` section 7). What "works" means for the merge gate is not changed by it.
+  - The invented part can run where the gate sees it. The real part runs on the laptop only, because real documents stay out of the repository; a number that the gate cannot see is discipline, not mechanism: the PR carries it and the reviewer reads it. How each part reaches the gate, and how a worse number that he accepted is recorded so that the next PR is compared against it, are settled when the batch is built, and this section is changed to say so. Until it says how, his accepting a worse number lifts no other rule: no merge past a red check, code and a baseline never share a PR, and a gate that cannot be met is a findings note or a waiver request (`CLAUDE.md`).
+  - The numbers of every merged PR go into the analytics record (`build-plan.md` section 7, "The analytics record").
 
 ### When to revisit
 
