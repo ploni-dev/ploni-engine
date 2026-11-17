@@ -15,7 +15,9 @@ Through the standard logging calls, as any library or careless product code woul
   W5   the name of the logger                      W6   the text of an exception that is logged
   W7   logger.exception inside an except block     W8   stack_info
   W9   an object whose str is the canary           W10  a message whose formatting fails
-  W11  a warning                                   W12  a record made by hand and handled
+  W11  a warning                                   W12  a record made by hand and handled, the
+                                                        canary as its file name, line number, level
+                                                        name and every other part
   W13  the forged fields attribute, with a string message
   W14  an Event message with forged fields: canary as key and as value
   W15  bytes, and a message of several lines
@@ -58,7 +60,8 @@ from ploni.safety import logging as safe
 
 HEBREW, LATIN, DIGITS = "קנרית־יעקב", "Canary-Jacob", "7301946"
 CANARY = f"{HEBREW} {LATIN} {DIGITS}"
-PARTS = (HEBREW, LATIN, DIGITS, "יעקב", "Jacob", "canary")
+# The bare word canary is not a part: the name of this file holds it, and a log line names the file.
+PARTS = (HEBREW, LATIN, DIGITS, "יעקב", "Jacob")
 ENCODINGS = ("utf-8", "utf-16-le", "cp1255")
 
 
@@ -106,8 +109,10 @@ def log_exception() -> None:
 
 
 def handle_by_hand() -> None:
-    """Hand the root logger a record built without a logging call."""
+    """Hand the root logger a record built without a logging call, the canary in every part of it."""
     record = logging.LogRecord(CANARY, logging.ERROR, CANARY, 1, CANARY, (CANARY,), None, func=CANARY, sinfo=CANARY)
+    record.levelname = record.filename = record.module = record.threadName = record.processName = CANARY
+    record.lineno = CANARY  # type: ignore[assignment]
     logging.getLogger().handle(record)
 
 
@@ -145,18 +150,32 @@ VALUES: dict[str, object] = {
 
 
 @pytest.fixture
-def log(logging_restored: None) -> io.StringIO:
-    """Install the handler on a stream held in memory and return the stream."""
-    stream = io.StringIO()
-    safe.install(stream, level=logging.DEBUG)
-    return stream
+def start(logging_restored: None) -> Callable[..., io.StringIO]:
+    """Return a function that installs the handler on a stream held in memory and returns the stream.
+
+    A test calls it first, in its own body. pytest hangs handlers of its own on the root logger at the start
+    of every phase of a test; `install` removes the ones of the phase it is called in.
+    """
+
+    def installed(level: int = logging.DEBUG) -> io.StringIO:
+        stream = io.StringIO()
+        safe.install(stream, level=level)
+        return stream
+
+    return installed
 
 
 def leaks(text: str) -> list[str]:
     """Return every part of the canary that the text holds, as text or in the bytes of an encoding."""
-    data = text.encode("utf-8", "surrogateescape")
-    as_text = [part for part in (CANARY, *PARTS) if part.lower() in text.lower()]
-    as_bytes = [f"{part} in {encoding}" for part in PARTS for encoding in ENCODINGS if part.encode(encoding) in data]
+    folded = text.lower()
+    as_text = [part for part in (CANARY, *PARTS) if part.lower() in folded]
+    # Bytes of another encoding that were read as text show as one character for each byte.
+    as_bytes = [
+        f"{part} as {encoding} bytes"
+        for part in PARTS
+        for encoding in ENCODINGS
+        if part.encode(encoding).decode("latin-1") in text
+    ]
     return as_text + as_bytes
 
 
@@ -168,8 +187,9 @@ def everything(log: io.StringIO, capfd: pytest.CaptureFixture[str]) -> str:
 
 @pytest.mark.parametrize("way", STANDARD)
 def test_the_canary_does_not_reach_the_log_through_a_standard_logging_call(
-    log: io.StringIO, capfd: pytest.CaptureFixture[str], way: str
+    start: Callable[..., io.StringIO], capfd: pytest.CaptureFixture[str], way: str
 ) -> None:
+    log = start()
     STANDARD[way]()
     written = everything(log, capfd)
     assert leaks(written) == []
@@ -178,8 +198,9 @@ def test_the_canary_does_not_reach_the_log_through_a_standard_logging_call(
 
 @pytest.mark.parametrize("kind", VALUES)
 def test_the_canary_does_not_reach_the_log_as_a_field_of_an_event(
-    log: io.StringIO, capfd: pytest.CaptureFixture[str], kind: str
+    start: Callable[..., io.StringIO], capfd: pytest.CaptureFixture[str], kind: str
 ) -> None:
+    log = start()
     safe.event(Step.DONE, pages=3, value=VALUES[kind])
     written = everything(log, capfd)
     assert leaks(written) == []
@@ -187,8 +208,9 @@ def test_the_canary_does_not_reach_the_log_as_a_field_of_an_event(
 
 
 def test_the_canary_as_the_event_itself_is_refused_and_not_repeated(
-    log: io.StringIO, capfd: pytest.CaptureFixture[str]
+    start: Callable[..., io.StringIO], capfd: pytest.CaptureFixture[str]
 ) -> None:
+    log = start()
     with pytest.raises(TypeError) as refused:
         safe.event(CANARY)  # type: ignore[arg-type]
     assert leaks(str(refused.value) + everything(log, capfd)) == []
@@ -196,15 +218,17 @@ def test_the_canary_as_the_event_itself_is_refused_and_not_repeated(
 
 
 def test_the_canary_as_a_field_key_is_refused_and_not_repeated(
-    log: io.StringIO, capfd: pytest.CaptureFixture[str]
+    start: Callable[..., io.StringIO], capfd: pytest.CaptureFixture[str]
 ) -> None:
+    log = start()
     with pytest.raises(ValueError, match="key") as refused:
         safe.event(Step.DONE, **{CANARY: 1})
     assert leaks(str(refused.value) + everything(log, capfd)) == []
     assert log.getvalue() == ""
 
 
-def test_positive_control_an_event_with_numbers_is_written(log: io.StringIO) -> None:
+def test_positive_control_an_event_with_numbers_is_written(start: Callable[..., io.StringIO]) -> None:
+    log = start()
     safe.event(Step.DONE, pages=3, seconds=0.25)
     assert log.getvalue().endswith(" Step.DONE pages=3 seconds=0.25\n")
 
@@ -212,7 +236,8 @@ def test_positive_control_an_event_with_numbers_is_written(log: io.StringIO) -> 
 def test_the_search_finds_the_canary_when_it_is_there() -> None:
     # The check that the checker works: each way a leak could look is found.
     assert leaks(f"x {CANARY} y") != []
-    assert leaks("only יעקב leaked") == ["יעקב"]
+    assert "יעקב" in leaks("only יעקב leaked")
     assert leaks("lower case canary-jacob") != []
-    assert leaks(HEBREW.encode("cp1255").decode("latin-1")) != []
+    assert leaks(HEBREW.encode("cp1255").decode("latin-1")) == [f"{HEBREW} as cp1255 bytes", "יעקב as cp1255 bytes"]
+    assert leaks(DIGITS.encode("utf-16-le").decode("latin-1")) == [f"{DIGITS} as utf-16-le bytes"]
     assert leaks("nothing of it here: Step.DONE pages=3 <withheld>") == []

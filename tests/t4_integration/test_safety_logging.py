@@ -28,7 +28,8 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 CANARY = "קנרית־יעקב Canary-Jacob 7301946"
-LINE = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d (?P<level>[A-Z]+) <string>:\d+ (?P<rest>.+)")
+# The program is given with -c, so its own lines are in "<string>"; a warning is logged from warnings.py.
+LINE = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d (?P<level>[A-Z]+) (?:<string>|warnings\.py):\d+ (?P<rest>.+)")
 
 PROGRAM = '''
 import enum, logging, sys, warnings

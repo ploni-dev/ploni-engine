@@ -45,6 +45,9 @@ Adversarial:
   A1  a message whose formatting fails ("%d" with a string)    the fixed mark, nothing on stderr;
       the standard handler would print the message and its arguments there
   A2  a field named like an argument of the logging call (level, extra, msg, name, exc_info)
+  A3  a record built by hand whose level name, file name or line number is text: each is
+      written as a fixed word; a file name shaped like a source file and a whole line number
+      are written as they are
 
 The Hebrew axes of the test-matrix skill apply as input only: text in Hebrew, in Latin letters
 and mixed is what must not come out; the canary test carries them. The document-structure axes
@@ -56,13 +59,14 @@ import io
 import logging
 import re
 import warnings
+from collections.abc import Callable
 from pathlib import Path
 
 import pytest
 
 from ploni.safety import logging as safe
 
-LINE = r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d {level} test_safety_logging\.py:\d+ {rest}\n"
+LINE = r"\d{{4}}-\d\d-\d\dT\d\d:\d\d:\d\d {level} test_safety_logging\.py:\d+ {rest}\n"
 TEXT = "יעקב כהן / John Smith"
 
 
@@ -98,11 +102,19 @@ class ChattyInt(int):
 
 
 @pytest.fixture
-def out(logging_restored: None) -> io.StringIO:
-    """Install the handler on a stream held in memory and return the stream."""
-    stream = io.StringIO()
-    safe.install(stream)
-    return stream
+def start(logging_restored: None) -> Callable[..., io.StringIO]:
+    """Return a function that installs the handler on a stream held in memory and returns the stream.
+
+    A test calls it first, in its own body. pytest hangs handlers of its own on the root logger at the start
+    of every phase of a test; `install` removes the ones of the phase it is called in.
+    """
+
+    def installed(level: int = logging.INFO) -> io.StringIO:
+        stream = io.StringIO()
+        safe.install(stream, level=level)
+        return stream
+
+    return installed
 
 
 def matches(out: io.StringIO, rest: str, level: str = "INFO") -> bool:
@@ -110,7 +122,8 @@ def matches(out: io.StringIO, rest: str, level: str = "INFO") -> bool:
     return re.fullmatch(LINE.format(level=level, rest=re.escape(rest)), out.getvalue()) is not None
 
 
-def test_ec1_an_event_with_fields_is_one_line_in_the_order_given(out: io.StringIO) -> None:
+def test_ec1_an_event_with_fields_is_one_line_in_the_order_given(start: Callable[..., io.StringIO]) -> None:
+    out = start()
     safe.event(Sample.DONE, pages=3, seconds=0.5, cached=False)
     assert matches(out, "Sample.DONE pages=3 seconds=0.5 cached=False"), out.getvalue()
 
@@ -120,8 +133,9 @@ def test_ec1_an_event_with_fields_is_one_line_in_the_order_given(out: io.StringI
     [(0, "0"), (-7, "-7"), (10**20, "100000000000000000000"), (1.25, "1.25"), (True, "True"), (False, "False"), (None, "None")],
 )
 def test_ec2_a_number_a_bool_and_none_are_written_as_python_writes_them(
-    out: io.StringIO, value: object, shown: str
+    start: Callable[..., io.StringIO], value: object, shown: str
 ) -> None:
+    out = start()
     safe.event(Sample.DONE, value=value)
     assert matches(out, f"Sample.DONE value={shown}"), out.getvalue()
 
@@ -142,14 +156,16 @@ def test_ec2_a_number_a_bool_and_none_are_written_as_python_writes_them(
         (Other.DONE, "<Other>"),
     ],
 )
-def test_ec3_any_other_value_is_a_mark_with_the_name_of_its_type(out: io.StringIO, value: object, shown: str) -> None:
+def test_ec3_any_other_value_is_a_mark_with_the_name_of_its_type(start: Callable[..., io.StringIO], value: object, shown: str) -> None:
+    out = start()
     safe.event(Sample.DONE, value=value)
     assert matches(out, f"Sample.DONE value={shown}"), out.getvalue()
     assert "יעקב" not in out.getvalue()
     assert "John" not in out.getvalue()
 
 
-def test_ec4_the_level_is_info_unless_one_is_given(out: io.StringIO) -> None:
+def test_ec4_the_level_is_info_unless_one_is_given(start: Callable[..., io.StringIO]) -> None:
+    out = start()
     safe.event(Sample.FAILED, level=logging.ERROR, tries=2)
     assert matches(out, "Sample.FAILED tries=2", level="ERROR"), out.getvalue()
 
@@ -162,13 +178,15 @@ def test_ec4_a_line_below_the_installed_level_is_not_written(logging_restored: N
     assert matches(stream, "Sample.FAILED", level="WARNING"), stream.getvalue()
 
 
-def test_ec5_an_event_with_no_fields_is_its_name_alone(out: io.StringIO) -> None:
+def test_ec5_an_event_with_no_fields_is_its_name_alone(start: Callable[..., io.StringIO]) -> None:
+    out = start()
     safe.event(Sample.DONE)
     assert matches(out, "Sample.DONE"), out.getvalue()
 
 
 @pytest.mark.parametrize("name", [TEXT, "sample.done", "Sample.DONE", Other.DONE, None, 3])
-def test_e1_what_is_no_member_of_an_event_class_is_refused_without_its_text(out: io.StringIO, name: object) -> None:
+def test_e1_what_is_no_member_of_an_event_class_is_refused_without_its_text(start: Callable[..., io.StringIO], name: object) -> None:
+    out = start()
     with pytest.raises(TypeError) as raised:
         safe.event(name)  # type: ignore[arg-type]
     assert "יעקב" not in str(raised.value)
@@ -177,7 +195,8 @@ def test_e1_what_is_no_member_of_an_event_class_is_refused_without_its_text(out:
 
 
 @pytest.mark.parametrize("key", [TEXT, "Pages", "two words", "", "1st", "naïve", "שם"])
-def test_e2_a_key_that_is_no_lower_case_identifier_is_refused_without_its_text(out: io.StringIO, key: str) -> None:
+def test_e2_a_key_that_is_no_lower_case_identifier_is_refused_without_its_text(start: Callable[..., io.StringIO], key: str) -> None:
+    out = start()
     with pytest.raises(ValueError, match="key") as raised:
         safe.event(Sample.DONE, **{key: 1})
     assert key == "" or key not in str(raised.value)
@@ -195,13 +214,15 @@ def test_e2_a_key_that_is_no_lower_case_identifier_is_refused_without_its_text(o
         lambda: logging.info("sample.done"),
     ],
 )
-def test_ec6_a_record_of_a_standard_logging_call_is_a_fixed_mark(out: io.StringIO, send: object) -> None:
+def test_ec6_a_record_of_a_standard_logging_call_is_a_fixed_mark(start: Callable[..., io.StringIO], send: object) -> None:
+    out = start()
     send()  # type: ignore[operator]
     level = "WARNING" if "WARNING" in out.getvalue() else "INFO"
     assert matches(out, "<withheld>", level=level), out.getvalue()
 
 
-def test_ec7_a_record_with_an_exception_names_its_type_only(out: io.StringIO) -> None:
+def test_ec7_a_record_with_an_exception_names_its_type_only(start: Callable[..., io.StringIO]) -> None:
+    out = start()
     try:
         raise KeyError(TEXT)
     except KeyError:
@@ -209,12 +230,14 @@ def test_ec7_a_record_with_an_exception_names_its_type_only(out: io.StringIO) ->
     assert matches(out, "<withheld> raised=KeyError", level="ERROR"), out.getvalue()
 
 
-def test_ec8_the_fields_attribute_without_an_event_is_still_a_fixed_mark(out: io.StringIO) -> None:
+def test_ec8_the_fields_attribute_without_an_event_is_still_a_fixed_mark(start: Callable[..., io.StringIO]) -> None:
+    out = start()
     logging.info(TEXT, extra={"ploni_fields": {"pages": 3}})
     assert matches(out, "<withheld>"), out.getvalue()
 
 
-def test_ec9_an_event_sent_by_a_standard_call_with_forged_fields_shows_no_text(out: io.StringIO) -> None:
+def test_ec9_an_event_sent_by_a_standard_call_with_forged_fields_shows_no_text(start: Callable[..., io.StringIO]) -> None:
+    out = start()
     logging.info(Sample.DONE, extra={"ploni_fields": {TEXT: 1, "note": TEXT, "pages": 3}})
     assert matches(out, f"Sample.DONE <key>=1 note=<str:{len(TEXT)}> pages=3"), out.getvalue()
 
@@ -239,7 +262,8 @@ def test_ec11_install_takes_the_handlers_of_named_loggers_away(logging_restored:
     assert matches(stream, "<withheld>", level="WARNING"), stream.getvalue()
 
 
-def test_ec12_a_warning_goes_through_the_handler(out: io.StringIO, capsys: pytest.CaptureFixture[str]) -> None:
+def test_ec12_a_warning_goes_through_the_handler(start: Callable[..., io.StringIO], capsys: pytest.CaptureFixture[str]) -> None:
+    out = start()
     warnings.warn(TEXT, UserWarning, stacklevel=1)
     assert "<withheld>" in out.getvalue()
     assert "יעקב" not in out.getvalue()
@@ -269,7 +293,8 @@ def test_b2_the_event_class_has_no_member_of_its_own() -> None:
     assert isinstance(Sample.DONE, safe.Event)
 
 
-def test_a1_a_message_whose_formatting_fails(out: io.StringIO, capsys: pytest.CaptureFixture[str]) -> None:
+def test_a1_a_message_whose_formatting_fails(start: Callable[..., io.StringIO], capsys: pytest.CaptureFixture[str]) -> None:
+    out = start()
     logging.info("%d pages", TEXT)
     logging.info("%s and %s", TEXT)
     assert out.getvalue().count("<withheld>") == 2
@@ -277,8 +302,36 @@ def test_a1_a_message_whose_formatting_fails(out: io.StringIO, capsys: pytest.Ca
     assert capsys.readouterr().err == ""
 
 
+def by_hand(level_name: object, file_name: object, line: object) -> logging.LogRecord:
+    """Return a record built without a logging call, with the three parts given."""
+    record = logging.LogRecord("library", logging.INFO, "path/module.py", 1, TEXT, None, None)
+    record.levelname, record.filename, record.lineno = level_name, file_name, line  # type: ignore[assignment]
+    return record
+
+
+@pytest.mark.parametrize(
+    ("level_name", "file_name", "line", "head"),
+    [
+        (TEXT, TEXT, TEXT, "LEVEL <file>:0"),
+        ("Level 25", "two words.py", 7.5, "LEVEL <file>:0"),
+        ("info", "../module.py", True, "LEVEL <file>:0"),
+        ("WARNING", "tokenization_utils_base.py", 812, "WARNING tokenization_utils_base.py:812"),
+        ("CRITICAL", "<stdin>", 3, "CRITICAL <stdin>:3"),
+        ("DEBUG", "window.pyw", 0, "DEBUG window.pyw:0"),
+        ("ERROR", None, None, "ERROR <file>:0"),
+    ],
+)
+def test_a3_a_record_built_by_hand_shows_only_what_has_the_shape_of_code(
+    start: Callable[..., io.StringIO], level_name: object, file_name: object, line: object, head: str
+) -> None:
+    out = start(logging.DEBUG)
+    logging.getLogger().handle(by_hand(level_name, file_name, line))
+    assert re.fullmatch(rf"\d{{4}}-\d\d-\d\dT\d\d:\d\d:\d\d {re.escape(head)} <withheld>\n", out.getvalue()), out.getvalue()
+
+
 @pytest.mark.parametrize("key", ["level", "extra", "msg", "name", "exc_info", "args", "stacklevel"])
-def test_a2_a_field_named_like_an_argument_of_the_logging_call(out: io.StringIO, key: str) -> None:
+def test_a2_a_field_named_like_an_argument_of_the_logging_call(start: Callable[..., io.StringIO], key: str) -> None:
+    out = start()
     if key == "level":
         safe.event(Sample.DONE, level=logging.WARNING)
         assert matches(out, "Sample.DONE", level="WARNING"), out.getvalue()
