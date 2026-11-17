@@ -40,8 +40,10 @@ Known limits:
   - A layer always may import itself, also a sub-package of it that is named like another
     layer (ploni/adapters/write/).
   - `from ploni import NAME` is judged as the layer ploni.NAME, also when NAME is no module.
-  - An import made by a call (importlib.import_module, __import__) is not seen, and neither is
-    `import ploni` followed by attribute access.
+  - An import made by a call (importlib.import_module, __import__) is judged like an import
+    statement when its name is a string literal. One whose name cannot be read is not judged
+    here; tests/t8_privacy/test_imports.py reports it. `import ploni` followed by attribute
+    access is not seen.
 
 The Hebrew and document-structure axes of the test-matrix skill do not apply: this code reads
 import statements and handles no document. Hebrew text in a source file is in the t1 matrix.
