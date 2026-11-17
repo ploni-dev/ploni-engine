@@ -265,8 +265,9 @@ def part_state(part: Path, identity: dict) -> dict:
     if not part.is_file():
         return {"identity": identity, "tokens": {}, "seconds": 0.0, "peak_mb": 0, "parts": 0}
     state = json.loads(part.read_text(encoding="utf-8"))
-    if state["identity"] != identity:
-        raise ValueError(f"{part.name} is of another run: {state['identity']}")
+    # A part file of the first harness has no identity at all; it is refused like any other.
+    if state.get("identity") != identity:
+        raise ValueError(f"{part.name} is of another run: {state.get('identity')}")
     return state
 
 

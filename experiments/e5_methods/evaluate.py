@@ -59,8 +59,9 @@ STACKS = {
 # The stack that is also tried on every threshold and on every union of detectors.
 MAIN_STACK = "titles, carry"
 # The rows of a table beside the pooled recall, in the order they are printed. `no_trigger`
-# holds the mentions with no title and no group word before the name: the ones that the
-# trigger steps cannot reach by construction.
+# holds the mentions with no title and no group word before the name. A trigger step alone
+# cannot reach them; a stack with `carry` after it can, by carrying a name that a trigger
+# gave (PREREGISTRATION.md, second amendment).
 WEAK_ROWS = ("group", "given_ordinary", "given_also_word", "prefixed", "alone", "lonely", "no_trigger", "arabic", "translit")
 # The corpus on which chosen methods are judged once (PREREGISTRATION.md, "The data").
 HELD_OUT = "heldout"
@@ -475,17 +476,16 @@ def main(arguments: argparse.Namespace) -> None:
     """Print the tables of one scoring run.
 
     Why: the command line of the experiment. Contract: prints which detectors were left
-    out and which list of names was used, then the tables; appends the record lines and
-    prints the missed mentions of one method when asked.
+    out, then the tables, each with the list of names in its title when one was used;
+    appends the record lines and prints the missed mentions of one method when asked.
     """
     name_list = read_name_list(arguments.names_list)
     results, methods, runs, left_out = evaluate(arguments.runs_dir, arguments.datasets, name_list, arguments.only)
     if left_out:
         print(f"not in these tables, because not run on every corpus asked for: {', '.join(left_out)}")
-    if name_list.label:
-        print(f"list of names: {name_list.label}")
     for dataset, found in results.items():
-        print(table(dataset, found), end="\n\n")
+        title = f"{dataset}, list of names: {name_list.label}" if name_list.label else dataset
+        print(table(title, found), end="\n\n")
         if arguments.record:
             lines = record_lines(dataset, found, methods, runs.get(dataset, runs[arguments.datasets[0]]), name_list.label)
             with arguments.record.open("a", encoding="utf-8") as handle:

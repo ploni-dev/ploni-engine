@@ -1,9 +1,9 @@
 """Methods that are not a model: they add person spans to what a detector found.
 
-Why: the research before E5 found no published system that reaches very high recall of names
-with a tagger alone; the ones that come close add rules, lists and a second pass over the
-document (PREREGISTRATION.md, "Why this experiment exists"). Each function here is one such
-method, small enough to be measured by itself and stacked on any detector.
+Why: a tagger alone misses names where nothing around them gives them away (E4: 61 of 1,145).
+Systems that hide names for a living add rules, lists and a second pass over the document to
+the tagger. Each function here is one such method, small enough to be measured by itself and
+stacked on any detector.
 
 Contract: a span is `(paragraph, start, end)`, characters of that paragraph, end exclusive.
 Every function takes the paragraphs of one document and the spans found so far, and returns

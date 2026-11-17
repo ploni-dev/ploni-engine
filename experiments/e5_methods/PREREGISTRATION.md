@@ -8,6 +8,10 @@ see the last section. It says what had been run and seen by then, narrows the ca
 to those already on the laptop, and settles the points this text left open. What stands
 above it is kept as first written.**
 
+**Amended a second time on 2026-11-17, before any scoring with the amended harness: the
+full account of what had been seen, a correction about the row `no_trigger`, and three
+more points of "the winner". See the section after the first amendment.**
+
 ## Why this experiment exists
 
 Achia decided on 2026-11-16 that a series of experiments comes before the tests demand
@@ -306,3 +310,86 @@ has no pinned source yet. Both facts go to him with the list.
     method with the `list` step says which list it used: file name, number of names, and
     the first 16 characters of the file's SHA-256.
 15. **A detector that was not run on every corpus asked for** is named above the tables.
+
+## Amended a second time on 2026-11-17, after the second review, before any scoring with the amended harness
+
+The second review pass found that the first amendment's account of what had been seen was
+not complete, that one sentence about the row `no_trigger` was too strong, and that three
+points of "the winner" were still open. This section corrects that. When it was committed,
+every detector had been run again with the amended harness and **nothing had been scored
+with it**; no file of `heldout` had been scored by any version.
+
+### What was seen before the first amendment, in full
+
+The first amendment spoke of "five numbers". More was on the screen.
+
+**The one scoring.** `evaluate.py` of the first harness printed one table for `select`, of
+which these eight rows were read, every column of them:
+
+```
+| method | recall | found | group | given_ordinary | given_also_word | prefixed | alone | lonely | arabic | translit | extra words | with titles | marked in a name | seconds | peak MB |
+| joint + carry | 99.11% | 446/450 | 30/30 | 65/65 | 7/7 | 90/90 | 59/60 | 52/55 | 20/20 | 64/64 | 17 | 18 | 97.3% | 197 | 1173 |
+| joint + titles, carry | 99.11% | 446/450 | 30/30 | 65/65 | 7/7 | 90/90 | 59/60 | 52/55 | 20/20 | 64/64 | 17 | 18 | 97.3% | 197 | 1173 |
+| joint + carry strong | 98.44% | 443/450 | 30/30 | 63/65 | 7/7 | 90/90 | 58/60 | 52/55 | 20/20 | 64/64 | 17 | 18 | 97.3% | 197 | 1173 |
+| joint + titles, carry strong | 98.44% | 443/450 | 30/30 | 63/65 | 7/7 | 90/90 | 58/60 | 52/55 | 20/20 | 64/64 | 17 | 18 | 97.3% | 197 | 1173 |
+| joint + titles | 95.11% | 428/450 | 30/30 | 59/65 | 5/7 | 77/90 | 58/60 | 52/55 | 20/20 | 64/64 | 16 | 17 | 97.4% | 197 | 1173 |
+| joint + group | 94.89% | 427/450 | 30/30 | 59/65 | 5/7 | 77/90 | 58/60 | 52/55 | 20/20 | 64/64 | 16 | 17 | 97.4% | 197 | 1173 |
+| joint | 88.44% | 398/450 | 1/30 | 59/65 | 5/7 | 67/90 | 58/60 | 52/55 | 20/20 | 58/64 | 16 | 17 | 97.3% | 197 | 1173 |
+| joint + whole words | 88.44% | 398/450 | 1/30 | 59/65 | 5/7 | 67/90 | 58/60 | 52/55 | 20/20 | 58/64 | 16 | 17 | 97.3% | 197 | 1173 |
+```
+
+So `joint + whole words`, the row that "alone" means, was 398 of 450, the same as `joint`.
+
+**The detector runs.** Each run printed its seconds, its peak memory, the model's labels and
+the number of rows it wrote, on `heldout` too. For `joint` a row is one name the model
+marked. Seen, with the first harness: `joint` 197.2 s and 422 rows on `select`, 420.9 s and
+1,138 rows on `e4`, 203.3 s and 402 rows on `heldout`, about 1,180 MB; `golem` 56.5, 119.3
+and 55.0 s, about 850 MB; `seter_fast` 98.7, 207.0 and 100.5 s, about 1,900 MB; `large`
+164.3 s on `select`, 2,053 MB. The runs with the amended harness printed the same kind of
+lines again, with times within a few seconds of these. A row count says how much a model
+marked, not how much of it is right; no recall on `heldout` was computed or seen.
+
+### Which predictions were therefore not made blind
+
+- **Prediction 1:** failed, known since the first scoring (88.44 percent on `select`).
+- **Prediction 3:** the gain on `select` was in view (10.67 points); said in the first
+  amendment.
+- **Prediction 5** (the best method of all finds 97.5 to 99.7 percent on selection): 99.11
+  percent for `joint + carry` on `select` was in view when the first amendment was written.
+  The range itself was written before any run and was not changed.
+- **Prediction 7** (the row `lonely`): 52 of 55 for every `joint` method on `select` was in
+  view when point 6 of the first amendment settled how the prediction is read.
+- **Prediction 8** (extra words): 16 and 17 extra words of the `joint` methods on `select`
+  were in view when point 7 settled how they are counted.
+- **Prediction 9** (the seconds of `large` against `joint`): 164.3 against 197.2 seconds on
+  `select` were in view when point 8 named `large` alone. On that corpus the ratio was
+  under 1, so the prediction is likely to be wrong.
+- **Predictions 2, 4 and 6** rest on numbers that had not been computed: no detector but
+  `joint` was scored, no union, and nothing on `heldout`.
+
+The findings note counts predictions 1, 3, 5, 7, 8 and 9 as partly after the fact.
+
+### The row `no_trigger`, corrected
+
+The first amendment called it "the part of each corpus that the trigger steps cannot reach
+by construction, and the row to read for what a method does without them". That is true of
+`group` and `titles` alone. It is not true of a stack with `carry` after them: a trigger
+gives the name, and `carry` takes it to the bare mention. Measured by the reviewer with no
+model: `titles` alone finds 0 of 620 and 0 of 275 mentions of that row in `e4` and
+`select`; `titles, carry` finds 390 of 620 and 110 of 275. So for `titles, carry` the row
+still holds names that the closed list gave. The rows that owe the list nothing are those
+of `<detector> + whole words`, `<detector> + carry`, `<detector> + list`, the thresholds
+without a stack, and the unions without a stack.
+
+### Three points of "the winner", settled
+
+16. **"Step: the step that adds most to the baseline"** compares the single steps on
+    `joint`: `group`, `titles`, `carry`, `carry strong`, and `list` once with each of its
+    two lists. A stack of two or more steps is not a step.
+17. **"Together"** compares the unions of detectors without a stack. A union with
+    `titles, carry` on top can be the winner of all, not the winner of "together".
+18. **On the held-out corpus** "the baseline alone" is `joint + whole words`, and "the
+    winning detector alone" is that detector `+ whole words`.
+
+Point 14 of the first amendment said every table names its list. The name of the list now
+stands in the title of each table of a run that uses one.
