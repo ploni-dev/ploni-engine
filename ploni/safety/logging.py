@@ -22,18 +22,26 @@ Known limits:
   identity number as an int, is not told from a count. Fields are for counts and times.
 - A word with the shape of a name in code is written when it stands where a name of code
   stands: as the name of an event's class or member, of a value's type, of an exception's
-  type, or of a source file. Code that builds a class, an enum member or a log record from
-  document text could put a word such as `Jacob` there. No plain logging call does.
+  type, or of a source file, and, in lower case, as a field key. Code that builds a class,
+  an enum member or a log record from document text could put a word such as `Jacob`
+  there, and a call that spreads a mapping made from document text into the fields,
+  `event(member, **counts_by_word)`, writes every key that is a lower-case word. No plain
+  logging call does either. Field keys are written in the call, never taken from data.
 - `install` holds for the process it is called in and from the moment it is called. A
   record logged before it, and a process started later, are outside it; the worker process
   calls `install` for itself.
-- Code that sets logging up again after `install` undoes it: `logging.basicConfig(force=True)`,
-  `logging.config.dictConfig`, a handler that a library adds to its own logger, and the end
-  of a `warnings.catch_warnings()` block that `install` was called inside.
+- Code that sets logging up again after `install` undoes it. Among the ways:
+  `logging.basicConfig(force=True)`; `logging.config.dictConfig`; a handler that a library
+  adds to its own logger; removing the handler from the root logger; setting
+  `logging.lastResort` back, or to `None`, after which the logging module prints the name
+  of a logger that has no handler; a caller that gives `warnings.showwarning` a stream of
+  its own; and the end of a `warnings.catch_warnings()` block that `install` was called
+  inside.
 - What is printed past the logging system, by `print` or by the interpreter for an uncaught
   error, is not seen here. `print` is banned under ploni/ by ruff.
-- A line that cannot be written leaves no trace: a stream that fails, and a record whose
-  time is no number.
+- A line that cannot be written leaves no trace: a stream that fails, and a record that
+  makes the formatter itself fail, which an object that raises when it is asked for its
+  own attributes can do.
 - A warning is one line with no category and no place of origin, and an exception shows
   the name of its type and the place of the logging call, not where it was raised.
 """
@@ -46,8 +54,9 @@ from typing import TextIO
 # The attribute of a log record that carries the fields of an event.
 FIELDS = "ploni_fields"
 
-# What a field key may be. A key comes from code, as a keyword of a call; this keeps a key
-# that was built from data out of the log.
+# What a field key may be. A key is meant to come from code, as a keyword of a call. The
+# shape keeps out a key with a space, a capital, a line break or a letter that is not ASCII;
+# it cannot keep out a lower-case word that was taken from data (module docstring).
 KEY = re.compile(r"[a-z][a-z0-9_]*")
 
 # What a name written in code looks like: the name of a class or of an enum member.
@@ -136,7 +145,9 @@ def shown(value: object) -> str:
             `bool`, `int` or `float`, a whole number only below LARGEST_NUMBER in size;
             `<str:N>` and `<bytes:N>` with the length for those two types; `<TypeName>`
             for every other value, or `<value>` when the name of the type has not the
-            shape of a name in code. `str` and `repr` of the value are never called.
+            shape of a name in code. `repr` is called only on `None` and on a value of
+            exactly one of the three number types, `str` on none, and the value is never
+            asked what class it is: an object can answer that with code of its own.
         Raises: nothing.
 
     Known limits: the name of a type is written, see the module docstring.
@@ -144,9 +155,11 @@ def shown(value: object) -> str:
     kind = type(value)
     if value is None or kind is bool or kind is float:
         return repr(value)
-    if isinstance(value, int) and kind is int:
+    # The real type is asked first, so `isinstance`, which asks the object, runs only for
+    # a real number or string; it is there for the type checker.
+    if kind is int and isinstance(value, int):
         return repr(value) if -LARGEST_NUMBER < value < LARGEST_NUMBER else "<int>"
-    if isinstance(value, (str, bytes)) and (kind is str or kind is bytes):
+    if (kind is str or kind is bytes) and isinstance(value, (str, bytes)):
         return f"<{'str' if kind is str else 'bytes'}:{len(value)}>"
     return f"<{_code_name(_type_name(kind), BAD_TYPE)}>"
 
@@ -158,8 +171,8 @@ class Redacting(logging.Formatter):
     kept, for the records of `event` and for those of any other caller alike.
 
     Contract: `format` returns one line without a line break, in ASCII. It never formats
-    the record's message with its arguments, and never calls `str` or `repr` on a value
-    the record carries.
+    the record's message with its arguments, and calls `str` on no value the record
+    carries and `repr` only as `shown` does, on exact numbers.
 
     Known limits: a record built by hand shows its level name, file name and line only
     when they have the shape of code; see the module docstring for what that leaves.
@@ -183,14 +196,14 @@ class Redacting(logging.Formatter):
             name = f"{_code_name(_type_name(type(member)), BAD_NAME)}.{_code_name(vars(member).get('_name_'), BAD_NAME)}"
             body = " ".join([name, *written])
         raised = record.exc_info[0] if type(record.exc_info) is tuple and record.exc_info else None
-        if isinstance(raised, type):
+        if issubclass(type(raised), type) and isinstance(raised, type):
             body += f" raised={_code_name(_type_name(raised), BAD_NAME)}"
         elif record.exc_info and raised is not None:
             body += f" raised={BAD_NAME}"
         return f"{head} {body}"
 
     def _time(self, record: logging.LogRecord) -> str:
-        """Return the time of a record, or NO_TIME when its time is no number that names a time."""
+        """Return the time of a record, or NO_TIME when its time is not exactly a float that names a time."""
         try:
             return self.formatTime(record, TIME) if type(record.created) is float else NO_TIME
         except (ValueError, OverflowError, OSError):
@@ -219,7 +232,11 @@ class Quiet(logging.StreamHandler[TextIO]):
 
     Contract: as `logging.StreamHandler`, but `handleError` does nothing.
 
-    Known limits: a log that cannot be written is silent about it.
+    Known limits: a log that cannot be written is silent about it. Two things are not
+    dropped: a `RecursionError` from the stream goes to the caller, as in the standard
+    handler; and when the stream fails to flush at the end of the process with an error
+    other than `OSError` or `ValueError`, the logging module prints that error, which holds
+    nothing of a record.
     """
 
     def handleError(self, record: logging.LogRecord) -> None:
@@ -294,7 +311,8 @@ def event(member: Event, /, *, level: int = logging.INFO, **fields: object) -> N
 
     Known limits: see the module docstring on numbers.
     """
-    if not isinstance(member, Event):
+    # The real type is asked, not the object: an object can say it is of any class.
+    if not issubclass(type(member), Event):
         raise TypeError("an event is a member of an Event class")
     if not _is_level(level):
         raise TypeError("a level is a whole number of the logging module")

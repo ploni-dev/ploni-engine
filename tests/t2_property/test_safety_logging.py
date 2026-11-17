@@ -10,9 +10,11 @@ The invariant: for every way a text can reach the logging system, the line that 
 the same for every text, once the numbers in it are masked (the time, the line number, the
 length of a string). And the text itself is not in the line.
 
-Generated input: TEXTS are 640 texts from a seeded generator: Hebrew, Latin, digits and
-punctuation in runs of 4 to 40 characters, and 40 texts of special shapes. WAYS are the ways
-of the canary test that take a text. 640 texts x 20 ways = 12,800 cases, in one test per way.
+Generated input: TEXTS are 640 texts: 600 from a seeded generator, Hebrew, Latin, digits and
+punctuation in runs of 4 to 40 characters, and 40 of special shapes. WAYS are 20 ways a text
+can reach the logging system through a call that takes a text; most are ways of the canary
+test, which also has ways that take none (a warning, a record built by hand, a logger that
+hands nothing up). 640 texts x 20 ways = 12,800 cases, in two tests per way.
 
 Not covered here, and said in the module: a text with the shape of a name of code, where a
 name of code stands (the name of an event, of a type, of a source file, a field key). Those are

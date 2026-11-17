@@ -75,7 +75,8 @@ HEBREW, LATIN, DIGITS = "קנרית־יעקב", "Canary-Jacob", "7301946"
 CANARY = f"{HEBREW} {LATIN} {DIGITS}"
 # The bare word canary is not a part: the name of this file holds it, and a log line names the file.
 PARTS = (HEBREW, LATIN, DIGITS, "יעקב", "Jacob")
-ENCODINGS = ("utf-8", "utf-16-le", "cp1255")
+# cp862 is the code page of a Hebrew Windows console, cp1255 of its other programs.
+ENCODINGS = ("utf-8", "utf-16-le", "utf-16-be", "cp1255", "cp862")
 
 
 class Step(safe.Event):
@@ -195,7 +196,7 @@ STANDARD: dict[str, Callable[[], object]] = {
     "W21 level name of a class of its own": lambda: logging.getLogger().handle(named_by_hand()),
     "W22 event with arguments": lambda: logging.info(Step.DONE, CANARY, CANARY),
     "W23 a logger that hands nothing up": silent_logger,
-    "W24 debug and critical": lambda: logging.getLogger("library").critical(CANARY),
+    "W24 critical": lambda: logging.getLogger("library").critical(CANARY),
 }
 
 VALUES: dict[str, object] = {
@@ -243,7 +244,10 @@ def start(logging_restored: None) -> Callable[..., io.StringIO]:
 def leaks(data: bytes) -> list[str]:
     """Return every part of the canary that the bytes hold, in any of the forms a leak could take."""
     folded = data.lower()
-    found = [f"{part} as {encoding}" for part in (CANARY, *PARTS) for encoding in ENCODINGS if part.encode(encoding) in data]
+    # A part that an encoding cannot write is searched with the letter it lacks left out: cp862 has no maqaf.
+    found = [
+        f"{part} as {encoding}" for part in (CANARY, *PARTS) for encoding in ENCODINGS if part.encode(encoding, "ignore") in data
+    ]
     found += [f"{part} in lower case" for part in (LATIN, "Jacob") if part.lower().encode("ascii") in folded]
     found += [f"{part} as escapes" for part in PARTS if part.encode("unicode_escape") in data and not part.isascii()]
     return found
@@ -337,5 +341,7 @@ def test_the_search_finds_the_canary_when_it_is_there() -> None:
     assert leaks(b"lower case canary-jacob") == [f"{LATIN} in lower case", "Jacob in lower case"]
     assert leaks(HEBREW.encode("cp1255")) == [f"{HEBREW} as cp1255", "יעקב as cp1255"]
     assert leaks(DIGITS.encode("utf-16-le")) == [f"{DIGITS} as utf-16-le"]
+    assert leaks("יעקב".encode("cp862")) == ["יעקב as cp862"]
+    assert leaks("יעקב".encode("utf-16-be")) == ["יעקב as utf-16-be"]
     assert leaks(HEBREW.encode("unicode_escape")) == [f"{HEBREW} as escapes", "יעקב as escapes"]
     assert leaks(b"nothing of it here: Step.DONE pages=3 <withheld> test_log_canary.py:7") == []
