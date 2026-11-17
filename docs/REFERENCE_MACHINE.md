@@ -2,7 +2,7 @@
 
 `build-plan.md` section 8.1: all performance numbers of the project are measured on this machine, with pinned thread counts.
 
-It is Achia's laptop. He decided that on 2026-11-16; the question and his answer are quoted in section 8.1.
+It is Achia's laptop. He decided that on 2026-11-16; the two offered answers and his answer are quoted in section 8.1.
 
 | | |
 |---|---|
