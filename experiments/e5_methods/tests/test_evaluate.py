@@ -67,6 +67,11 @@ load_runs / check_request / evaluate / record_lines / read_name_list
                                        what the list holds
   E3   a run file with no digest       ValueError that names the file
   EC40 the title of a table            names the list of names that was used
+  EC41 the command line on two corpora, with a list and a record file    a table per corpus and
+                                       one for all, each titled with its own corpus and the
+                                       list; the detector left out is named; a record line
+                                       per method and table, each with its own corpus's model,
+                                       the list's label only where the method uses the list
 
 data
   EC20 the three corpora               the sizes the pre-registration names
@@ -405,6 +410,28 @@ def test_ec40_the_title_of_a_table_names_the_list(tmp_path: Path, capsys: pytest
     arguments.only = ["every + whole words"]
     evaluate.main(arguments)
     assert "### select\n" in capsys.readouterr().out
+
+
+def test_ec41_the_command_line_on_two_corpora_with_a_list_and_a_record(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    write(runs, "every.select.json", fake_run("select"))
+    write(runs, "every.e4.json", {**fake_run("e4"), "model": "made-up-on-e4"})
+    write(runs, "nogroup.select.json", fake_run("select", frozenset(generate.GROUP_WORDS)))
+    names, record = tmp_path / "names.txt", tmp_path / "record.jsonl"
+    names.write_text("נועה\n", encoding="utf-8")
+    label = evaluate.read_name_list(names).label
+    only = ["every + list", "every + whole words"]
+    evaluate.main(argparse.Namespace(runs_dir=runs, datasets=["select", "e4"], names_list=names, only=only, record=record, list_errors=None))
+    printed = capsys.readouterr().out
+    assert [line for line in printed.splitlines() if line.startswith("###")] == [f"### {corpus}, list of names: {label}" for corpus in ("select", "e4", "all")]
+    assert "not in these tables, because not run on every corpus asked for: nogroup" in printed
+    lines = [json.loads(line) for line in record.read_text(encoding="utf-8").splitlines()]
+    assert [(line["dataset"], line["method"], line["name_list"]) for line in lines] == [
+        (corpus, method_name, label if "list" in method_name else "") for corpus in ("select", "e4", "all") for method_name in only
+    ]
+    # Each corpus's lines name the model of that corpus's own run file; the table of all takes the first corpus's.
+    assert [line["detectors"][0]["model"] for line in lines] == ["made-up", "made-up", "made-up-on-e4", "made-up-on-e4", "made-up", "made-up"]
 
 
 @pytest.mark.parametrize(("datasets", "only"), [(["heldout", "select"], ["a"]), (["e4", "select", "heldout"], ["a"]), (["heldout"], [])])
