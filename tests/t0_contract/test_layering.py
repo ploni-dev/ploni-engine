@@ -15,9 +15,10 @@ Equivalence classes:
   EC2  the two lines of CLAUDE.md     adapters may not import detect, resolve, policy, write;
                                       detect may not import write, rehydrate, report
   EC3  what every row allows          types, safety, errors
-  EC4  every layer of the table x every package of build-plan.md section 4.7 x every way to
+  EC4  every layer of the table x every package of build-plan.md section 4.7 x seven ways to
        write the import (LAYERS x PACKAGES x FORMS, 5 x 19 x 7 = 665 cases): reported exactly
-       when the package is neither the layer itself nor in its row
+       when the package is neither the layer itself nor in its row. The other ways to write
+       an import (a star, a deeper module, a block other than a function) are in the t1 matrix
   EC5  a tree on disk                 one line per broken import, with file and line; a layer
                                       with no row and a module at the top of ploni/ are not judged
   EC6  the repository                 no line
@@ -35,7 +36,10 @@ Known limits:
   - A layer with no row is not judged: morph, mapping, verify, rehydrate, report, safety,
     worker, i18n and the modules at the top of ploni/. The table of section 5.2 has five rows.
   - "Only api.py is public" (`CLAUDE.md`) is not tested here: nothing outside ploni/ exists
-    yet that could import past it.
+    yet that could import past it. Issue #87 owns that test.
+  - A layer always may import itself, also a sub-package of it that is named like another
+    layer (ploni/adapters/write/).
+  - `from ploni import NAME` is judged as the layer ploni.NAME, also when NAME is no module.
   - An import made by a call (importlib.import_module, __import__) is not seen, and neither is
     `import ploni` followed by attribute access.
 
@@ -67,7 +71,7 @@ PACKAGES = (
     "policy", "mapping", "write", "verify", "rehydrate", "report", "safety", "worker", "i18n",
 )  # fmt: skip
 
-# Every way to write the import of ploni.<target> from a module two levels down, ploni.<layer>.module.
+# Seven ways to write the import of ploni.<target> from a module two levels down, ploni.<layer>.module.
 FORMS = {
     "import": "import ploni.{target}.thing\n",
     "import as": "import ploni.{target}.thing as other\n",
@@ -127,6 +131,7 @@ def test_ec4_an_import_is_reported_exactly_when_the_row_does_not_hold_it(layer: 
 
 
 def test_ec4_the_matrix_has_at_least_500_cases() -> None:
+    # CLAUDE.md, Tests: an invariant is held over 500 generated cases.
     assert len(LAYERS) * len(PACKAGES) * len(FORMS) >= 500
 
 

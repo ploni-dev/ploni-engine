@@ -34,14 +34,19 @@ Adversarial:
 
 project_imports, a folder. Equivalence classes:
   EC12  nested folders        the importer's name comes from the path; __init__.py is its folder
-  EC13  what is read          .py files under the package folder only: not a .txt or .pyi file in it,
-                              not a .py file beside it
+  EC13  what is read          .py and .pyw files under the package folder only, since Python on
+                              Windows imports both: not a .txt or .pyi file in it, not a .py file
+                              beside it
   EC14  no package folder     nothing, which is today's repository
   EC15  order                 by file path, then by line
 
 Error paths:
   E3  a file that is not Python           SyntaxError that names the file
   E4  a file whose relative import leaves the top package    ImportError that names the file
+  E5  a source file that cannot be read (a folder named like one)    OSError
+
+The reader against Python's own import system, on a package that is really imported, is in
+tests/t4_integration/test_project_imports.py.
 
 not_allowed, the rule. Equivalence classes:
   EC16  a layer of the table imports a layer its row allows        nothing
@@ -60,7 +65,8 @@ Boundaries:
 
 Adversarial:
   A4  a name that only begins like a layer: an importer ploni.adaptersx has no row; a target
-      ploni.typesx is not ploni.types and is reported
+      ploni.typesx is not ploni.types and is reported; a target ploni.adaptersx is not the
+      importer's own layer and is reported
   A5  the same second name under another top package (eval.write) is outside the project
 
 The Hebrew axes of the test-matrix skill apply in one place, A3: a source file may hold Hebrew
@@ -155,8 +161,22 @@ def test_ec10_source_without_an_import() -> None:
 
 
 def test_ec11_lines_are_the_first_line_of_each_statement_in_order() -> None:
-    source = "import os\n\nfrom a import (\n    b,\n    c,\n)\n\ndef late():\n    import os\n"
-    assert reader.imported(source, "pkg.mod") == [(1, "os"), (3, "a"), (3, "a.b"), (3, "a.c"), (9, "os")]
+    source = "import os\n\nfrom a import (\n    b,\n    c,\n)\n\ndef late():\n    import os\n\nimport x, \\\n    y\n"
+    assert reader.imported(source, "pkg.mod") == [
+        (1, "os"),
+        (3, "a"),
+        (3, "a.b"),
+        (3, "a.c"),
+        (9, "os"),
+        (11, "x"),
+        (11, "y"),
+    ]
+
+
+def test_ec11_the_result_is_sorted_by_line_and_then_by_name() -> None:
+    # The walk of the tree meets the import of line 3 before the one inside the function.
+    source = "def late():\n    import b\nimport z, a\n"
+    assert reader.imported(source, "pkg.mod") == [(2, "b"), (3, "a"), (3, "z")]
 
 
 @pytest.mark.parametrize("source", ["", '"""Only a docstring."""\n'])
@@ -222,12 +242,15 @@ def test_ec12_the_importer_is_named_from_its_path(tmp_path: Path) -> None:
         {
             "ploni/__init__.py": "",
             "ploni/api.py": "import ploni.types\n",
+            "ploni/copy.py": "import json\n",
             "ploni/detect/__init__.py": "from . import base\n",
             "ploni/detect/deterministic/iban.py": "\nfrom ...types import Span\n",
         },
     )
     assert reader.project_imports(tmp_path, "ploni") == [
         Import("ploni/api.py", 1, "ploni.api", "ploni.types"),
+        # A name that ends in the letters of the suffix: only the suffix is cut off.
+        Import("ploni/copy.py", 1, "ploni.copy", "json"),
         Import("ploni/detect/__init__.py", 1, "ploni.detect", "ploni.detect"),
         Import("ploni/detect/__init__.py", 1, "ploni.detect", "ploni.detect.base"),
         Import("ploni/detect/deterministic/iban.py", 2, "ploni.detect.deterministic.iban", "ploni.types"),
@@ -240,13 +263,17 @@ def test_ec13_only_python_files_under_the_package_are_read(tmp_path: Path) -> No
         tmp_path,
         {
             "ploni/real.py": "import json\n",
+            "ploni/window.pyw": "import socket\n",
             "ploni/notes.txt": "import socket\n",
             "ploni/stub.pyi": "import socket\n",
             "other/beside.py": "import socket\n",
             "beside.py": "import socket\n",
         },
     )
-    assert reader.project_imports(tmp_path, "ploni") == [Import("ploni/real.py", 1, "ploni.real", "json")]
+    assert reader.project_imports(tmp_path, "ploni") == [
+        Import("ploni/real.py", 1, "ploni.real", "json"),
+        Import("ploni/window.pyw", 1, "ploni.window", "socket"),
+    ]
 
 
 def test_ec14_no_package_folder(tmp_path: Path) -> None:
@@ -264,13 +291,19 @@ def test_ec15_order_is_by_file_then_by_line(tmp_path: Path) -> None:
 
 def test_e3_a_file_that_is_not_python_is_named(tmp_path: Path) -> None:
     write(tmp_path, {"ploni/good.py": "import json\n", "ploni/detect/bad.py": "def (:\n"})
-    with pytest.raises(SyntaxError, match="ploni/detect/bad.py"):
+    with pytest.raises(SyntaxError, match="ploni/detect/bad.py: invalid syntax"):
         reader.project_imports(tmp_path, "ploni")
 
 
 def test_e4_a_file_whose_relative_import_leaves_the_package_is_named(tmp_path: Path) -> None:
     write(tmp_path, {"ploni/api.py": "from .. import outside\n"})
-    with pytest.raises(ImportError, match="ploni/api.py"):
+    with pytest.raises(ImportError, match="ploni/api.py: attempted relative import beyond top-level package"):
+        reader.project_imports(tmp_path, "ploni")
+
+
+def test_e5_a_source_file_that_cannot_be_read(tmp_path: Path) -> None:
+    (tmp_path / "ploni" / "odd.py").mkdir(parents=True)
+    with pytest.raises(OSError, match="odd.py"):
         reader.project_imports(tmp_path, "ploni")
 
 
@@ -347,6 +380,9 @@ def test_b5_an_empty_table_judges_nothing() -> None:
 def test_a4_a_name_that_only_begins_like_a_layer() -> None:
     assert reader.not_allowed([one("ploni.write", importer="ploni.adaptersx.thing")], TABLE) == []
     assert reader.not_allowed([one("ploni.typesx")], TABLE) == [f"{FILE}:7: ploni.adapters may not import ploni.typesx"]
+    assert reader.not_allowed([one("ploni.adaptersx.thing")], TABLE) == [
+        f"{FILE}:7: ploni.adapters may not import ploni.adaptersx"
+    ]
 
 
 def test_a5_the_same_layer_name_under_another_top_package() -> None:
