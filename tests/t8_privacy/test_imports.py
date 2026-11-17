@@ -4,8 +4,9 @@ Why: the product's promise is that a document never leaves the machine. `CLAUDE.
 constraints: "No networking imports anywhere under ploni/" and "ploni/ must never import
 from eval/", which may use the network. The ruff rule in pyproject.toml sees only a plain
 import at the top of a module; these tests read every import of every file, wherever it
-stands, also one made by a call. They are two of the four tests the merge gate needs in
-order to work (`PROMOTION.md` section 11).
+stands, also one made by a call. The first is one of the four tests the merge gate needs in
+order to work (`PROMOTION.md` section 11: "the network test, the two canaries and the
+layering test"); the second stands beside it by issue #19.
 
 The reading of the files and the rule are in tests/project_imports.py; their own matrix is
 in tests/t1_unit/test_project_imports.py. This file holds the list of networking modules
@@ -25,7 +26,7 @@ Equivalence classes:
   EC6  the repository               no line, for each of the three rules
 
 Negative cases (no line):
-  N1  a module whose name only begins or ends like one of the list (socketx, xsocket),
+  N1  a module whose name only begins or ends like one of the list (sockety, ysocket),
       for every module of the list                                      32 cases
   N2  a project module with a name of the list (ploni.socket, a relative import of a
       module named socket), for every module of the list                32 cases
@@ -42,10 +43,17 @@ Adversarial:
       ruff rule does not see (two of the FORMS)
   A2  an import made by a call, with a literal name (two of the FORMS) and with a name
       that cannot be read (EC4)
+  A3  an import function under another name (imported as another name, assigned, fetched
+      with getattr): reported as an import that cannot be read, at the line that names it
+  A4  a relative name in a call whose package is not the module's own: read against the
+      package the call gives
 
 Known limits:
   - The list is the sixteen names of pyproject.toml. A networking package that is not on
     it is not found; a new dependency is read against this list when it is added.
+  - Only the first part of a module's name is compared with the list. A networking module
+    that another package hands on under its own name is not found:
+    `from logging.handlers import socket` binds the real socket module and gives no line.
   - Source text handed to exec or eval is not read, and neither is code that reaches the
     import system some other way (pkgutil, runpy, a loader object).
   - This is a test of imports. That no socket is opened at run time is the socket audit of
@@ -147,12 +155,33 @@ def test_ec4_an_import_whose_name_cannot_be_read_is_reported(source: str) -> Non
     assert lines(source, "ploni.detect.fusion", False, NETWORK + EVAL) == []
 
 
+@pytest.mark.parametrize(
+    ("source", "found"),
+    [
+        ("from importlib import import_module as load\nvalue = load('socket')\n", 1),
+        ("import importlib\nload = importlib.import_module\nvalue = load('socket')\n", 2),
+        ("value = getattr(__import__('importlib'), 'import_module')('socket')\n", 1),
+    ],
+)
+def test_a3_an_import_function_under_another_name_is_reported(source: str, found: int) -> None:
+    assert lines(source, "ploni.detect.fusion", False, (UNREADABLE,)) == [f"file.py:{found}: imports {UNREADABLE}"]
+
+
+@pytest.mark.parametrize(
+    ("source", "name"),
+    [
+        ("import importlib\nclient = importlib.import_module('.client', 'http')\n", "http"),
+        ("import importlib\nscore = importlib.import_module('.run_eval', package='eval')\n", "eval"),
+    ],
+)
+def test_a4_a_relative_name_with_a_package_that_is_not_the_modules_own(source: str, name: str) -> None:
+    assert lines(source, "ploni.detect.fusion", False, NETWORK + EVAL) == [f"file.py:2: imports {name}"]
+
+
 @pytest.mark.parametrize("name", NETWORK)
-@pytest.mark.parametrize("source", ["import {name}x\n", "from x{name} import thing\n"])
+@pytest.mark.parametrize("source", ["import {name}y\n", "from y{name} import thing\n"])
 def test_n1_a_module_that_only_looks_like_one_of_the_list(name: str, source: str) -> None:
-    # httpx is on the list itself, so http followed by x is the one look-alike that is a real finding.
-    expected = ["file.py:1: imports httpx"] if source.format(name=name) == "import httpx\n" else []
-    assert lines(source.format(name=name), "ploni.detect.fusion", False, NETWORK) == expected
+    assert lines(source.format(name=name), "ploni.detect.fusion", False, NETWORK) == []
 
 
 @pytest.mark.parametrize("name", NETWORK)

@@ -28,11 +28,18 @@ Error paths:
 
 Adversarial:
   A1  the word import in a string and in a comment     nothing
-  A2  an import made by a call, importlib.import_module("x") or __import__("x"), in every way
-      the function can be named: read like an import statement when the name is a string
-      literal, relative names against the importer's package; given as UNREADABLE when the
-      name is anything else (a variable, an f-string, a sum, no argument). A call of another
-      function is nothing. What is still not seen is pinned too: exec of source text
+  A2  an import made by a call of importlib.import_module or __import__, the function named
+      by its own name at the call, on any receiver: read like an import statement when the
+      name is a string literal. A relative name is resolved against the importer's package
+      when the package given is the bare name __package__, and against the package given
+      when that is a string literal. Given as UNREADABLE when the name is anything else (a
+      variable, an f-string, a sum, no argument) or a relative name has no package that can
+      be read. A call of another function is nothing, also one whose name only ends like an
+      import function's. What is still not seen is pinned too: exec of source text
+  A7  an import function that is named and not called there (assigned to another name, handed
+      to map or partial, fetched with getattr or from __builtins__ by its name as a string,
+      imported under another name): UNREADABLE at that line, since the call that follows
+      cannot be told from any other call. Under its own name it is read as in A2
   A3  source bytes with Hebrew text: UTF-8, UTF-8 with a byte order mark, cp1255 with a coding line
 
 project_imports, a folder. Equivalence classes:
@@ -243,12 +250,65 @@ def test_a1_the_word_import_in_a_string_and_in_a_comment() -> None:
         ("builtins.__import__('ssl')", "ssl"),
         ("importlib.import_module(name='socket')", "socket"),
         ("value = importlib.import_module('socket').create_connection", "socket"),
+        ("importlib.import_module(package=__package__, name='socket')", "socket"),
+        ("self.tools.importlib.import_module('socket')", "socket"),
         ("importlib.import_module('.base', __package__)", "ploni.detect.base"),
         ("importlib.import_module('..write.edits', package=__package__)", "ploni.write.edits"),
+        ("importlib.import_module('.client', 'http')", "http.client"),
+        ("importlib.import_module('.run_eval', package='eval')", "eval.run_eval"),
+        ("importlib.import_module('..base', 'ploni.detect.deterministic')", "ploni.detect.base"),
     ],
 )
 def test_a2_an_import_made_by_a_call_with_a_literal_name_is_read(call: str, module: str) -> None:
     assert reader.imported(f"\n{call}\n", "ploni.detect.fusion") == [(2, module)]
+
+
+def test_a2_a_call_over_several_lines_is_given_at_its_first_line() -> None:
+    source = "\nvalue = importlib.import_module(\n    'socket',\n)\n"
+    assert reader.imported(source, "ploni.detect.fusion") == [(2, "socket")]
+
+
+def test_a2_a_relative_name_in_a_call_in_an_init_file_counts_from_the_package_itself() -> None:
+    source = "importlib.import_module('.base', __package__)\n"
+    assert reader.imported(source, "ploni.detect", is_package=True) == [(1, "ploni.detect.base")]
+
+
+@pytest.mark.parametrize(
+    "mention",
+    [
+        "load = importlib.import_module",
+        "imp = __import__",
+        "value = getattr(importlib, 'import_module')('socket')",
+        "modules = list(map(import_module, names))",
+        "load = functools.partial(importlib.import_module, 'socket')",
+        "value = __builtins__['__import__']('socket')",
+        "value = (importlib.import_module if fast else slow)('socket')",
+    ],
+)
+def test_a7_an_import_function_that_is_named_and_not_called_is_unreadable(mention: str) -> None:
+    assert reader.imported(f"\n\n{mention}\n", "ploni.detect.fusion") == [(3, reader.UNREADABLE)]
+
+
+def test_a7_an_import_function_imported_under_another_name_is_unreadable() -> None:
+    source = "from importlib import import_module as load\nvalue = load('socket')\n"
+    assert reader.imported(source, "ploni.detect.fusion") == [
+        (1, reader.UNREADABLE),
+        (1, "importlib"),
+        (1, "importlib.import_module"),
+    ]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from importlib import import_module\nvalue = import_module('json')\n",
+        "from importlib import import_module as import_module\nvalue = import_module('json')\n",
+        "import importlib as tools\nvalue = tools.import_module('json')\n",
+    ],
+)
+def test_a7_an_import_function_under_its_own_name_is_read_as_before(source: str) -> None:
+    assert (2, "json") in reader.imported(source, "ploni.detect.fusion")
+    assert reader.UNREADABLE not in [module for _, module in reader.imported(source, "ploni.detect.fusion")]
 
 
 @pytest.mark.parametrize(
@@ -263,6 +323,10 @@ def test_a2_an_import_made_by_a_call_with_a_literal_name_is_read(call: str, modu
         "__import__(name)",
         "__import__(b'socket')",
         "importlib.import_module(name=name)",
+        "importlib.import_module('.base')",
+        "importlib.import_module('.base', package)",
+        "importlib.import_module('.base', __name__)",
+        "importlib.import_module('.base', package=None)",
     ],
 )
 def test_a2_an_import_made_by_a_call_with_any_other_name_is_unreadable(call: str) -> None:
@@ -277,6 +341,9 @@ def test_a2_an_import_made_by_a_call_with_any_other_name_is_unreadable(call: str
         "registry.import_modules('socket')\n",
         "import_module = 3\n",
         "exec('import socket')\n",
+        "safe_import_module('socket')\n",
+        "tools.reimport_module('socket')\n",
+        "text = 'call import_module to load it'\n",
     ],
 )
 def test_a2_a_call_of_another_function_is_nothing(source: str) -> None:
