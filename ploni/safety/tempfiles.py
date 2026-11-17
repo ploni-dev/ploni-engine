@@ -10,7 +10,8 @@ Contract: `private_dir` gives a new folder for the length of a `with` block. `sw
 what earlier runs left under the same root. `NotRemoved` is raised when a folder cannot be
 removed. No file outside the folder is written over or removed: a link, of any kind, is
 never followed, also when it stands in the place of the private folder itself. One thing
-outside can change, the read-only mark of a file that has a name inside too (below).
+outside can change: the read-only mark, and on a POSIX system the owner's read bit, of a
+file that has a name inside too (below).
 
 Known limits:
 - All of this holds while nothing else changes the folder during the removal. Code that
@@ -38,8 +39,9 @@ Known limits:
 - A file that other code holds open with a plain `open` when the block ends is written
   over but cannot be removed on Windows. The block then ends with `NotRemoved`, and
   `sweep` removes the file on the next start.
-- A read-only file that has a second name outside the folder is made writable there too:
-  the mark belongs to the file, not to the name.
+- A read-only file that has a second name outside the folder is made writable there too,
+  and on a POSIX system readable by its owner: the marks belong to the file, not to the
+  name.
 """
 
 import os
@@ -125,7 +127,7 @@ def _own_files(folder: Path) -> list[tuple[Path, int]]:
     A file that has a name outside the folder too (a hard link) is left out: its bytes are
     not this folder's alone. A file with several names inside is given once. Files are told
     apart by the number the file system gives them; where it gives none, every name is
-    taken as a file of its own.
+    taken as a file of its own. A file with a second name is then not written over.
     """
     found: dict[object, tuple[Path, os.stat_result]] = {}
     names: Counter[object] = Counter()
@@ -166,8 +168,9 @@ def _remove(folder: Path) -> None:
         Raises: NotRemoved when the folder is still there afterwards, whatever the cause.
             A file that could not be made writable or written over is still removed when
             it can be. A link in the place of the folder is not gone through and not
-            removed, so it gives NotRemoved. An interrupt while files are being written
-            over passes through, after the folder was removed.
+            removed, so it gives NotRemoved, also when it leads to nothing. An interrupt
+            while files are being written over passes through, after the attempt to
+            remove the folder.
 
     Known limits: see the module docstring on what is written over and on open files.
     """
@@ -181,7 +184,8 @@ def _remove(folder: Path) -> None:
         with suppress(OSError):
             shutil.rmtree(folder)
     # Asked of the disk and not of an error: a removal that failed quietly is found too.
-    if folder.exists():
+    # A link is asked for by itself: one that leads to nothing does not "exist".
+    if folder.exists() or _is_link(folder):
         raise NotRemoved(f"the temp folder {folder.name} could not be removed")
 
 
@@ -252,7 +256,8 @@ def sweep(root: Path) -> int:
             whoever made it; on Windows the beginning is matched in any case of letters.
             A file and a link with such a name are left alone.
         Raises: NotRemoved, after every folder was tried, for the first one that could
-            not be removed.
+            not be removed; ValueError for a root that no path can be (one with a
+            null character).
 
     Known limits: it must not run while another process of this product is at work under
     the same root: that process's folder would be removed under it. A folder that can
