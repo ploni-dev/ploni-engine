@@ -53,14 +53,29 @@ Adversarial:
   A1  a file name in Hebrew, with spaces, and a very long one
   A2  the block removes its own folder before it ends    no error
 
+From the second review:
+  A3  the block puts a link to a folder outside in the place of its own folder, a symbolic
+      link or a junction    nothing behind it is touched; NotRemoved
+  A4  a file system that gives every file the number 0    every file is still written over
+  A5  the removal is interrupted while files are being written over    the folder is gone
+      all the same, and the interrupt passes through
+  A6  a file and a folder with no permission bit at all    written over, removed
+  A7  one file whose facts cannot be read    the others are written over
+  A8  blocks in two threads    a `tempfile` call lands in the newest open block, whichever
+      thread makes it; every change of the process's temp folder is made under the lock
+  EC6 on Windows too: the root that the helper makes does not take its access list from
+      the folder above it
+
 The Hebrew axes of the test-matrix skill apply to names and content of files (A1, and the
 canary). The document-structure axes do not apply: no document is handled.
 """
 
 import os
 import stat
+import subprocess
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 if sys.platform == "win32":
@@ -161,6 +176,17 @@ def test_ec7_a_read_only_folder_is_removed_with_what_is_in_it(tmp_path: Path) ->
         (folder / "locked" / "deeper").chmod(stat.S_IREAD | stat.S_IEXEC)
         (folder / "locked").chmod(stat.S_IREAD | stat.S_IEXEC)
     assert list(tmp_path.iterdir()) == []
+
+
+def test_a6_a_folder_and_a_file_with_no_permission_bit_at_all(tmp_path: Path, seen_at_removal: dict[str, bytes]) -> None:
+    with tempfiles.private_dir(tmp_path) as folder:
+        (folder / "closed" / "deeper").mkdir(parents=True)
+        (folder / "closed" / "deeper" / "page.txt").write_text(TEXT, encoding="utf-8")
+        (folder / "closed" / "deeper" / "page.txt").chmod(0)
+        (folder / "closed" / "deeper").chmod(0)
+        (folder / "closed").chmod(0)
+    assert list(tmp_path.iterdir()) == []
+    assert set(seen_at_removal["page.txt"]) == {0}
 
 
 @pytest.fixture
@@ -432,11 +458,24 @@ def test_ec4_a_temp_folder_that_other_code_chose_is_put_back_each_time(tmp_path:
     assert tempfile.tempdir == str(later)
 
 
+def access_list(folder: Path) -> str:
+    """Return what the Windows tool icacls prints for a folder: who may do what with it."""
+    tool = Path(os.environ["SystemRoot"]) / "System32" / "icacls.exe"
+    return subprocess.run([str(tool), str(folder)], capture_output=True, text=True, check=True).stdout  # noqa: S603 a fixed system tool, on a folder the test made
+
+
 def test_ec6_a_root_that_the_helper_makes_is_for_its_owner_only(tmp_path: Path) -> None:
     root = tmp_path / "made"
     with tempfiles.private_dir(root):
         if sys.platform != "win32":
             assert stat.S_IMODE(root.stat().st_mode) == 0o700
+        else:
+            # Windows has no mode. A folder made for its owner only gets an access list of its own; one made
+            # in the usual way takes the list of the folder above it, and icacls marks such an entry with (I).
+            plain = tmp_path / "plain"
+            plain.mkdir()
+            assert "(I)" in access_list(plain)
+            assert "(I)" not in access_list(root)
     assert root.is_dir()
 
 
@@ -564,7 +603,8 @@ def test_e3_a_file_that_cannot_be_written_over_is_still_removed(tmp_path: Path, 
 
 def test_a1_file_names_in_hebrew_with_spaces_and_a_long_one(tmp_path: Path) -> None:
     with tempfiles.private_dir(tmp_path) as folder:
-        for name in ("חוזה שכירות - יעקב כהן.docx", "two words.txt", "n" * 120 + ".txt"):
+        # 60 letters: long for a name, and short enough that a deep temp folder stays under the 260 of Windows.
+        for name in ("חוזה שכירות - יעקב כהן.docx", "two words.txt", "n" * 60 + ".txt"):
             (folder / name).write_text(TEXT, encoding="utf-8")
     assert list(tmp_path.iterdir()) == []
 
@@ -573,3 +613,134 @@ def test_a2_a_block_that_removes_its_own_folder(tmp_path: Path) -> None:
     with tempfiles.private_dir(tmp_path) as folder:
         folder.rmdir()
     assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("kind", FOLDER_LINKS)
+def test_a3_a_link_in_the_place_of_the_private_folder_itself_is_not_gone_through(tmp_path: Path, kind: str) -> None:
+    root, outside = tmp_path / "root", outside_tree(tmp_path)
+    with pytest.raises(tempfiles.NotRemoved), tempfiles.private_dir(root) as folder:
+        folder.rmdir()
+        link(folder, outside, kind)
+    assert untouched(outside)
+    assert [path.name for path in root.iterdir()] == [folder.name]
+    # sweep leaves a link alone, so the next start does not go through it either.
+    assert tempfiles.sweep(root) == 0
+    assert untouched(outside)
+
+
+def test_a4_a_file_system_that_numbers_no_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seen_at_removal: dict[str, bytes]) -> None:
+    real = Path.lstat
+
+    def unnumbered(self: Path) -> os.stat_result:
+        facts = list(real(self))
+        facts[1] = 0  # st_ino
+        return os.stat_result(facts)
+
+    with tempfiles.private_dir(tmp_path) as folder:
+        for name in ("a.txt", "b.txt", "c.txt"):
+            (folder / name).write_text(TEXT, encoding="utf-8")
+        monkeypatch.setattr(Path, "lstat", unnumbered)
+    monkeypatch.setattr(Path, "lstat", real)
+    assert {name: set(data) for name, data in seen_at_removal.items()} == dict.fromkeys(("a.txt", "b.txt", "c.txt"), {0})
+
+
+def test_a5_a_removal_that_is_interrupted_still_removes_the_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+
+    def interrupted(handle: int) -> None:
+        calls.append(handle)
+        if len(calls) == 2:
+            raise KeyboardInterrupt
+
+    monkeypatch.setattr(tempfiles.os, "fsync", interrupted)
+    with pytest.raises(KeyboardInterrupt), tempfiles.private_dir(tmp_path) as folder:
+        for name in ("a.txt", "b.txt", "c.txt", "d.txt"):
+            (folder / name).write_text(TEXT, encoding="utf-8")
+    assert len(calls) == 2
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_a7_one_file_whose_facts_cannot_be_read_does_not_stop_the_others(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    names = ("a-first.txt", "b-odd.txt", "c-last.txt")
+    seen: dict[str, bytes] = {}
+    real, remove = Path.lstat, tempfiles.shutil.rmtree
+
+    def failing_for_one(self: Path) -> os.stat_result:
+        if self.name == "b-odd.txt":
+            raise PermissionError(13, "Access is denied")
+        return real(self)
+
+    def recording(folder: Path, **options: object) -> None:
+        # Read by name with the built-in open: the recorder of the other tests asks for the facts of each file.
+        for name in names:
+            with open(os.path.join(folder, name), "rb") as handle:
+                seen[name] = handle.read()
+        remove(folder, **options)
+
+    monkeypatch.setattr(tempfiles.shutil, "rmtree", recording)
+    with tempfiles.private_dir(tmp_path) as folder:
+        for name in names:
+            (folder / name).write_text(TEXT, encoding="utf-8")
+        monkeypatch.setattr(Path, "lstat", failing_for_one)
+    monkeypatch.setattr(Path, "lstat", real)
+    assert list(tmp_path.iterdir()) == []
+    assert set(seen["a-first.txt"]) == {0}
+    assert set(seen["c-last.txt"]) == {0}
+    assert seen["b-odd.txt"] == TEXT.encode("utf-8")
+
+
+def test_a8_blocks_in_two_threads_hand_out_the_newest_open_folder_to_both(tmp_path: Path) -> None:
+    before = tempfile.gettempdir()
+    second_open, first_may_go, seen = threading.Event(), threading.Event(), {}
+
+    def second() -> None:
+        with tempfiles.private_dir(tmp_path) as folder:
+            seen["second folder"] = folder
+            second_open.set()
+            first_may_go.wait(timeout=30)
+
+    with tempfiles.private_dir(tmp_path) as first:
+        worker = threading.Thread(target=second)
+        worker.start()
+        assert second_open.wait(timeout=30)
+        # The first thread asks while the second thread's block is the newest that is open.
+        seen["asked by the first thread"] = Path(tempfile.gettempdir())
+        first_may_go.set()
+        worker.join(timeout=30)
+        assert not worker.is_alive()
+        seen["after the second ended"] = Path(tempfile.gettempdir())
+    assert seen["asked by the first thread"] == seen["second folder"]
+    assert seen["after the second ended"] == first
+    assert tempfile.gettempdir() == before
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_a8_the_temp_folder_of_the_process_is_changed_only_under_the_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    held, changes = [], []
+
+    class Watched:
+        """A lock that says whether it is held."""
+
+        def __enter__(self) -> None:
+            held.append(True)
+
+        def __exit__(self, *details: object) -> None:
+            held.pop()
+
+    class Watching(list):  # type: ignore[type-arg]
+        """A list that writes down whether the lock was held at each change."""
+
+        def append(self, item: object) -> None:
+            changes.append(bool(held))
+            super().append(item)
+
+        def remove(self, item: object) -> None:
+            changes.append(bool(held))
+            super().remove(item)
+
+    monkeypatch.setattr(tempfiles, "_LOCK", Watched())
+    monkeypatch.setattr(tempfiles, "_OPEN", Watching())
+    with tempfiles.private_dir(tmp_path), tempfiles.private_dir(tmp_path):
+        pass
+    assert changes == [True] * 5
+    assert held == []

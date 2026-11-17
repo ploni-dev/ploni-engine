@@ -202,12 +202,14 @@ def test_n1_the_canary_is_written_over_before_a_file_goes(tmp_path: Path, monkey
 
     monkeypatch.setattr(tempfiles.shutil, "rmtree", recording)
     for name, way in WAYS.items():
-        if name in ("W4 names", "W11 still open"):
-            # A name is not written over, and a file that is still open cannot be: both are stated limits.
+        if name == "W4 names":
+            # A name is not written over: a stated limit.
             continue
         with tempfiles.private_dir(tmp_path) as folder:
             way(folder)
     assert held == []
+    while STILL_OPEN:
+        STILL_OPEN.pop().close()
 
 
 @pytest.mark.parametrize("way", WAYS)

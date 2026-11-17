@@ -110,7 +110,10 @@ def test_whatever_tree_a_block_makes_nothing_is_left_and_nothing_outside_is_touc
     real = tempfiles.shutil.rmtree
 
     def recording(folder: Path, **options: object) -> None:
-        still_text.extend(str(path) for path in expected if any(path.read_bytes()))
+        for path, size in sizes.items():
+            data = path.read_bytes()
+            if any(data) or len(data) != size:
+                still_text.append(str(path))
         real(folder, **options)
 
     monkeypatch.setattr(tempfiles.shutil, "rmtree", recording)
@@ -119,6 +122,7 @@ def test_whatever_tree_a_block_makes_nothing_is_left_and_nothing_outside_is_touc
     for number in range(TREES):
         with tempfiles.private_dir(root) as folder:
             expected = build(folder, outside, rng, made)
+            sizes = {path: path.stat().st_size for path in expected}
         if list(root.iterdir()) or not untouched(outside):
             failed.append(number)
     assert failed == []
