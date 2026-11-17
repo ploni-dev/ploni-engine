@@ -38,10 +38,10 @@ of its sentences say more than is so.
 - **"The commit order is the evidence."** The commit shows that this file was written
   before the held-out table and its record lines were written (10:02:54 against 10:03:06).
   It cannot show that nothing was scored to the screen before: all four detectors had been
-  run on `heldout` by 09:50. That no such scoring was made is the author's word.
+  run on `heldout` by 09:51. That no such scoring was made is the author's word.
 - **The rule for the cheapest method** is quoted above as ending "then the name". Point 11
   of the first amendment ends with "then fewer steps". Three methods tie on its rules:
   `golem + titles, carry`, `golem + titles, carry strong` and
   `golem at 0.5 + titles, carry`, each with 1,590 names, 173 seconds, 45 extra words and
-  two steps. The tie was broken by the name, as point 10 does for the tables. That step
+  two steps on top (the third also has a threshold; counted as a step, two tie). The tie was broken by the name, as point 10 does for the tables. That step
   was added here, at the choosing.
