@@ -74,7 +74,7 @@ def imported(source: str | bytes, importer: str, is_package: bool = False) -> li
             it is anything else. A relative name in a call is resolved against the
             importer's package when the call gives the bare name `__package__`, against
             the package the call gives when that is a string literal, and is UNREADABLE
-            otherwise. A place that names one of the two functions without calling it
+            otherwise; so is a call of `__import__` with a level other than 0. A place that names one of the two functions without calling it
             there is UNREADABLE too, see `_mentions`. The same import twice is given
             twice.
         Raises: SyntaxError when the source is not Python. ImportError when a relative
@@ -82,7 +82,10 @@ def imported(source: str | bytes, importer: str, is_package: bool = False) -> li
 
     Known limits: see the module docstring. A call is known by the name of the function
     alone, so a method of the project's own that is called `import_module` is read as one,
-    and a string that is exactly one of the two names is read as a mention of it.
+    and a string that is exactly one of the two names is read as a mention of it. What
+    still gets past: a function name that is built when the program runs
+    (`getattr(importlib, "import_" + "module")`), and a file that gives `__package__`
+    another value before it calls `import_module(".x", __package__)`.
     """
     package = importer if is_package else importer.rpartition(".")[0]
     tree = ast.parse(source)
@@ -113,7 +116,9 @@ def _called(node: ast.Call, package: str) -> str | None:
     resolved as `import_module` resolves it: against the importer's own package when the
     call gives the bare name `__package__`, against the package the call gives when that is
     a string literal. Any other name, and a relative name with any other package or none,
-    gives UNREADABLE.
+    gives UNREADABLE. So does a call of `__import__` whose fifth argument, `level`, is
+    anything but the number 0: a level makes the name relative to a package that the call
+    takes from a mapping, which cannot be read.
     """
     function = node.func
     name = function.id if isinstance(function, ast.Name) else getattr(function, "attr", None)
@@ -121,6 +126,9 @@ def _called(node: ast.Call, package: str) -> str | None:
         return None
     given = _argument(node, 0, "name")
     if not (isinstance(given, ast.Constant) and isinstance(given.value, str)):
+        return UNREADABLE
+    level = _argument(node, 4, "level")
+    if level is not None and not (isinstance(level, ast.Constant) and level.value == 0):
         return UNREADABLE
     if not given.value.startswith("."):
         return given.value
