@@ -1,0 +1,103 @@
+kind	gender	name	classes
+given	m	נדב	
+given	m	איתמר	
+given	m	אסף	
+given	m	אוהד	
+given	m	עידו	
+given	m	אלעד	
+given	m	יהונתן	
+given	m	אביתר	
+given	m	אריאל	
+given	m	ליאור	prefix_initial
+given	m	בועז	prefix_initial
+given	m	מרדכי	prefix_initial
+given	m	שלמה	prefix_initial
+given	m	הלל	prefix_initial
+given	m	עמית	ordinary
+given	m	תומר	ordinary
+given	m	דור	ordinary
+given	m	גיא	ordinary
+given	m	ניר	ordinary
+given	m	זיו	ordinary
+given	m	כפיר	ordinary,prefix_initial
+given	m	אשר	also_word
+given	m	דן	also_word
+given	m	גד	also_word
+given	m	עזרא	also_word
+given	m	יוסוף	arabic
+given	m	סמיר	arabic
+given	m	באסל	arabic,prefix_initial
+given	m	אלכסנדר	translit
+given	m	איגור	translit
+given	m	דמיטרי	translit
+given	m	פיליפ	translit
+given	f	עדי	
+given	f	אביגיל	
+given	f	בתיה	prefix_initial
+given	f	נוגה	ordinary
+given	f	רותם	ordinary
+given	f	הדס	ordinary,prefix_initial
+given	f	כנרת	ordinary,prefix_initial
+given	f	הילה	ordinary,prefix_initial
+given	f	צביה	also_word
+given	f	אילה	also_word
+given	f	נחמה	also_word
+given	f	סוהא	arabic
+given	f	היבא	arabic,prefix_initial
+given	f	קטרין	translit
+given	f	ז'קלין	translit
+given	f	ויקטוריה	prefix_initial,translit
+surname	-	אברהמי	
+surname	-	יוספי	
+surname	-	גבריאלי	
+surname	-	אשכנזי	
+surname	-	דיין	
+surname	-	גרינברג	
+surname	-	זילברמן	
+surname	-	טננבאום	
+surname	-	קורן	
+surname	-	רביבו	
+surname	-	אדרי	
+surname	-	עטיה	
+surname	-	סבג	
+surname	-	זכאי	
+surname	-	טייב	
+surname	-	הלוי	prefix_initial
+surname	-	הכהן	prefix_initial
+surname	-	ברגר	prefix_initial
+surname	-	בוזגלו	prefix_initial
+surname	-	מלול	prefix_initial
+surname	-	לנקרי	prefix_initial
+surname	-	וולך	prefix_initial
+surname	-	כץ	prefix_initial
+surname	-	שמעוני	prefix_initial
+surname	-	מרקוביץ	prefix_initial
+surname	-	לוינסון	prefix_initial
+surname	-	הרשקוביץ	prefix_initial
+surname	-	ויצמן	prefix_initial
+surname	-	כהנא	prefix_initial
+surname	-	גולן	also_word
+surname	-	יעקבי	also_word
+surname	-	אפרתי	also_word
+surname	-	גבע	also_word
+surname	-	נגר	also_word
+surname	-	חייט	also_word
+surname	-	אבן	ordinary
+surname	-	גפן	ordinary
+surname	-	תמיר	ordinary
+surname	-	שדה	ordinary,prefix_initial
+surname	-	חורי	arabic
+surname	-	נאסר	arabic
+surname	-	עיסא	arabic
+surname	-	סלאמה	arabic
+surname	-	דיאב	arabic
+surname	-	כנאענה	arabic,prefix_initial
+surname	-	מחאמיד	arabic,prefix_initial
+surname	-	שחאדה	arabic,prefix_initial
+surname	-	סמירנוב	translit
+surname	-	פופוב	translit
+surname	-	וולקוב	prefix_initial,translit
+surname	-	מורוזוב	prefix_initial,translit
+surname	-	לבדב	prefix_initial,translit
+surname	-	רבינוביץ	translit
+surname	-	גורביץ	translit
