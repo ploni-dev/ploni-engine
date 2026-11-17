@@ -29,6 +29,9 @@ MIN_LETTERS = 2
 def names_of(table: str, top: int | None) -> set[str]:
     """Return the names of one table.
 
+    Why: the tables are ordered by how common a name is, so the same function gives the
+    whole list and its shorter form.
+
     Contract: `table` is the text of one file; a line is the name, then tab-separated
     numbers, most common first. With `top`, only the first `top` lines that hold a name.
     Each word of a name of several words is a name. A word is kept when it is at least
@@ -43,6 +46,9 @@ def names_of(table: str, top: int | None) -> set[str]:
 
 def build(folder: Path, top: int | None) -> list[str]:
     """Return the sorted names of every given-name table in a folder.
+
+    Why: a name is on the list whichever table holds it; the step does not ask who a
+    name belongs to.
 
     Contract: reads every file of `folder` whose name ends in `.first`. Raises
     FileNotFoundError when there is none: an empty list would turn the step off unseen.

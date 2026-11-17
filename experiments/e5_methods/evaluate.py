@@ -11,7 +11,8 @@ Contract: `python -I evaluate.py --runs-dir R --datasets NAME [NAME ...] [--name
 when there are several: a row per method, best recall first. With `--record` every row is
 also appended to a file, one JSON object per line. With `--list-errors` every mention that
 one method missed is printed with the text around it, which is allowed because every
-sentence and every name is generated.
+sentence and every name is generated. The held-out corpus is scored only by itself and
+only for methods named with `--only` (`check_request`).
 
 Known limits: recall is E4's strict rule, by characters. A word marked for nothing is
 counted by Hebrew words; a word in Latin letters is not looked at.
@@ -21,6 +22,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import itertools
 import json
 import re
@@ -41,7 +43,7 @@ import data
 import layers
 
 Span = tuple[int, int, int]
-# PREREGISTRATION.md, "The methods": the chances at which a token is taken as a person.
+# PREREGISTRATION.md, "Steps that are no model": the chances at which a token is taken as a person.
 THRESHOLDS = (0.5, 0.3, 0.1, 0.03)
 # Every stack of steps that is tried on a detector, by the name it has in the tables.
 STACKS = {
@@ -56,15 +58,23 @@ STACKS = {
 }
 # The stack that is also tried on every threshold and on every union of detectors.
 MAIN_STACK = "titles, carry"
-# The rows of a table beside the pooled recall, in the order they are printed.
-WEAK_ROWS = ("group", "given_ordinary", "given_also_word", "prefixed", "alone", "lonely", "arabic", "translit")
+# The rows of a table beside the pooled recall, in the order they are printed. `no_trigger`
+# holds the mentions with no title and no group word before the name: the ones that the
+# trigger steps cannot reach by construction.
+WEAK_ROWS = ("group", "given_ordinary", "given_also_word", "prefixed", "alone", "lonely", "no_trigger", "arabic", "translit")
+# The corpus on which chosen methods are judged once (PREREGISTRATION.md, "The data").
+HELD_OUT = "heldout"
 SPACE_WORD = re.compile(r"\S+")
 # How much of the paragraph is printed on each side of a mention that was not found.
 ERROR_CONTEXT_CHARACTERS = 60
 
 
 class Marked(NamedTuple):
-    """A span in the form E4's scorer reads: a place and the label of a person."""
+    """A span in the form E4's scorer reads.
+
+    Why: E5 scores with E4's own function, so that its recall is the same rule as E4's and
+    not a copy of it. Contract: a place, with the label of a person.
+    """
 
     paragraph: int
     start: int
@@ -74,6 +84,9 @@ class Marked(NamedTuple):
 
 class Method(NamedTuple):
     """One way of finding names.
+
+    Why: a method is data, so that every method goes through the same code and a table
+    row can say exactly what was run.
 
     Contract: `detectors` are names of runs; what they found is put together. `threshold`
     None takes the tokens each model itself labels as a person; a number takes every token
@@ -88,10 +101,43 @@ class Method(NamedTuple):
     steps: tuple[str, ...]
 
 
+class NameList(NamedTuple):
+    """The list of names for the `list` step, with what tells one list from another.
+
+    Why: the step is pre-registered with two lists, and their numbers must not be mixed up.
+
+    Contract: `label` is the file's name, the number of names and the first 16 characters
+    of the SHA-256 of the file, or "" when no list was given.
+    """
+
+    names: frozenset[str]
+    label: str
+
+
+def read_name_list(path: Path | None) -> NameList:
+    """Read the list of names for the `list` step.
+
+    Why: the step is pre-registered with two lists, and a number must say which one it
+    was measured with.
+
+    Contract: the file holds names separated by white space. `None` gives an empty list
+    with an empty label, which leaves the stacks with the list step out.
+    """
+    if path is None:
+        return NameList(frozenset(), "")
+    raw = path.read_bytes()
+    names = frozenset(raw.decode("utf-8").split())
+    return NameList(names, f"{path.name}, {len(names)} names, sha256 {hashlib.sha256(raw).hexdigest()[:16]}")
+
+
 def chosen(rows: list[list], threshold: float | None) -> list[Span]:
     """Return the tokens of one document that count as a person.
 
+    Why: a lower threshold is one of the methods: it takes what the model was less sure of.
+
     Contract: a row is `[paragraph, start, end, chance, chosen]` as `detect.py` writes it.
+    Without a threshold, the rows the model chose; with one, the rows whose chance is at
+    least that, chosen or not.
     """
     return [(row[0], row[1], row[2]) for row in rows if (row[4] if threshold is None else row[3] >= threshold)]
 
@@ -115,7 +161,11 @@ def whole_words(paragraphs: list[str], spans: list[Span]) -> list[Span]:
 
 
 def step_table(names: frozenset[str]) -> dict[str, Callable[[list[str], list[Span]], list[Span]]]:
-    """Return every step by its key: a function from what is marked to what it adds."""
+    """Return every step by its key: a function from what is marked to what it adds.
+
+    Why: a stack is a list of keys, so that the name in a table says exactly which
+    functions ran.
+    """
     return {
         "group": lambda paragraphs, spans: layers.after_triggers(paragraphs, spans),
         "titles": lambda paragraphs, spans: layers.after_triggers(paragraphs, spans, titles=True),
@@ -126,7 +176,16 @@ def step_table(names: frozenset[str]) -> dict[str, Callable[[list[str], list[Spa
 
 
 def marked(method: Method, document: generate.Document, runs: dict[str, dict], steps: dict) -> list[Span]:
-    """Return everything one method marks in one document."""
+    """Return everything one method marks in one document.
+
+    Why: the one place where a method's parts are put together, so that every method is
+    built the same way.
+
+    Contract: the tokens of every detector of the method, at its threshold, put together;
+    widened to whole words when the method says so; then each step in order, working on
+    everything marked before it. Raises KeyError when a detector has no rows for the
+    document.
+    """
     spans = sorted({span for name in method.detectors for span in chosen(runs[name]["tokens"][document.doc_id], method.threshold)})
     if method.whole_words:
         spans = whole_words(document.paragraphs, spans)
@@ -137,6 +196,8 @@ def marked(method: Method, document: generate.Document, runs: dict[str, dict], s
 
 def grid(detectors: list[str], with_chance: set[str], has_list: bool) -> list[Method]:
     """Build every method that is tried, from the detectors that were run.
+
+    Why: the methods are fixed by a rule before any number is seen, not picked one by one.
 
     Contract: per detector: as the model gives it; with whole words; with whole words and
     each stack of STACKS; and, for a detector whose file holds chances, each threshold with
@@ -163,6 +224,9 @@ def grid(detectors: list[str], with_chance: set[str], has_list: bool) -> list[Me
 def extra_words(document: generate.Document, spans: list[Span]) -> tuple[int, int, int]:
     """Count the Hebrew words a method marked that lie in no planted name.
 
+    Why: a method can find every name by marking everything. What it marks for nothing is
+    its price, and the product would replace those words too.
+
     Contract: returns `(extra, extra that is no title, marked)`. A word is marked when a
     span overlaps it. It is extra when no gold span overlaps it, counted or not. A title, a
     group word and an initial are extra, and are left out of the second number: hiding
@@ -186,14 +250,21 @@ def extra_words(document: generate.Document, spans: list[Span]) -> tuple[int, in
 def rows_of(document: generate.Document, outcomes: list[score.Outcome]) -> dict[str, list[score.Outcome]]:
     """Sort the outcomes of one document into the rows of the table.
 
+    Why: a pooled number hides where a method fails; the rows are the kinds of mention the
+    experiment was set up to look at.
+
     Contract: `all`, the document's kind, and each of WEAK_ROWS that applies: E4's rows by
-    their names, the name classes `arabic` and `translit`, and `lonely` as `data.lonely`
-    defines it.
+    their names, the name classes `arabic` and `translit`, `lonely` as `data.lonely`
+    defines it, and `no_trigger` for a mention whose form has no title and no group word.
     """
     lonely = {document.gold[index] for index in data.lonely(document)}
     rows: dict[str, list[score.Outcome]] = {"all": list(outcomes), document.kind: list(outcomes)}
     for item in outcomes:
-        names = set(generate.buckets_of(item.gold)) | set(item.gold.classes) | ({"lonely"} if item.gold in lonely else set())
+        names = set(generate.buckets_of(item.gold)) | set(item.gold.classes)
+        if item.gold in lonely:
+            names.add("lonely")
+        if item.gold.form not in generate.TITLE_FORMS and item.gold.form not in generate.GROUP_WORDS:
+            names.add("no_trigger")
         for name in names & set(WEAK_ROWS):
             rows.setdefault(name, []).append(item)
     return rows
@@ -202,11 +273,14 @@ def rows_of(document: generate.Document, outcomes: list[score.Outcome]) -> dict[
 def measure(method: Method, documents: list[generate.Document], runs: dict[str, dict], steps: dict) -> dict:
     """Score one method over one corpus.
 
-    Contract: returns `rows`, mapping a row's name to `[found, total]`; `extra`,
-    `extra_no_title` and `marked`, counts of Hebrew words as in `extra_words`; `words`, the
-    Hebrew words of the corpus; `seconds`, the detectors' time for the corpus plus the time
-    the steps took here; `peak_mb`, the largest of the detectors'; and `missed`, every
-    outcome that is not `found`, with its document.
+    Why: every number of a table row comes from here, so that all methods are counted alike.
+
+    Contract: returns `rows`, mapping a row's name to `[found, total]`, a mention being
+    found only when E4's strict rule says so; `extra`, `extra_no_title` and `marked`,
+    counts of Hebrew words as in `extra_words`; `words`, the Hebrew words of the corpus;
+    `seconds`, the detectors' time for the corpus added up, plus the time the steps took
+    here; `peak_mb`, the largest of the detectors'; and `missed`, every outcome that is not
+    `found`, with its document.
     """
     counts: dict[str, list[int]] = {}
     extra = plain = total = words = 0
@@ -233,6 +307,8 @@ def measure(method: Method, documents: list[generate.Document], runs: dict[str, 
 def pooled(results: list[dict]) -> dict:
     """Add up the results of one method over several corpora.
 
+    Why: a method is chosen on two corpora together (PREREGISTRATION.md, "The data").
+
     Contract: counts are summed, seconds are summed, memory is the largest, and the missed
     mentions are put one after the other.
     """
@@ -256,20 +332,24 @@ def _cell(row: list[int] | None) -> str:
 def table(title: str, results: dict[str, dict]) -> str:
     """Write one table: a row per method, best recall first.
 
+    Why: the findings note pastes this as printed, so the order of the rows is the order
+    the pre-registration gives to "the winner".
+
     Contract: columns: the method; strict recall in percent and as a count; each of
-    WEAK_ROWS as a count; the Hebrew words marked outside every planted name, titles left
-    out, then all; the share of marked words that lie in a planted name; seconds; peak
-    memory in megabytes. Methods with the same recall come in order of fewer extra words.
+    WEAK_ROWS and each kind of document as a count; the Hebrew words marked outside every
+    planted name, titles left out, then all; the share of marked words that lie in a
+    planted name; seconds; peak memory in megabytes. Methods with the same recall come in
+    order of fewer extra words without titles, then fewer seconds, then by name.
     """
-    head = ["method", "recall", "found", *WEAK_ROWS, "extra words", "with titles", "marked in a name", "seconds", "peak MB"]
+    head = ["method", "recall", "found", *WEAK_ROWS, *generate.KINDS, "extra words", "with titles", "marked in a name", "seconds", "peak MB"]
     lines = [f"### {title}", "", "| " + " | ".join(head) + " |", "|" + "---|" * len(head)]
-    order = sorted(results, key=lambda name: (-results[name]["rows"]["all"][0], results[name]["extra_no_title"], name))
+    order = sorted(results, key=lambda name: (-results[name]["rows"]["all"][0], results[name]["extra_no_title"], results[name]["seconds"], name))
     for name in order:
         result = results[name]
         found, total = result["rows"]["all"]
         share = f"{(result['marked'] - result['extra']) * 100 / result['marked']:.1f}%" if result["marked"] else "-"
         cells = [
-            name, f"{found * 100 / total:.2f}%", f"{found}/{total}", *(_cell(result["rows"].get(row)) for row in WEAK_ROWS),
+            name, f"{found * 100 / total:.2f}%", f"{found}/{total}", *(_cell(result["rows"].get(row)) for row in (*WEAK_ROWS, *generate.KINDS)),
             str(result["extra_no_title"]), str(result["extra"]), share, f"{result['seconds']:.0f}", str(result["peak_mb"]),
         ]  # fmt: skip
         lines.append("| " + " | ".join(cells) + " |")
@@ -277,7 +357,11 @@ def table(title: str, results: dict[str, dict]) -> str:
 
 
 def error_lines(missed: list) -> list[str]:
-    """List the mentions one method did not find, with the text around each."""
+    """List the mentions one method did not find, with the text around each.
+
+    Why: what a method misses says more than how many it misses. The text may be printed
+    because all of it is generated.
+    """
     lines = []
     for document, item in missed:
         gold = item.gold
@@ -288,17 +372,25 @@ def error_lines(missed: list) -> list[str]:
 
 
 def commit() -> str:
-    """Return the commit of the checkout this script runs in, or `unknown` outside one."""
+    """Return the commit of the checkout this script runs in, or `unknown` outside one.
+
+    Why: a record line must say which code gave its numbers.
+    """
     done = subprocess.run(["git", "rev-parse", "HEAD"], cwd=HERE, capture_output=True, text=True, check=False)  # noqa: S607 git is found on the path, as everywhere in this repository
     return done.stdout.strip() or "unknown"
 
 
-def record_lines(dataset: str, results: dict[str, dict], methods: dict[str, Method], runs: dict[str, dict]) -> list[str]:
+def record_lines(dataset: str, results: dict[str, dict], methods: dict[str, Method], runs: dict[str, dict], list_label: str) -> list[str]:
     """Write the rows of one table as JSON objects, one per line, for the record file.
 
+    Why: `build-plan.md` section 7 asks every experiment to write its numbers in a form a
+    dashboard can read later.
+
     Contract: each object holds the date, the commit, the corpus, the method with its
-    parts, the model and the hashes of every detector in it, and every number of the
-    table. The missed mentions are not written.
+    parts, the list of names when the method uses one, the model and the hashes of every
+    detector in it, and every number of the table. `runs` are the run files of this
+    corpus, or of the first one for the table of all corpora. The missed mentions are not
+    written. What section 7 lists is held but for a PR number.
     """
     lines = []
     for name, result in results.items():
@@ -306,6 +398,7 @@ def record_lines(dataset: str, results: dict[str, dict], methods: dict[str, Meth
         entry = {
             "date": datetime.date.today().isoformat(), "commit": commit(), "experiment": "e5", "dataset": dataset,
             "method": name, "threshold": method.threshold, "whole_words": method.whole_words, "steps": list(method.steps),
+            "name_list": list_label if "list" in method.steps else "",
             "detectors": [{"name": key, "model": runs[key]["model"], "hashes": runs[key]["hashes"]} for key in method.detectors],
             **{key: value for key, value in result.items() if key != "missed"},
         }  # fmt: skip
@@ -313,48 +406,90 @@ def record_lines(dataset: str, results: dict[str, dict], methods: dict[str, Meth
     return lines
 
 
-def load_runs(runs_dir: Path, dataset: str) -> dict[str, dict]:
-    """Read every detector's file for one corpus, by the detector's name."""
-    return {
-        path.name.removesuffix(f".{dataset}.json"): json.loads(path.read_text(encoding="utf-8"))
-        for path in sorted(runs_dir.glob(f"*.{dataset}.json"))
-    }
+def load_runs(runs_dir: Path, dataset: str, digest: str) -> dict[str, dict]:
+    """Read every detector's file for one corpus, by the detector's name.
+
+    Why: a run file holds places in a text. Scored against another text, or the same
+    corpus after a template changed, it would give wrong numbers with no error.
+
+    Contract: reads every `<detector>.<dataset>.json` of the folder. Raises ValueError,
+    naming the file, when the file says it was made on another corpus, or on a text whose
+    digest (`data.digest`) is not `digest`.
+    """
+    runs = {}
+    for path in sorted(runs_dir.glob(f"*.{dataset}.json")):
+        run = json.loads(path.read_text(encoding="utf-8"))
+        if run.get("dataset") != dataset or run.get("corpus_sha256") != digest:
+            raise ValueError(f"{path.name} was not made on the text of {dataset} as it is now")
+        runs[path.name.removesuffix(f".{dataset}.json")] = run
+    return runs
 
 
-def evaluate(runs_dir: Path, datasets: list[str], names: frozenset[str], only: list[str]) -> tuple[dict, dict, dict]:
+def check_request(datasets: list[str], only: list[str]) -> None:
+    """Refuse a request that would score the held-out corpus for choosing.
+
+    Why: the held-out corpus judges methods that were already chosen. Its numbers for
+    every method, or pooled with the corpora for choosing, would be seen once and could
+    not be unseen.
+
+    Contract: raises ValueError when the held-out corpus is asked for together with
+    another corpus, or without naming the methods.
+    """
+    if HELD_OUT in datasets and (len(datasets) > 1 or not only):
+        raise ValueError(f"{HELD_OUT} is scored by itself and only for methods named with --only")
+
+
+def evaluate(runs_dir: Path, datasets: list[str], name_list: NameList, only: list[str]) -> tuple[dict, dict, dict, list[str]]:
     """Score every method on every corpus asked for.
 
-    Contract: returns `(results, methods, runs)`. `results` maps a corpus to a method's
-    name to what `measure` gave; with several corpora it also has `all`, from `pooled`.
-    Only detectors that were run on every corpus asked for take part. `only`, when not
-    empty, keeps the methods with those names; a name that no method has raises KeyError.
+    Why: the whole of a scoring run in one function, so that a test can run it on made-up
+    files.
+
+    Contract: returns `(results, methods, runs, left_out)`. `results` maps a corpus to a
+    method's name to what `measure` gave; with several corpora it also has `all`, from
+    `pooled`. `runs` maps a corpus to its run files. Only detectors that were run on every
+    corpus asked for take part; `left_out` names the others. `only`, when not empty, keeps
+    the methods with those names; a name that no method has raises KeyError. Raises
+    ValueError as `check_request` and `load_runs` do.
     """
-    runs = {dataset: load_runs(runs_dir, dataset) for dataset in datasets}
+    check_request(datasets, only)
+    corpora = {dataset: data.load(dataset) for dataset in datasets}
+    runs = {dataset: load_runs(runs_dir, dataset, data.digest(corpora[dataset])) for dataset in datasets}
     detectors = sorted(set.intersection(*(set(found) for found in runs.values())))
+    left_out = sorted(set.union(*(set(found) for found in runs.values())) - set(detectors))
     first = runs[datasets[0]]
     with_chance = {name for name in detectors if any(row[3] < 1 for rows in first[name]["tokens"].values() for row in rows)}
-    methods = {method.name: method for method in grid(detectors, with_chance, bool(names))}
+    methods = {method.name: method for method in grid(detectors, with_chance, bool(name_list.names))}
     if only:
         methods = {name: methods[name] for name in only}
-    steps = step_table(names)
+    steps = step_table(name_list.names)
     results: dict[str, dict[str, dict]] = {}
     for dataset in datasets:
-        documents = data.load(dataset)
-        results[dataset] = {name: measure(method, documents, runs[dataset], steps) for name, method in methods.items()}
+        results[dataset] = {name: measure(method, corpora[dataset], runs[dataset], steps) for name, method in methods.items()}
     if len(datasets) > 1:
         results["all"] = {name: pooled([results[dataset][name] for dataset in datasets]) for name in methods}
-    return results, methods, first
+    return results, methods, runs, left_out
 
 
 def main(arguments: argparse.Namespace) -> None:
-    """Print the tables, and write the record and the errors when asked."""
-    names = frozenset(arguments.names_list.read_text(encoding="utf-8").split()) if arguments.names_list else frozenset()
-    results, methods, runs = evaluate(arguments.runs_dir, arguments.datasets, names, arguments.only)
+    """Print the tables of one scoring run.
+
+    Why: the command line of the experiment. Contract: prints which detectors were left
+    out and which list of names was used, then the tables; appends the record lines and
+    prints the missed mentions of one method when asked.
+    """
+    name_list = read_name_list(arguments.names_list)
+    results, methods, runs, left_out = evaluate(arguments.runs_dir, arguments.datasets, name_list, arguments.only)
+    if left_out:
+        print(f"not in these tables, because not run on every corpus asked for: {', '.join(left_out)}")
+    if name_list.label:
+        print(f"list of names: {name_list.label}")
     for dataset, found in results.items():
         print(table(dataset, found), end="\n\n")
         if arguments.record:
+            lines = record_lines(dataset, found, methods, runs.get(dataset, runs[arguments.datasets[0]]), name_list.label)
             with arguments.record.open("a", encoding="utf-8") as handle:
-                handle.write("\n".join(record_lines(dataset, found, methods, runs)) + "\n")
+                handle.write("\n".join(lines) + "\n")
     if arguments.list_errors:
         last = results[list(results)[-1]][arguments.list_errors]
         print(f"not found by {arguments.list_errors}:", *error_lines(last["missed"]), sep="\n")

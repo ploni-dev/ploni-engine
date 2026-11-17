@@ -28,10 +28,10 @@ folder. `<models>` is the `models/` folder of the repository, `<runs>` a folder 
 ```
 python ../../scripts/download_e5_models.py golem          # the only step that uses the network
 python -I detect.py --detector joint --model-dir <models>/dictabert-joint/<revision> --dataset select --out <runs>/joint.select.json
-python -I detect.py --detector hf --model-dir <models>/golem/<revision> --dataset select --out <runs>/golem.select.json
-python -I detect.py --detector onnx --model-dir <models>/seter_fast_int8/<revision> --onnx-file <models>/seter_fast_int8/<revision>/onnx/model_quantized.onnx --dataset select --out <runs>/seter_fast_int8.select.json
+python -I detect.py --detector hf --model-dir <models>/golem/<revision> --sha256 <hash of its weights, from docs/THIRD_PARTY.md> --dataset select --out <runs>/golem.select.json
+python -I detect.py --detector onnx --model-dir <models>/seter_fast_int8/<revision> --onnx-file <models>/seter_fast_int8/<revision>/onnx/model_quantized.onnx --sha256 <hash of that file> --dataset select --out <runs>/seter_fast_int8.select.json
 python -I evaluate.py --runs-dir <runs> --datasets e4 select --record results/record.jsonl
-python -I evaluate.py --runs-dir <runs> --datasets heldout --only "joint + whole words" ...
+python -I evaluate.py --runs-dir <runs> --datasets heldout --only "joint + whole words" ...   # by itself, and only for named methods
 python -m pytest
 ```
 
@@ -39,9 +39,11 @@ On a machine with little memory free, add `--budget-seconds 420` to a `detect.py
 same command again until it says that every document is done: the run is then made in parts,
 and no command is longer than a few minutes.
 
-The name of a detector in the tables is the first part of its file's name. `results/` holds
-what the runs printed and one line per method and corpus in `record.jsonl`, in the form the
-analytics record of `build-plan.md` section 7 asks of an experiment.
+The name of a detector in the tables is the first part of its file's name. A run file says
+which corpus it was made on and carries a digest of that text; `evaluate.py` refuses a file
+whose text is not the corpus as it is now. The findings PR adds a folder `results/` with
+what the runs printed and one line per method and corpus in `record.jsonl`, which holds
+what `build-plan.md` section 7 lists for an entry, but for a PR number.
 
 ## What it does not do
 

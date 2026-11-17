@@ -13,6 +13,7 @@ document. What a method gains here is an upper bound on what it gains on a clien
 
 from __future__ import annotations
 
+import hashlib
 import sys
 from collections import Counter
 from pathlib import Path
@@ -37,6 +38,9 @@ OWN_NAME_FORMS = frozenset(generate.FORM_BUCKETS) - frozenset(generate.GROUP_WOR
 def load(name: str) -> list[generate.Document]:
     """Generate one corpus.
 
+    Why: the text is not stored; it is written again from its templates, bank and seed, so
+    that the corpus a number was measured on can always be made again.
+
     Contract: `name` is a key of DATASETS; KeyError otherwise. The generator's seed is put
     back afterwards, so loading one corpus does not change the next.
     """
@@ -47,6 +51,21 @@ def load(name: str) -> list[generate.Document]:
         return generate.corpus(templates, bank)
     finally:
         generate.SEED = before
+
+
+def digest(documents: list[generate.Document]) -> str:
+    """Return the SHA-256 of the text of a corpus.
+
+    Why: a run file holds places in the text. The digest is written into it, so that a
+    file made before a template, a bank or the generator changed is refused and not
+    scored against other text.
+
+    Contract: over every document in order: its id, then its paragraphs, each followed by
+    a line break, in UTF-8. The planted names are not part of it: they are made again
+    with the text.
+    """
+    lines = [line for document in documents for line in (document.doc_id, *document.paragraphs)]
+    return hashlib.sha256("".join(line + "\n" for line in lines).encode("utf-8")).hexdigest()
 
 
 def lonely(document: generate.Document) -> set[int]:

@@ -1,7 +1,17 @@
 """Write the two name banks of E5 from the lists below.
 
-Usage: python build_banks.py <e4 names.tsv> <out dir>. A name that E4's bank holds, or that both lists hold, is
-left out, so the three banks share no name. The class `prefix_initial` is worked out from the first letter.
+Why: the corpora for choosing and for judging must not share a name with each other or
+with E4's bank, or a method that learned a name on one would be judged on it on the other.
+The banks are in the repository; this script is kept so that they can be made again and
+so that the claim can be checked.
+
+Contract: `python build_banks.py <e4 names.tsv> <out dir>`. Writes `names_select.tsv` and
+`names_heldout.tsv` into the folder and prints how many names each holds. A name that
+E4's bank holds, or that both lists hold, is left out, so the three banks share no name.
+The class `prefix_initial` is worked out from the first letter.
+
+Known limits: the names are common Israeli given names and surnames, written by Claude.
+No name of a real person is meant.
 """
 
 import sys
@@ -48,7 +58,14 @@ HELDOUT = [
 
 
 def rows(lists: list[tuple[str, str, str, str]], taken: set[str]) -> list[str]:
-    """Return the bank's rows, leaving out every name in `taken`, and add the kept names to it."""
+    """Return the rows of one bank, without the names that an earlier bank holds.
+
+    Why: see the module: no name in two banks.
+
+    Contract: one row per name, `kind, gender, name, classes`, tab-separated. A name in
+    `taken` is left out; every name kept is added to `taken`, so that the next bank
+    leaves it out too.
+    """
     out = []
     for kind, gender, name_class, names in lists:
         for name in names.split():
@@ -63,7 +80,11 @@ def rows(lists: list[tuple[str, str, str, str]], taken: set[str]) -> list[str]:
 
 
 def main() -> None:
-    """Write names_select.tsv and names_heldout.tsv and print how many names each holds."""
+    """Write the two banks.
+
+    Why and contract: see the module docstring. E4's bank is read first, so that no name of
+    it is used again.
+    """
     e4 = Path(sys.argv[1]).read_text(encoding="utf-8").splitlines()[1:]
     taken = {line.split("\t")[2] for line in e4 if line.strip()}
     out = Path(sys.argv[2])
@@ -73,4 +94,5 @@ def main() -> None:
         print(name, len(body))
 
 
-main()
+if __name__ == "__main__":
+    main()

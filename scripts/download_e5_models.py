@@ -37,6 +37,9 @@ from download_e1_model import MODELS_ROOT, file_sha256, inventory_lines
 class Candidate(NamedTuple):
     """One model of E5: where it comes from, which files are fetched, what the weights must be.
 
+    Why: the pin of a candidate is data in one place, which `docs/THIRD_PARTY.md` and the
+    pre-registration repeat and a reviewer can compare.
+
     Contract: `revision` is a full commit of the hub repository. `files` are the only files
     fetched: never a pickle of the weights and never Python of the model's own. `weights`
     is the path of the weights file inside the snapshot and `sha256` its hash, as the hub
@@ -109,6 +112,7 @@ NAMES_FILES = {
     "hebrew_names/dist.muslim.male.first": "782d36b1fcfd988e988a81a5dca0c6265e5de920",
     "hebrew_names/dist.other.female.first": "ffa0d9e7972c7b92d18f808f0e1be0790e987814",
     "hebrew_names/dist.other.male.first": "4e67ba2817fbfb8936be472775aef5df80489ebf",
+    "LICENSE.txt": "5fed2cefa61f365679d2480d3e76bdc9632055d0",
 }
 
 
@@ -124,12 +128,13 @@ def snapshot_dir(name: str) -> Path:
 
 
 def download(name: str) -> Path:
-    """Fetch the listed files of one candidate at its pinned commit and check the weights.
+    """Fetch one candidate at its pinned commit.
 
     Why: a pin by branch name would let the weights change between the run that was
     reported and the next one.
 
-    Contract: returns the snapshot folder. Sends no stored account token (`token=False`),
+    Contract: fetches the files the candidate lists and no other, then checks the weights.
+    Returns the snapshot folder. Sends no stored account token (`token=False`),
     so the request carries nothing that identifies the user. Raises ValueError when the
     weights do not have the pinned hash; `huggingface_hub` errors pass unchanged.
     """
@@ -152,14 +157,15 @@ def git_blob_id(data: bytes) -> str:
 
 
 def download_names_list() -> Path:
-    """Fetch the given-name tables of NAMES_REPO at NAMES_COMMIT and check each one.
+    """Fetch the given-name tables of NAMES_REPO at NAMES_COMMIT.
 
     Why: E5's `list` step needs a list of names that does not come from the corpora
     (`experiments/e5_methods/names_list.py`).
 
     Contract: returns the folder, `models/hebrew-names/<commit>/`, holding the ten tables
-    and the project's licence. Raises ValueError when a file is not the one the pinned
-    commit records, before it is written; URL errors pass unchanged.
+    and the project's licence file. Each file is checked against the id the pinned commit
+    records for it; ValueError when one differs, before it is written. URL errors pass
+    unchanged.
     """
     target = MODELS_ROOT / NAMES_LIST / NAMES_COMMIT
     target.mkdir(parents=True, exist_ok=True)

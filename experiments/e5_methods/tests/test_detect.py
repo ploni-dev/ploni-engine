@@ -193,7 +193,7 @@ class Pieces:
 def every_piece_a_person(encoded: dict) -> numpy.ndarray:
     """A made-up model with two labels that calls every piece a person."""
     scores = numpy.zeros((encoded["input_ids"].shape[1], 2))
-    scores[:, 1] = 9.0
+    scores[:, 1] = 50.0
     return scores
 
 
