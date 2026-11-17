@@ -28,8 +28,11 @@ Error paths:
 
 Adversarial:
   A1  the word import in a string and in a comment     nothing
-  A2  importlib.import_module("x") and __import__("x")  not seen; the limit is pinned here so that it
-      cannot change unnoticed
+  A2  an import made by a call, importlib.import_module("x") or __import__("x"), in every way
+      the function can be named: read like an import statement when the name is a string
+      literal, relative names against the importer's package; given as UNREADABLE when the
+      name is anything else (a variable, an f-string, a sum, no argument). A call of another
+      function is nothing. What is still not seen is pinned too: exec of source text
   A3  source bytes with Hebrew text: UTF-8, UTF-8 with a byte order mark, cp1255 with a coding line
 
 project_imports, a folder. Equivalence classes:
@@ -68,6 +71,22 @@ Adversarial:
       ploni.typesx is not ploni.types and is reported; a target ploni.adaptersx is not the
       importer's own layer and is reported
   A5  the same second name under another top package (eval.write) is outside the project
+
+from_packages, the second rule. Equivalence classes:
+  EC25  an import whose top package is one of those given    one line: file:line: imports <top>
+  EC26  a module below such a package (http.client)            reported under the top package
+  EC27  an import of any other package                         nothing
+  EC28  from a import b, read as a and as a.b                  one line for the statement
+  EC29  an unreadable import, when UNREADABLE is asked for     one line; nothing when it is not
+  EC30  several imports                                        one line each, in the order given
+
+Boundaries:
+  B6  no imports; no packages
+
+Adversarial:
+  A6  a name that only begins like a package asked for (sockets, httpx when http is asked);
+      the package as a lower part of another name (ploni.socket, a relative import of a
+      module named socket)
 
 The Hebrew axes of the test-matrix skill apply in one place, A3: a source file may hold Hebrew
 literals and must still be read. The document-structure axes do not apply: no document is handled.
@@ -211,9 +230,62 @@ def test_a1_the_word_import_in_a_string_and_in_a_comment() -> None:
     assert reader.imported("text = 'import os'\n# import socket\n", "pkg.mod") == []
 
 
-def test_a2_an_import_made_by_a_call_is_not_seen() -> None:
-    source = "import importlib\nimportlib.import_module('ploni.write')\n__import__('socket')\n"
-    assert reader.imported(source, "pkg.mod") == [(1, "importlib")]
+@pytest.mark.parametrize(
+    ("call", "module"),
+    [
+        ("importlib.import_module('ploni.write')", "ploni.write"),
+        ('importlib.import_module("socket")', "socket"),
+        ("il.import_module('http.client')", "http.client"),
+        ("import_module('requests')", "requests"),
+        ("__import__('socket')", "socket"),
+        ("__import__('urllib.request', fromlist=['x'])", "urllib.request"),
+        ("importlib.__import__('ssl')", "ssl"),
+        ("builtins.__import__('ssl')", "ssl"),
+        ("importlib.import_module(name='socket')", "socket"),
+        ("value = importlib.import_module('socket').create_connection", "socket"),
+        ("importlib.import_module('.base', __package__)", "ploni.detect.base"),
+        ("importlib.import_module('..write.edits', package=__package__)", "ploni.write.edits"),
+    ],
+)
+def test_a2_an_import_made_by_a_call_with_a_literal_name_is_read(call: str, module: str) -> None:
+    assert reader.imported(f"\n{call}\n", "ploni.detect.fusion") == [(2, module)]
+
+
+@pytest.mark.parametrize(
+    "call",
+    [
+        "importlib.import_module(name)",
+        "importlib.import_module(f'ploni.{name}')",
+        "importlib.import_module('ploni.' + name)",
+        "importlib.import_module(*parts)",
+        "importlib.import_module()",
+        "import_module(name)",
+        "__import__(name)",
+        "__import__(b'socket')",
+        "importlib.import_module(name=name)",
+    ],
+)
+def test_a2_an_import_made_by_a_call_with_any_other_name_is_unreadable(call: str) -> None:
+    assert reader.imported(f"\n\n{call}\n", "ploni.detect.fusion") == [(3, reader.UNREADABLE)]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "load('socket')\n",
+        "importlib.reload(module)\n",
+        "registry.import_modules('socket')\n",
+        "import_module = 3\n",
+        "exec('import socket')\n",
+    ],
+)
+def test_a2_a_call_of_another_function_is_nothing(source: str) -> None:
+    assert reader.imported(source, "ploni.detect.fusion") == []
+
+
+def test_a2_a_relative_name_in_a_call_that_leaves_the_top_package() -> None:
+    with pytest.raises(ImportError):
+        reader.imported("importlib.import_module('...x', __package__)\n", "ploni.api")
 
 
 @pytest.mark.parametrize(
@@ -387,3 +459,47 @@ def test_a4_a_name_that_only_begins_like_a_layer() -> None:
 
 def test_a5_the_same_layer_name_under_another_top_package() -> None:
     assert reader.not_allowed([one("eval.write"), one("tests.write.thing")], TABLE) == []
+
+
+@pytest.mark.parametrize("module", ["socket", "http", "http.client", "urllib.request.urlopen"])
+def test_ec25_ec26_a_package_asked_for_is_reported_under_its_top_name(module: str) -> None:
+    top = module.split(".")[0]
+    assert reader.from_packages([one(module)], {"socket", "http", "urllib"}) == [f"{FILE}:7: imports {top}"]
+
+
+@pytest.mark.parametrize("module", ["json", "os.path", "ploni.types", "eval"])
+def test_ec27_any_other_package(module: str) -> None:
+    assert reader.from_packages([one(module)], {"socket", "http"}) == []
+
+
+def test_ec28_one_statement_read_twice_gives_one_line() -> None:
+    imports = [one("http"), one("http.client"), one("http", line=8)]
+    assert reader.from_packages(imports, {"http"}) == [f"{FILE}:7: imports http", f"{FILE}:8: imports http"]
+
+
+def test_ec29_an_unreadable_import_is_reported_only_when_asked_for() -> None:
+    imports = [one(reader.UNREADABLE)]
+    assert reader.from_packages(imports, {reader.UNREADABLE}) == [f"{FILE}:7: imports {reader.UNREADABLE}"]
+    assert reader.from_packages(imports, {"socket"}) == []
+
+
+def test_ec30_one_line_for_each_import_in_the_order_given() -> None:
+    imports = [one("ssl", line=9), one("json", line=3), one("socket.socket", line=2)]
+    assert reader.from_packages(imports, {"socket", "ssl"}) == [f"{FILE}:9: imports ssl", f"{FILE}:2: imports socket"]
+
+
+def test_b6_no_imports_and_no_packages() -> None:
+    assert reader.from_packages([], {"socket"}) == []
+    assert reader.from_packages([one("socket")], set()) == []
+
+
+@pytest.mark.parametrize("module", ["sockets", "httpx", "xhttp", "ploni.socket", "ploni.detect.http.client"])
+def test_a6_a_name_that_only_looks_like_a_package_asked_for(module: str) -> None:
+    assert reader.from_packages([one(module)], {"socket", "http"}) == []
+
+
+def test_the_unreadable_mark_is_no_module_name() -> None:
+    # No import statement can give it, and it has no dot, so no rule takes it for a layer.
+    assert not reader.UNREADABLE.isidentifier()
+    assert "." not in reader.UNREADABLE
+    assert reader.not_allowed([one(reader.UNREADABLE)], TABLE) == []
