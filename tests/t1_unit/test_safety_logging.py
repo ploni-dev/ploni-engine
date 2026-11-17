@@ -180,7 +180,7 @@ def test_ec1_an_event_with_fields_is_one_line_in_the_order_given(start: Callable
 
 @pytest.mark.parametrize(
     ("value", "shown"),
-    [(0, "0"), (-7, "-7"), (10**20, "100000000000000000000"), (1.25, "1.25"), (True, "True"), (False, "False"), (None, "None")],
+    [(0, "0"), (-7, "-7"), (2**62, "4611686018427387904"), (1.25, "1.25"), (True, "True"), (False, "False"), (None, "None")],
 )
 def test_ec2_a_number_a_bool_and_none_are_written_as_python_writes_them(
     start: Callable[..., io.StringIO], value: object, shown: str
@@ -743,3 +743,15 @@ def test_install_makes_its_handler_the_one_of_last_resort_and_gives_it_the_level
     handler = safe.install(io.StringIO(), level=logging.ERROR)
     assert logging.lastResort is handler
     assert handler.level == logging.ERROR
+
+
+def test_ec11_a_named_logger_hands_its_records_up_again_whatever_the_last_resort_is(logging_restored: None) -> None:
+    # Without this a logger that had stopped handing up would depend on the handler of last resort alone.
+    library = logging.getLogger("some.closed.library")
+    library.propagate = False
+    stream, elsewhere = io.StringIO(), io.StringIO()
+    safe.install(stream)
+    logging.lastResort = logging.StreamHandler(elsewhere)
+    library.warning(TEXT)
+    assert elsewhere.getvalue() == ""
+    assert matches(stream, "<withheld>", level="WARNING"), stream.getvalue()
