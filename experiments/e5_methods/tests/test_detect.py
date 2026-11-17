@@ -27,10 +27,24 @@ file_hashes
 
 peak_memory_mb
   EC11 this process                                    a positive number of megabytes
+
+measure (a run made in parts, for a machine that cannot hold a long run)
+  EC12 no budget                                       every document, in order; True
+  EC13 a budget that ends after two documents          those two; False; a third is not begun
+  EC14 a second call on the same state                 the documents already done are not run again
+  EC15 the seconds                                     only the time inside the detector is added, over all parts
+  B3   a budget smaller than one document              one document is still done in every call
+
+part_state
+  EC16 no file of an earlier part                      a fresh state for this model and corpus
+  EC17 a file of an earlier part of the same run       that state
+  E2   a file of another model or another corpus       ValueError
 """
 
 import hashlib
+import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import numpy
 import pytest
@@ -87,3 +101,65 @@ def test_ec10_file_hashes(tmp_path: Path) -> None:
 
 def test_ec11_peak_memory() -> None:
     assert detect.peak_memory_mb() > 1
+
+
+DOCUMENTS = [SimpleNamespace(doc_id=f"doc{number:02d}", paragraphs=[f"paragraph {number}"]) for number in range(1, 6)]
+
+
+class Clock:
+    """A clock that moves only when a detector is said to work: ten seconds per document."""
+
+    def __init__(self) -> None:
+        self.now = 0.0
+        self.ran: list[str] = []
+
+    def __call__(self) -> float:
+        return self.now
+
+    def tokens(self, paragraphs: list[str]) -> list[list]:
+        self.ran.append(paragraphs[0])
+        self.now += 10.0
+        return [[0, 0, 1, 1.0, 1]]
+
+
+def fresh() -> dict:
+    """Return the state of a run of which nothing is done yet."""
+    return {"model": "m", "dataset": "select", "tokens": {}, "seconds": 0.0, "peak_mb": 0, "parts": 0}
+
+
+def test_ec12_no_budget_runs_every_document_in_order() -> None:
+    clock, state = Clock(), fresh()
+    assert detect.measure(clock.tokens, DOCUMENTS, state, None, clock) is True
+    assert list(state["tokens"]) == [document.doc_id for document in DOCUMENTS]
+    assert clock.ran == [f"paragraph {number}" for number in range(1, 6)]
+    assert state["seconds"] == 50.0
+
+
+def test_ec13_ec14_ec15_a_run_in_parts() -> None:
+    clock, state = Clock(), fresh()
+    assert detect.measure(clock.tokens, DOCUMENTS, state, 15.0, clock) is False
+    assert list(state["tokens"]) == ["doc01", "doc02"]
+    clock.now += 1000.0  # the time between two parts, and the loading of the model, are not the detector's
+    assert detect.measure(clock.tokens, DOCUMENTS, state, 15.0, clock) is False
+    assert list(state["tokens"]) == ["doc01", "doc02", "doc03", "doc04"]
+    assert detect.measure(clock.tokens, DOCUMENTS, state, 15.0, clock) is True
+    assert clock.ran == [f"paragraph {number}" for number in range(1, 6)]
+    assert state["seconds"] == 50.0
+
+
+def test_b3_a_budget_smaller_than_one_document_still_does_one() -> None:
+    clock, state = Clock(), fresh()
+    assert detect.measure(clock.tokens, DOCUMENTS, state, 0.001, clock) is False
+    assert list(state["tokens"]) == ["doc01"]
+
+
+def test_ec16_ec17_e2_part_state(tmp_path: Path) -> None:
+    part = tmp_path / "golem.select.json.part"
+    assert detect.part_state(part, "m", "select") == fresh()
+    kept = {**fresh(), "tokens": {"doc01": []}, "seconds": 10.0, "parts": 1}
+    part.write_text(json.dumps(kept), encoding="utf-8")
+    assert detect.part_state(part, "m", "select") == kept
+    with pytest.raises(ValueError, match="another run"):
+        detect.part_state(part, "other", "select")
+    with pytest.raises(ValueError, match="another run"):
+        detect.part_state(part, "m", "heldout")
