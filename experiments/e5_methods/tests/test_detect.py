@@ -22,9 +22,6 @@ _rows
   EC9  a window that starts later in the paragraph     places are moved by the shift
   E1   more offsets than rows of chances               ValueError
 
-file_hashes
-  EC10 a file that exists and one that does not        only the first, by its name
-
 peak_memory_mb
   EC11 this process                                    a positive number of megabytes
 
@@ -36,9 +33,22 @@ measure (a run made in parts, for a machine that cannot hold a long run)
   B3   a budget smaller than one document              one document is still done in every call
 
 part_state
-  EC16 no file of an earlier part                      a fresh state for this model and corpus
+  EC16 no file of an earlier part                      a fresh state for this run
   EC17 a file of an earlier part of the same run       that state
-  E2   a file of another model or another corpus       ValueError
+  E2   a file of another model, another kind of detector, another weights file, another
+       corpus, or the same corpus with another text    ValueError
+
+paragraph_rows (the windows of a long paragraph, with a made-up tokenizer and model)
+  EC18 a paragraph of one window                       every character at its own place
+  EC19 a paragraph cut into several windows            every character once, at its place in
+                                                       the paragraph, not in its window
+  E3   a window longer than was counted                ValueError
+
+file_sha256 / checked_hashes / _write
+  EC20 a file                                          its SHA-256
+  EC21 weights with the expected hash                  the hashes of the folder's files
+  E4   weights with another hash, no expected hash, an ONNX file with another hash   ValueError
+  EC22 a file written over an older one                the new content, and nothing left beside it
 """
 
 import hashlib
@@ -93,12 +103,6 @@ def test_e1_offsets_and_chances_of_different_lengths() -> None:
         detect._rows(0, 0, [(0, 1), (1, 2)], numpy.array([[0.0, 1.0]]), [1])
 
 
-def test_ec10_file_hashes(tmp_path: Path) -> None:
-    (tmp_path / "config.json").write_bytes(b"{}")
-    found = detect.file_hashes([tmp_path / "config.json", tmp_path / "missing.bin"])
-    assert found == {"config.json": hashlib.sha256(b"{}").hexdigest()}
-
-
 def test_ec11_peak_memory() -> None:
     assert detect.peak_memory_mb() > 1
 
@@ -122,9 +126,12 @@ class Clock:
         return [[0, 0, 1, 1.0, 1]]
 
 
+IDENTITY = {"detector": "hf", "model": "m", "weights": "model.safetensors", "dataset": "select", "corpus_sha256": "abc"}
+
+
 def fresh() -> dict:
     """Return the state of a run of which nothing is done yet."""
-    return {"model": "m", "dataset": "select", "tokens": {}, "seconds": 0.0, "peak_mb": 0, "parts": 0}
+    return {"identity": dict(IDENTITY), "tokens": {}, "seconds": 0.0, "peak_mb": 0, "parts": 0}
 
 
 def test_ec12_no_budget_runs_every_document_in_order() -> None:
@@ -153,13 +160,81 @@ def test_b3_a_budget_smaller_than_one_document_still_does_one() -> None:
     assert list(state["tokens"]) == ["doc01"]
 
 
-def test_ec16_ec17_e2_part_state(tmp_path: Path) -> None:
+def test_ec16_ec17_part_state(tmp_path: Path) -> None:
     part = tmp_path / "golem.select.json.part"
-    assert detect.part_state(part, "m", "select") == fresh()
+    assert detect.part_state(part, dict(IDENTITY)) == fresh()
     kept = {**fresh(), "tokens": {"doc01": []}, "seconds": 10.0, "parts": 1}
     part.write_text(json.dumps(kept), encoding="utf-8")
-    assert detect.part_state(part, "m", "select") == kept
+    assert detect.part_state(part, dict(IDENTITY)) == kept
+
+
+@pytest.mark.parametrize(
+    ("key", "value"),
+    [("model", "other"), ("detector", "onnx"), ("weights", "model_quantized.onnx"), ("dataset", "heldout"), ("corpus_sha256", "def")],
+)
+def test_e2_a_part_file_of_another_run_is_refused(tmp_path: Path, key: str, value: str) -> None:
+    part = tmp_path / "golem.select.json.part"
+    part.write_text(json.dumps({**fresh(), "tokens": {"doc01": []}}), encoding="utf-8")
     with pytest.raises(ValueError, match="another run"):
-        detect.part_state(part, "other", "select")
-    with pytest.raises(ValueError, match="another run"):
-        detect.part_state(part, "m", "heldout")
+        detect.part_state(part, {**IDENTITY, key: value})
+
+
+class Pieces:
+    """A made-up tokenizer: one piece per character that is no white space, between two marks of its own."""
+
+    def tokenize(self, word: str) -> list[str]:
+        return list(word)
+
+    def __call__(self, text: str, return_offsets_mapping: bool, return_tensors: str) -> dict:
+        offsets = [(0, 0)] + [(place, place + 1) for place, sign in enumerate(text) if not sign.isspace()] + [(0, 0)]
+        return {"input_ids": numpy.zeros((1, len(offsets)), dtype=int), "offset_mapping": numpy.array([offsets])}
+
+
+def every_piece_a_person(encoded: dict) -> numpy.ndarray:
+    """A made-up model with two labels that calls every piece a person."""
+    scores = numpy.zeros((encoded["input_ids"].shape[1], 2))
+    scores[:, 1] = 9.0
+    return scores
+
+
+def test_ec18_ec19_the_places_of_a_paragraph_cut_into_windows() -> None:
+    paragraph = "אב גד. הו זח. טי כל. מנ סע."
+    whole = detect.paragraph_rows(3, paragraph, Pieces(), every_piece_a_person, [1])
+    cut = detect.paragraph_rows(3, paragraph, Pieces(), every_piece_a_person, [1], budget=6)
+    expected = [[3, place, place + 1, 1.0, 1] for place, sign in enumerate(paragraph) if not sign.isspace()]
+    assert whole == expected
+    assert cut == expected
+    # The cut really happened: with a budget of six pieces no window holds the paragraph.
+    assert sum(not sign.isspace() for sign in paragraph) > 6
+
+
+def test_e3_a_window_longer_than_was_counted() -> None:
+    class Undercounting(Pieces):
+        def tokenize(self, word: str) -> list[str]:
+            return [word]
+
+    with pytest.raises(ValueError, match="positions"):
+        detect.paragraph_rows(0, "אבגדהו זחטיכל", Undercounting(), every_piece_a_person, [1], budget=2)
+
+
+def test_ec20_ec21_e4_the_weights_are_checked_before_a_run(tmp_path: Path) -> None:
+    (tmp_path / "model.safetensors").write_bytes(b"weights")
+    (tmp_path / "config.json").write_bytes(b"{}")
+    (tmp_path / "model.onnx").write_bytes(b"other weights")
+    right, onnx = hashlib.sha256(b"weights").hexdigest(), hashlib.sha256(b"other weights").hexdigest()
+    assert detect.file_sha256(tmp_path / "model.safetensors") == right
+    assert detect.checked_hashes("hf", tmp_path, None, right) == {"model.safetensors": right, "config.json": hashlib.sha256(b"{}").hexdigest()}
+    assert detect.checked_hashes("onnx", tmp_path, tmp_path / "model.onnx", onnx)["model.onnx"] == onnx
+    for expected, onnx_file in ((onnx, None), (None, None), (right, tmp_path / "model.onnx")):
+        with pytest.raises(ValueError, match="sha256"):
+            detect.checked_hashes("hf" if onnx_file is None else "onnx", tmp_path, onnx_file, expected)
+    with pytest.raises(ValueError, match="sha256"):
+        detect.checked_hashes("hf", tmp_path / "missing", None, right)
+
+
+def test_ec22_a_file_is_written_whole(tmp_path: Path) -> None:
+    out = tmp_path / "run.json.part"
+    detect._write(out, {"parts": 1})
+    detect._write(out, {"parts": 2, "name": "יעקב"})
+    assert json.loads(out.read_text(encoding="utf-8")) == {"parts": 2, "name": "יעקב"}
+    assert [path.name for path in tmp_path.iterdir()] == ["run.json.part"]

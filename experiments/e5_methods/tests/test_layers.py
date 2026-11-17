@@ -7,6 +7,7 @@ words
   EC2  a geresh or gershayim inside a word            ג'ון, עו"ד, ד"ר are one word each
   EC3  a geresh at the end                            גב' is one word
   B1   an empty paragraph, digits and Latin only      nothing
+  A5   a maqaf or a hyphen inside a name             two words: the stated limit
 
 strip_prefix
   EC4  the word itself is known                       itself
@@ -22,6 +23,9 @@ name_words
   EC10 the same one word in two spans                 weak and strong
   EC11 a particle and an initial inside a span        left out
   B3   no spans                                       nothing
+  EC25 one span per word, as whole words give them    two marked words side by side are a
+                                                      name of two words: both are strong
+  EC26 a title marked beside a name                   does not make the name strong
 
 propagate
   EC12 a name found once stands again bare            the other place is marked
@@ -29,6 +33,8 @@ propagate
   EC14 ... in another paragraph                       marked
   EC15 the place already marked                       not returned again
   A2   an everyday word that is a name in this document (אור) is marked everywhere it stands
+  A6   a name found only behind attached letters (לכהן) is not carried to its bare form:
+       the stated limit
 
 after_triggers
   EC16 משפחת X, האחים X                               X is marked
@@ -39,7 +45,10 @@ after_triggers
   EC21 a title, an initial and a surname              the initial and the surname
   EC22 the word already marked                        not returned again
   B4   a trigger as the last word of a paragraph      nothing, no error
-  A3   a word that only looks like a trigger (שמר, מרב, רב, רשם, שופט, אחים)   nothing
+  A3   a word that only looks like a trigger (שמר, מרב, רב, רשם, שופט, אחים; and behind ל, ב
+       or כ: למנוחה, במנוחה, כשופט, לרב, לאחות, בשופט)   nothing
+  A7   something between the trigger and the next word: a full stop, a bracket, a word
+       in Latin letters   nothing; the same between an initial and the surname
   A4   a title inside a marked span                   not a name word, not carried
 
 from_list
@@ -158,7 +167,9 @@ def test_ec19_ec20_the_word_after_a_title(title: str) -> None:
     assert layers.after_triggers([paragraph], [], titles=True) == [at(paragraph, "מזרחי")]
 
 
-@pytest.mark.parametrize("word", ["שמר", "מרב", "רב", "ורב", "רשם", "שופט", "אחים", "חמר", "הר"])
+@pytest.mark.parametrize(
+    "word", ["שמר", "מרב", "רב", "ורב", "רשם", "שופט", "אחים", "חמר", "הר", "למנוחה", "במנוחה", "כשופט", "בשופט", "לרב", "לאחות", "למנוח"]
+)
 def test_a3_a_word_that_only_looks_like_a_title_or_a_group_word(word: str) -> None:
     paragraph = f"הוא {word} על הסדר"
     assert layers.after_triggers([paragraph], [], titles=True) == []
@@ -194,3 +205,47 @@ def test_ec23_ec24_from_a_list() -> None:
     assert layers.from_list([paragraph], [], names) == [at(paragraph, "נועה"), at(paragraph, "לנועה")]
     assert layers.from_list([paragraph], [], names, prefixes=False) == [at(paragraph, "נועה")]
     assert layers.from_list([paragraph], [at(paragraph, "נועה")], names, prefixes=False) == []
+
+
+@pytest.mark.parametrize("name", ["בן־גוריון", "בן-גוריון"])
+def test_a5_a_maqaf_or_a_hyphen_ends_a_word(name: str) -> None:
+    assert [text for _, _, text in layers.words(f"דוד {name} אמר")] == ["דוד", "בן", "גוריון", "אמר"]
+
+
+def test_ec25_two_marked_words_side_by_side_are_a_name_of_two_words() -> None:
+    # As `evaluate.whole_words` gives them: one span per word, never one span over the name.
+    paragraph = "יעקב כהן חתם. אחר כך כהן הלך, ויעקב נשאר."
+    per_word = [at(paragraph, "יעקב"), at(paragraph, "כהן")]
+    assert layers.name_words([paragraph], per_word, strong=True) == {"יעקב", "כהן"}
+    assert layers.propagate([paragraph], per_word, strong=True) == [at(paragraph, "כהן", nth=1), at(paragraph, "ויעקב")]
+    apart = "יעקב חתם, וגם כהן. אחר כך כהן הלך."
+    assert layers.name_words([apart], [at(apart, "יעקב"), at(apart, "כהן")], strong=True) == set()
+
+
+def test_ec26_a_title_beside_a_name_does_not_make_it_strong() -> None:
+    paragraph = "מר כהן חתם. אחר כך כהן הלך."
+    per_word = [at(paragraph, "מר"), at(paragraph, "כהן")]
+    assert layers.name_words([paragraph], per_word, strong=True) == set()
+    assert layers.name_words([paragraph], per_word, strong=False) == {"כהן"}
+    with_initial = "י' כהן חתם."
+    assert layers.name_words([with_initial], [at(with_initial, "י'"), at(with_initial, "כהן")], strong=True) == {"כהן"}
+
+
+def test_a6_a_name_found_only_behind_attached_letters_is_not_carried_to_its_bare_form() -> None:
+    # A stated limit of `name_words`, pinned: cutting letters off without knowing the name would make `רק` of `ברק`.
+    paragraph = "נמסר לכהן אתמול. כהן לא ענה, וגם לכהן השני לא."
+    found = layers.propagate([paragraph], [at(paragraph, "לכהן")])
+    assert found == [at(paragraph, "לכהן", nth=1)]
+
+
+@pytest.mark.parametrize(
+    "paragraph",
+    ["פנה אל האחות. היא לא ענתה", "מר (להלן: המוכר) חתם", "גב' Cohen ואחר כך הלכה", "משפחת, כך נאמר, עברה", "עו\"ד: כהן"],
+)
+def test_a7_something_between_the_trigger_and_the_next_word(paragraph: str) -> None:
+    assert layers.after_triggers([paragraph], [], titles=True) == []
+
+
+def test_a7_something_between_an_initial_and_the_surname() -> None:
+    paragraph = "השופט י'. כהן חתם"
+    assert layers.after_triggers([paragraph], [], titles=True) == [at(paragraph, "י'")]
