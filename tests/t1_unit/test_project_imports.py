@@ -34,7 +34,8 @@ Adversarial:
       when the package given is the bare name __package__, and against the package given
       when that is a string literal. Given as UNREADABLE when the name is anything else (a
       variable, an f-string, a sum, no argument) or a relative name has no package that can
-      be read. A call of another function is nothing, also one whose name only ends like an
+      be read, or `__import__` is given a level other than the number 0, which makes its
+      name relative. A call of another function is nothing, also one whose name only ends like an
       import function's. What is still not seen is pinned too: exec of source text
   A7  an import function that is named and not called there (assigned to another name, handed
       to map or partial, fetched with getattr or from __builtins__ by its name as a string,
@@ -257,6 +258,9 @@ def test_a1_the_word_import_in_a_string_and_in_a_comment() -> None:
         ("importlib.import_module('.client', 'http')", "http.client"),
         ("importlib.import_module('.run_eval', package='eval')", "eval.run_eval"),
         ("importlib.import_module('..base', 'ploni.detect.deterministic')", "ploni.detect.base"),
+        ("importlib.import_module('socket', 'ploni.detect')", "socket"),
+        ("__import__('socket', globals(), locals(), [], 0)", "socket"),
+        ("__import__('socket', level=0)", "socket"),
     ],
 )
 def test_a2_an_import_made_by_a_call_with_a_literal_name_is_read(call: str, module: str) -> None:
@@ -283,6 +287,10 @@ def test_a2_a_relative_name_in_a_call_in_an_init_file_counts_from_the_package_it
         "load = functools.partial(importlib.import_module, 'socket')",
         "value = __builtins__['__import__']('socket')",
         "value = (importlib.import_module if fast else slow)('socket')",
+        "imp = builtins.__import__",
+        "load = self.tools.importlib.import_module",
+        "def get(name, load=importlib.import_module): return load(name)",
+        "class Tools: load = staticmethod(importlib.import_module)",
     ],
 )
 def test_a7_an_import_function_that_is_named_and_not_called_is_unreadable(mention: str) -> None:
@@ -327,6 +335,11 @@ def test_a7_an_import_function_under_its_own_name_is_read_as_before(source: str)
         "importlib.import_module('.base', package)",
         "importlib.import_module('.base', __name__)",
         "importlib.import_module('.base', package=None)",
+        "importlib.import_module('.base', other.__package__)",
+        "__import__('client', {'__package__': 'http'}, None, ['x'], 1)",
+        "__import__('write', globals(), locals(), ['edits'], 3)",
+        "__import__('socket', globals(), locals(), [], level=1)",
+        "__import__('socket', level=depth)",
     ],
 )
 def test_a2_an_import_made_by_a_call_with_any_other_name_is_unreadable(call: str) -> None:
@@ -350,9 +363,34 @@ def test_a2_a_call_of_another_function_is_nothing(source: str) -> None:
     assert reader.imported(source, "ploni.detect.fusion") == []
 
 
-def test_a2_a_relative_name_in_a_call_that_leaves_the_top_package() -> None:
+@pytest.mark.parametrize("package", ["__package__", "'http'"])
+def test_a2_a_relative_name_in_a_call_that_leaves_the_top_package(package: str) -> None:
     with pytest.raises(ImportError):
-        reader.imported("importlib.import_module('...x', __package__)\n", "ploni.api")
+        reader.imported(f"importlib.import_module('...x', {package})\n", "ploni.api")
+
+
+def test_a7_one_of_several_names_imported_under_another_name_is_unreadable() -> None:
+    source = "from builtins import reload, __import__ as load\n"
+    assert reader.imported(source, "ploni.detect.fusion") == [
+        (1, reader.UNREADABLE),
+        (1, "builtins"),
+        (1, "builtins.__import__"),
+        (1, "builtins.reload"),
+    ]
+
+
+def test_a7_a_mention_inside_a_function_and_inside_a_class_is_found() -> None:
+    source = (
+        "def get(name):\n"
+        "    load = importlib.import_module\n"
+        "    return load(name)\n"
+        "\n"
+        "\n"
+        "class Tools:\n"
+        "    def find(self):\n"
+        "        return getattr(importlib, 'import_module')\n"
+    )
+    assert reader.imported(source, "ploni.detect.fusion") == [(2, reader.UNREADABLE), (8, reader.UNREADABLE)]
 
 
 @pytest.mark.parametrize(
