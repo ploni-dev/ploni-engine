@@ -403,6 +403,35 @@ def test_ec5_blocks_that_overlap_and_end_in_the_order_they_began(tmp_path: Path)
     assert list(tmp_path.iterdir()) == []
 
 
+def test_ec5_three_blocks_that_end_out_of_order_hand_out_the_newest_that_is_still_open(tmp_path: Path) -> None:
+    before = tempfile.gettempdir()
+    first, second, third = (tempfiles.private_dir(tmp_path) for _ in range(3))
+    first.__enter__()
+    two = second.__enter__()
+    third.__enter__()
+    third.__exit__(None, None, None)
+    assert Path(tempfile.gettempdir()) == two
+    first.__exit__(None, None, None)
+    assert Path(tempfile.gettempdir()) == two
+    second.__exit__(None, None, None)
+    assert tempfile.gettempdir() == before
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_ec4_a_temp_folder_that_other_code_chose_is_put_back_each_time(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    chosen, later, root = tmp_path / "chosen", tmp_path / "later", tmp_path / "root"
+    chosen.mkdir()
+    later.mkdir()
+    monkeypatch.setattr(tempfile, "tempdir", str(chosen))
+    with tempfiles.private_dir(root) as folder:
+        assert tempfile.tempdir == str(folder)
+    assert tempfile.tempdir == str(chosen)
+    tempfile.tempdir = str(later)
+    with tempfiles.private_dir(root) as folder:
+        assert tempfile.tempdir == str(folder)
+    assert tempfile.tempdir == str(later)
+
+
 def test_ec6_a_root_that_the_helper_makes_is_for_its_owner_only(tmp_path: Path) -> None:
     root = tmp_path / "made"
     with tempfiles.private_dir(root):
