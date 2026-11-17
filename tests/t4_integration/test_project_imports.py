@@ -7,10 +7,12 @@ the reader has to name the same importers and the same modules from the same fil
 
 Matrix (one package, ten files, imported once):
   M1  absolute imports: import a.b, import a.b as c, from a import module, from a.b import name
-  M2  relative imports with one, two and three dots, in a module and in an __init__
+  M2  relative imports: one and two dots in an __init__; one, two and three in a module
   M3  a star import, and an import inside a function that runs
   M4  from a import name where the name is no module: Python resolves the module only; the
       reader also gives a.name, which is no module and is left out of the comparison
+  M5  the rule on the same files: with a table that lets the detect layer import types
+      only, `not_allowed` names the two imports of other layers, with file and line
 The comparison is over modules of the package itself. What Python resolved and what the
 reader read must be the same set.
 
@@ -27,7 +29,7 @@ from pathlib import Path
 
 import pytest
 
-from tests.project_imports import project_imports
+from tests.project_imports import not_allowed, project_imports
 
 TOP = "layered_sample"
 
@@ -128,3 +130,11 @@ def test_the_reader_names_importers_and_modules_as_python_resolves_them(
     }
     assert (f"{TOP}.adapters.docx.reader", f"{TOP}.types") in by_python
     assert (f"{TOP}.detect.fusion", f"{TOP}.adapters.docx.reader") in by_python
+
+
+def test_the_rule_reports_the_imports_of_other_layers_in_the_same_package(package: Path) -> None:
+    table = {f"{TOP}.detect": {f"{TOP}.types"}}
+    assert not_allowed(project_imports(package, TOP), table) == [
+        f"{TOP}/detect/__init__.py:1: {TOP}.detect may not import {TOP}.errors",
+        f"{TOP}/detect/fusion.py:3: {TOP}.detect may not import {TOP}.adapters",
+    ]
