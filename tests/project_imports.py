@@ -5,10 +5,12 @@ Why: three rules of the project are rules about imports: the layering (`PROCESS.
 Hard constraints). A lint rule on top-level imports misses an import inside a function, so the
 tests read every import of every file themselves, here, in one place.
 
-Contract: `project_imports` reads a folder, `imported` one source text, and `not_allowed`
-judges imports against a table of allowed layers. Module names are absolute and dotted.
+Contract: `project_imports` reads a folder, `imported` one source text; `not_allowed`
+judges imports against a table of allowed layers, and `from_packages` against a list of
+packages that must not be imported. Module names are absolute and dotted.
 
-Known limits: an import made by a call (`importlib.import_module`, `__import__`) is not seen.
+Known limits: source text handed to `exec` or `eval` is not read, and neither is code that
+reaches the import system some other way (`pkgutil`, `runpy`, a loader object).
 `from a import b` is given as `a` and as `a.b`, because `b` may be a module; a caller that
 counts imports counts such a statement twice.
 """
@@ -23,6 +25,14 @@ from typing import NamedTuple
 # What Python imports as source on Windows (importlib.machinery.SOURCE_SUFFIXES there). Elsewhere
 # it imports .py only; reading .pyw there too is the stricter side.
 SOURCE_SUFFIXES = (".py", ".pyw")
+
+# The functions that import a module named by their first argument: importlib.import_module
+# and the built-in __import__, however they are reached (importlib.__import__, an alias).
+IMPORT_CALLS = ("import_module", "__import__")
+
+# What `imported` gives in place of a module name when a call of such a function names its
+# module by anything but a string literal. It is no dotted name, so no rule takes it for one.
+UNREADABLE = "<unreadable>"
 
 
 class Import(NamedTuple):
@@ -55,11 +65,14 @@ def imported(source: str | bytes, importer: str, is_package: bool = False) -> li
             is; is_package, True when the source is the `__init__.py` of that name.
         Returns: (line, module) pairs sorted by line, then by name. `from a import b` gives
             `a` and `a.b`; `from a import *` gives `a`. A relative import is resolved
-            against the importer. The same import twice is given twice.
+            against the importer. A call of `import_module` or `__import__` is given like
+            an import statement when its name is a string literal, and as UNREADABLE when
+            it is anything else. The same import twice is given twice.
         Raises: SyntaxError when the source is not Python. ImportError when a relative
             import leaves the top package, or the importer has no package.
 
-    Known limits: see the module docstring.
+    Known limits: see the module docstring. A call is known by the name of the function
+    alone, so a method of the project's own that is called `import_module` is read as one.
     """
     package = importer if is_package else importer.rpartition(".")[0]
     found = []
@@ -70,7 +83,27 @@ def imported(source: str | bytes, importer: str, is_package: bool = False) -> li
             base = resolve_name("." * node.level + (node.module or ""), package)
             found.append((node.lineno, base))
             found += [(node.lineno, f"{base}.{alias.name}") for alias in node.names if alias.name != "*"]
+        elif isinstance(node, ast.Call) and (module := _called(node, package)) is not None:
+            found.append((node.lineno, module))
     return sorted(found)
+
+
+def _called(node: ast.Call, package: str) -> str | None:
+    """Return the module that a call imports: None when the call is of no import function.
+
+    A name that is a string literal is resolved like a relative import, against the package
+    given; a relative name is taken to be relative to the module's own package, which is
+    what `import_module(".x", __package__)` means. Any other name gives UNREADABLE.
+    """
+    function = node.func
+    name = function.id if isinstance(function, ast.Name) else getattr(function, "attr", None)
+    if name not in IMPORT_CALLS:
+        return None
+    named = (keyword.value for keyword in node.keywords if keyword.arg == "name")
+    given = node.args[0] if node.args else next(named, None)
+    if isinstance(given, ast.Constant) and isinstance(given.value, str):
+        return resolve_name(given.value, package)
+    return UNREADABLE
 
 
 def project_imports(root: Path, package: str) -> list[Import]:
@@ -134,4 +167,30 @@ def not_allowed(imports: Iterable[Import], table: Mapping[str, Collection[str]])
         inside = "." in target and target.split(".")[0] == source.split(".")[0]
         if source in table and inside and target != source and target not in table[source]:
             found.append(f"{item.file}:{item.line}: {source} may not import {target}")
+    return list(dict.fromkeys(found))
+
+
+def from_packages(imports: Iterable[Import], packages: Collection[str]) -> list[str]:
+    """Return one line for every import whose top package is one of those given.
+
+    Why: two rules of the project name packages that product code must never load, the
+    networking modules and `eval/`. A module below such a package loads the package too, so
+    the top name is what is compared.
+
+    Contract:
+        Args: imports, as `project_imports` returns them; packages, top-level names such as
+            `socket`. UNREADABLE may be one of them, and then an import whose name could
+            not be read is reported as well.
+        Returns: lines of the form `file:line: imports NAME`, NAME being the top package,
+            in the order of the imports, each line once.
+        Raises: nothing.
+
+    Known limits: only the first part of a module's name is compared, so a project module
+    with the name of such a package (`ploni.socket`) is not reported, and rightly so.
+    """
+    found = [
+        f"{item.file}:{item.line}: imports {top}"
+        for item in imports
+        if (top := item.module.split(".")[0]) in packages
+    ]
     return list(dict.fromkeys(found))
