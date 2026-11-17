@@ -34,10 +34,13 @@ def restored() -> Iterator[None]:
         logging.captureWarnings(False)
         warnings.showwarning = show
         root.handlers[:] = handlers
-        root.setLevel(level)
+        if root.level != level:
+            root.setLevel(level)
         logging.lastResort = last
         for name, (kept, propagate, own_level) in named.items():
             logger = logging.getLogger(name)
             logger.handlers[:] = kept
             logger.propagate = propagate
-            logger.setLevel(own_level)
+            # Only where it changed: setting a level empties a cache on every logger of the process.
+            if logger.level != own_level:
+                logger.setLevel(own_level)
