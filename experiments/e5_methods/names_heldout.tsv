@@ -1,0 +1,135 @@
+kind	gender	name	classes
+given	m	אהוד	
+given	m	עוזיאל	
+given	m	ירון	
+given	m	אלחנן	
+given	m	יאיר	
+given	m	עמיחי	
+given	m	אבישי	
+given	m	יחזקאל	
+given	m	צדוק	
+given	m	שמואל	prefix_initial
+given	m	מתן	prefix_initial
+given	m	ברוך	prefix_initial
+given	m	כלב	prefix_initial
+given	m	עוז	ordinary
+given	m	אייל	ordinary
+given	m	ארז	ordinary
+given	m	סהר	ordinary
+given	m	רז	ordinary
+given	m	בר	ordinary,prefix_initial
+given	m	הוד	ordinary,prefix_initial
+given	m	שלו	ordinary,prefix_initial
+given	m	ישי	also_word
+given	m	אמיר	also_word
+given	m	נסים	also_word
+given	m	ששון	also_word,prefix_initial
+given	m	חסן	arabic
+given	m	נביל	arabic
+given	m	ראמי	arabic
+given	m	כרים	arabic,prefix_initial
+given	m	וליד	arabic,prefix_initial
+given	m	אנדריי	translit
+given	m	פבל	translit
+given	m	ניקולאי	translit
+given	m	רומן	translit
+given	m	ליאוניד	prefix_initial,translit
+given	m	מיכאיל	prefix_initial,translit
+given	f	גליה	
+given	f	אפרת	
+given	f	זהבה	
+given	f	עינת	
+given	f	טליה	
+given	f	אילנה	
+given	f	דליה	
+given	f	ליאת	prefix_initial
+given	f	מירב	prefix_initial
+given	f	שולמית	prefix_initial
+given	f	בלה	prefix_initial
+given	f	הודיה	prefix_initial
+given	f	שני	ordinary,prefix_initial
+given	f	מור	ordinary,prefix_initial
+given	f	אגם	ordinary
+given	f	זוהר	ordinary
+given	f	ענבל	ordinary
+given	f	סיון	ordinary
+given	f	פז	ordinary
+given	f	לבנה	ordinary,prefix_initial
+given	f	שושנה	ordinary,prefix_initial
+given	f	ברכה	ordinary,prefix_initial
+given	f	פנינה	also_word
+given	f	אורה	also_word
+given	f	טובה	also_word
+given	f	שמחה	also_word,prefix_initial
+given	f	עביר	arabic
+given	f	סמאח	arabic
+given	f	נסרין	arabic
+given	f	ח'דיג'ה	arabic
+given	f	מנאל	arabic,prefix_initial
+given	f	הנאא	arabic,prefix_initial
+given	f	אירינה	translit
+given	f	טטיאנה	translit
+given	f	ילנה	translit
+given	f	מרינה	prefix_initial,translit
+given	f	לריסה	prefix_initial,translit
+given	f	ג'ולי	translit
+surname	-	אדלשטיין	
+surname	-	גוטמן	
+surname	-	דוידוב	
+surname	-	זוסמן	
+surname	-	יחזקאלי	
+surname	-	נגבי	
+surname	-	סעדה	
+surname	-	עמרני	
+surname	-	פולק	
+surname	-	קדוש	
+surname	-	רחמים	
+surname	-	תורג'מן	
+surname	-	אלבז	
+surname	-	גרשון	
+surname	-	דנינו	
+surname	-	חיון	
+surname	-	הרוש	prefix_initial
+surname	-	בניטה	prefix_initial
+surname	-	ברנשטיין	prefix_initial
+surname	-	לוינגר	prefix_initial
+surname	-	מנדלסון	prefix_initial
+surname	-	מימון	prefix_initial
+surname	-	שמואלי	prefix_initial
+surname	-	שרעבי	prefix_initial
+surname	-	ויסמן	prefix_initial
+surname	-	וולפסון	prefix_initial
+surname	-	כחלון	prefix_initial
+surname	-	כספי	prefix_initial
+surname	-	הורן	prefix_initial
+surname	-	לנדסמן	prefix_initial
+surname	-	מושקוביץ	prefix_initial
+surname	-	רביב	also_word
+surname	-	גורן	also_word
+surname	-	דגן	also_word
+surname	-	בוקר	also_word,prefix_initial
+surname	-	מלמד	also_word,prefix_initial
+surname	-	שוחט	also_word,prefix_initial
+surname	-	אביב	ordinary
+surname	-	זמיר	ordinary
+surname	-	יער	ordinary
+surname	-	נהר	ordinary
+surname	-	ענבר	ordinary
+surname	-	שביט	ordinary,prefix_initial
+surname	-	להב	ordinary,prefix_initial
+surname	-	ברוש	ordinary,prefix_initial
+surname	-	ג'בארין	arabic
+surname	-	טאהא	arabic
+surname	-	עזאם	arabic
+surname	-	קאסם	arabic
+surname	-	מרעי	arabic,prefix_initial
+surname	-	בדראן	arabic,prefix_initial
+surname	-	שלבי	arabic,prefix_initial
+surname	-	סוקולוב	translit
+surname	-	נוביקוב	translit
+surname	-	פדורוב	translit
+surname	-	קרסנוב	translit
+surname	-	מדבדב	prefix_initial,translit
+surname	-	בלוב	prefix_initial,translit
+surname	-	וסילייב	prefix_initial,translit
+surname	-	לויטין	prefix_initial,translit
