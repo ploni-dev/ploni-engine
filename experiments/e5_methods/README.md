@@ -35,6 +35,10 @@ python -I evaluate.py --runs-dir <runs> --datasets heldout --only "joint + whole
 python -m pytest
 ```
 
+On a machine with little memory free, add `--budget-seconds 420` to a `detect.py` command and give the
+same command again until it says that every document is done: the run is then made in parts,
+and no command is longer than a few minutes.
+
 The name of a detector in the tables is the first part of its file's name. `results/` holds
 what the runs printed and one line per method and corpus in `record.jsonl`, in the form the
 analytics record of `build-plan.md` section 7 asks of an experiment.
