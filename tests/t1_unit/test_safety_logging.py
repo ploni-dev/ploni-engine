@@ -82,12 +82,23 @@ install and event, more:
         anything is changed, and from `event`
   A10   an event sent by a standard call with arguments; a field named `member`
 
+From the second review:
+  A11  a field key built from data that is a lower-case word is written: a stated limit, pinned
+  A12  an object that lies about its class, or cannot say it: a proxy of an object that is
+       gone as a field; an object whose `__class__` raises; one whose `__class__` says `type`
+       in `exc_info`; one whose `__class__` says it is an event, given to `event`
+  A13  small shapes: a name with a line break at its end; a `$` or a digit where a letter must
+       stand; a time before 1970; a level that is a whole number of a class of its own; the
+       Event class in place of a member; an event that carries an exception
+  The helper tests/logging_state.py puts back the handler of last resort and every logger's level
+
 The Hebrew axes of the test-matrix skill apply as input only: text in Hebrew, in Latin letters
 and mixed is what must not come out; the canary test carries them. The document-structure axes
 do not apply: no document is handled.
 """
 
 import enum
+import gc
 import io
 import logging
 import decimal
@@ -95,6 +106,7 @@ import fractions
 import re
 import time
 import warnings
+import weakref
 from collections.abc import Callable, Iterator
 from pathlib import Path
 
@@ -131,6 +143,12 @@ class Chatty:
 
 class ChattyStr(str):
     """A string of a class of its own, which could give itself any length."""
+
+    __slots__ = ()
+
+
+class LevelOfItsOwn(int):
+    """A whole number of a class of its own, which could show any text when it is written."""
 
     __slots__ = ()
 
@@ -507,7 +525,9 @@ def test_is_key_takes_a_lower_case_identifier(key: str) -> None:
     assert safe._is_key(key)
 
 
-@pytest.mark.parametrize("key", ["_x", "aB", "a-b", "a.b", "pages\n", "", "1a", "two words", "שם", 1, None, b"pages", LoudStr("pages")])
+@pytest.mark.parametrize(
+    "key", ["_x", "aB", "a-b", "a.b", "pages\n", "", "1a", "two words", "שם", "pages$", "a$b", 1, None, b"pages", LoudStr("pages")]
+)
 def test_is_key_refuses_every_other_shape_and_every_other_type(key: object) -> None:
     assert not safe._is_key(key)
 
@@ -519,7 +539,8 @@ def test_is_file_takes_the_name_of_a_source_file(name: str) -> None:
 
 @pytest.mark.parametrize(
     "name",
-    ["Jacob Cohen.py", "יעקב.py", "<two words>", "<>", "<Stdin>", "x.pyc", "path/x.py", "x.py\n", ".py", "", None, 3, LoudStr("x.py")],
+    ["Jacob Cohen.py", "יעקב.py", "<two words>", "<>", "<Stdin>", "<st1n>", "<a$>", "x$.py", "x.pyc", "path/x.py", "x.py\n",
+     "<stdin>\n", ".py", "", None, 3, LoudStr("x.py")],  # fmt: skip
 )
 def test_is_file_refuses_every_other_shape_and_every_other_type(name: object) -> None:
     assert not safe._is_file(name)
@@ -530,7 +551,7 @@ def test_code_name_gives_a_name_of_code_back(name: str) -> None:
     assert safe._code_name(name, "<mark>") == name
 
 
-@pytest.mark.parametrize("name", ["two words", "יעקב", "a.b", "a\nb", "a-b", "1a", "", None, 3, LoudStr("Sample")])
+@pytest.mark.parametrize("name", ["two words", "יעקב", "a.b", "a\nb", "Sample\n", "a$", "a-b", "1a", "", None, 3, LoudStr("Sample")])
 def test_code_name_gives_the_mark_for_anything_else(name: object) -> None:
     assert safe._code_name(name, "<mark>") == "<mark>"
 
@@ -638,7 +659,7 @@ def test_a7_fields_that_are_a_mapping_of_a_class_of_its_own_are_not_read(start: 
     assert matches(out, "Sample.DONE"), out.getvalue()
 
 
-@pytest.mark.parametrize("created", [TEXT, None, float("nan"), float("inf"), 1e30, -1e30, 3])
+@pytest.mark.parametrize("created", [TEXT, None, float("nan"), float("inf"), 1e30, -1e30, 3, True])
 def test_a8_a_record_whose_time_is_no_time_is_still_written(start: Callable[..., io.StringIO], created: object) -> None:
     out = start()
     record = by_hand("INFO", "module.py", 3)
@@ -706,22 +727,22 @@ def test_ec17_the_time_of_a_record_is_its_local_time_to_the_second(start: Callab
     assert out.getvalue() == f"{expected} INFO module.py:3 <withheld>\n"
 
 
-@pytest.mark.parametrize("level", ["WARNING", TEXT, 20.0, True, None])
+@pytest.mark.parametrize("level", ["WARNING", TEXT, 20.0, True, None, LevelOfItsOwn(20)])
 def test_e3_install_refuses_a_level_that_is_no_whole_number_before_it_changes_anything(
     logging_restored: None, level: object
 ) -> None:
     root = logging.getLogger()
-    before = (list(root.handlers), root.level, logging.lastResort)
-    with pytest.raises(TypeError) as raised:
+    before = (list(root.handlers), root.level, logging.lastResort, warnings.showwarning)
+    with pytest.raises(TypeError, match="whole number") as raised:
         safe.install(io.StringIO(), level=level)
     assert "יעקב" not in str(raised.value)
-    assert (list(root.handlers), root.level, logging.lastResort) == before
+    assert (list(root.handlers), root.level, logging.lastResort, warnings.showwarning) == before
 
 
-@pytest.mark.parametrize("level", ["WARNING", TEXT, 20.0, True, None])
+@pytest.mark.parametrize("level", ["WARNING", TEXT, 20.0, True, None, LevelOfItsOwn(20)])
 def test_e3_event_refuses_a_level_that_is_no_whole_number(start: Callable[..., io.StringIO], level: object) -> None:
     out = start()
-    with pytest.raises(TypeError) as raised:
+    with pytest.raises(TypeError, match="whole number") as raised:
         safe.event(Sample.DONE, level=level)
     assert "יעקב" not in str(raised.value)
     assert out.getvalue() == ""
@@ -755,3 +776,112 @@ def test_ec11_a_named_logger_hands_its_records_up_again_whatever_the_last_resort
     library.warning(TEXT)
     assert elsewhere.getvalue() == ""
     assert matches(stream, "<withheld>", level="WARNING"), stream.getvalue()
+
+
+def test_a11_a_field_key_built_from_data_is_written_when_it_is_a_lower_case_word(start: Callable[..., io.StringIO]) -> None:
+    # A stated limit of the module, pinned so that it is not forgotten: no code can tell such a word from a key.
+    out = start()
+    safe.event(Sample.DONE, **{"jacob": 2, "cohen": 1})
+    assert matches(out, "Sample.DONE jacob=2 cohen=1"), out.getvalue()
+
+
+class Gone:
+    """An object that a weak reference can point at."""
+
+
+class NoClass:
+    """An object that cannot say what class it is."""
+
+    @property
+    def __class__(self) -> type:  # type: ignore[override]
+        raise RuntimeError(TEXT)
+
+
+def claiming(kind: type) -> object:
+    """Return an object whose `__class__` says it is of another class than it is."""
+
+    class Liar:
+        __class__ = kind  # type: ignore[assignment]
+
+    return Liar()
+
+
+def test_a12_a_proxy_of_an_object_that_is_gone_is_a_mark() -> None:
+    target = Gone()
+    proxy = weakref.proxy(target)
+    del target
+    gc.collect()
+    assert safe.shown(proxy) in ("<ProxyType>", "<CallableProxyType>", "<weakproxy>", "<value>")
+
+
+@pytest.mark.parametrize("kind", [int, str, bytes, float, bool])
+def test_a12_an_object_that_says_it_is_a_number_or_a_string_is_a_mark(kind: type) -> None:
+    assert safe.shown(claiming(kind)) == "<Liar>"
+
+
+def test_a12_an_object_that_cannot_say_its_class_is_a_mark_and_the_line_is_kept(start: Callable[..., io.StringIO]) -> None:
+    assert safe.shown(NoClass()) == "<NoClass>"
+    out = start()
+    safe.event(Sample.DONE, pages=NoClass(), seconds=2)
+    assert matches(out, "Sample.DONE pages=<NoClass> seconds=2"), out.getvalue()
+
+
+# The object is made inside the test: pytest asks a parameter for its class when it collects.
+@pytest.mark.parametrize("make", [lambda: claiming(type), NoClass], ids=["says it is a class", "cannot say its class"])
+def test_a12_an_object_in_exc_info_that_lies_about_its_class_keeps_the_line(
+    start: Callable[..., io.StringIO], make: Callable[[], object]
+) -> None:
+    out = start()
+    logging.getLogger().handle(with_exc_info((make(), None, None)))
+    assert out.getvalue().endswith(" ERROR module.py:5 <withheld> raised=<name>\n"), out.getvalue()
+
+
+def test_a12_an_object_that_says_it_is_an_event_is_refused_by_event(start: Callable[..., io.StringIO]) -> None:
+    out = start()
+    with pytest.raises(TypeError, match="member of an Event class"):
+        safe.event(claiming(Sample))  # type: ignore[arg-type]
+    assert out.getvalue() == ""
+
+
+def test_a13_the_event_class_in_place_of_a_member_is_refused(start: Callable[..., io.StringIO]) -> None:
+    out = start()
+    for no_member in (Sample, safe.Event):
+        with pytest.raises(TypeError, match="member of an Event class"):
+            safe.event(no_member)  # type: ignore[arg-type]
+    assert out.getvalue() == ""
+
+
+def test_a13_an_event_that_carries_an_exception_names_its_type_after_the_fields(start: Callable[..., io.StringIO]) -> None:
+    out = start()
+    try:
+        raise KeyError(TEXT)
+    except KeyError:
+        logging.getLogger(safe.LOGGER).error(Sample.FAILED, exc_info=True, extra={"ploni_fields": {"pages": 3}})
+    assert matches(out, "Sample.FAILED pages=3 raised=KeyError", level="ERROR"), out.getvalue()
+
+
+def test_a13_a_time_before_1970_is_a_time_or_the_mark_and_the_line_is_kept(start: Callable[..., io.StringIO]) -> None:
+    out = start()
+    record = by_hand("INFO", "module.py", 3)
+    record.created = -1.0
+    logging.getLogger().handle(record)
+    assert re.fullmatch(r"(19(69|70)-\d\d-\d\dT\d\d:\d\d:\d\d|0000-00-00T00:00:00) INFO module\.py:3 <withheld>\n", out.getvalue())
+
+
+def test_the_state_helper_puts_back_the_handler_of_last_resort_and_the_level_of_every_logger() -> None:
+    last, named = logging.lastResort, logging.getLogger("tests.logging_state.named")
+    named.setLevel(logging.ERROR)
+    with logging_state.restored():
+        safe.install(io.StringIO())
+        named.setLevel(logging.DEBUG)
+        logging.getLogger(safe.LOGGER).setLevel(logging.DEBUG)
+    assert logging.lastResort is last
+    assert named.level == logging.ERROR
+    assert logging.getLogger(safe.LOGGER).level == logging.NOTSET
+
+
+def test_the_state_helper_puts_back_a_handler_of_last_resort_that_a_test_set_by_hand() -> None:
+    last = logging.lastResort
+    with logging_state.restored():
+        logging.lastResort = logging.StreamHandler(io.StringIO())
+    assert logging.lastResort is last
