@@ -21,6 +21,7 @@ grid
   EC8  a detector with chances         also every threshold, alone and with the main stack
   EC9  two detectors                   one union; three: three pairs and all three
   EC10 a list was given                the stacks with the list step are there
+  EC35 one detector, with a list       every method runs exactly the steps its name says
 
 step_table and STACKS
   EC23 every key of the table          gives what the function of that name in layers gives
@@ -39,6 +40,8 @@ extra_words
   EC14 a title                         extra, not in the second number
   EC15 a word of a planted name        marked, not extra
   B2   nothing marked                  three zeros
+  EC36 a group word, an initial        extra, not in the second number
+  EC37 a name that is not counted (a firm)    marked, not extra
 
 rows_of / measure / pooled / table
   EC16 everything found                all 3/3, group 1/1, no_trigger 1/1, the kind 3/3
@@ -49,6 +52,7 @@ rows_of / measure / pooled / table
   EC18 pooled over two results         counts and seconds added, memory the largest
   EC19 the table                       best recall first; then fewer extra words; then fewer
                                        seconds; then the name
+  EC38 one row of the table            every number in its own column
 
 load_runs / check_request / evaluate / record_lines / read_name_list
   EC30 run files of two detectors on a real corpus    scored; a detector not run on every
@@ -59,6 +63,10 @@ load_runs / check_request / evaluate / record_lines / read_name_list
   EC32 a record line                   the corpus, the method, its detectors with model and
                                        hashes; the list's label only for a method that uses it
   EC33 a list of names                 its names, and a label with file name, count and hash
+  EC39 a scoring run with a list       the methods with the list step are scored, and mark
+                                       what the list holds
+  E3   a run file with no digest       ValueError that names the file
+  EC40 the title of a table            names the list of names that was used
 
 data
   EC20 the three corpora               the sizes the pre-registration names
@@ -68,6 +76,7 @@ data
                                        another text gives another digest
 """
 
+import argparse
 import hashlib
 import json
 from pathlib import Path
@@ -156,6 +165,14 @@ def test_ec9_ec10_grid_unions_and_the_list() -> None:
     assert [item.name for item in evaluate.grid(["a", "b"], {"a"}, has_list=True) if not item.whole_words] == ["a", "b"]
 
 
+def test_ec35_every_method_of_one_detector_runs_the_steps_its_name_says() -> None:
+    methods = {item.name: item for item in evaluate.grid(["a"], set(), has_list=True)}
+    expected = {"a": (), "a + whole words": (), **{f"a + {name}": steps for name, steps in evaluate.STACKS.items()}}
+    assert {name: item.steps for name, item in methods.items()} == expected
+    assert {name: item.whole_words for name, item in methods.items()} == {name: name != "a" for name in expected}
+    assert all(item.detectors == ("a",) and item.threshold is None for item in methods.values())
+
+
 def test_ec23_every_key_of_the_step_table_runs_the_function_of_its_name() -> None:
     names = frozenset({"הלך"})
     steps = evaluate.step_table(names)
@@ -221,6 +238,18 @@ def test_ec13_to_b2_extra_words() -> None:
     assert evaluate.extra_words(DOCUMENT, [FULL, title, plain_word]) == (2, 1, 4)
 
 
+def test_ec36_ec37_a_group_word_an_initial_and_a_name_that_is_not_counted() -> None:
+    paragraphs = ["משפחת לוי וגם י' כהן ממשרד רון."]
+    firm = gold(0, "רון", "*", "firm", frozenset(), paragraphs)._replace(counted=False)
+    document = generate.Document("doc01", "hand", "letter", 1, paragraphs, [gold(0, "לוי", "B", "group_family", frozenset(), paragraphs), firm])
+    group_word, initial, firm_name, plain = (0, 0, 5), (0, 14, 16), (0, 27, 30), (0, 10, 13)
+    assert [paragraphs[0][start:end] for _, start, end in (group_word, initial, firm_name, plain)] == ["משפחת", "י'", "רון", "וגם"]
+    assert evaluate.extra_words(document, [group_word]) == (1, 0, 1)
+    assert evaluate.extra_words(document, [initial]) == (1, 0, 1)
+    assert evaluate.extra_words(document, [firm_name]) == (0, 0, 1)
+    assert evaluate.extra_words(document, [group_word, initial, firm_name, plain]) == (3, 1, 4)
+
+
 def test_ec16_ec17_measure() -> None:
     everything = evaluate.measure(method("a"), [DOCUMENT], {"a": run(FULL, SURNAME, GROUP)}, STEPS)
     assert everything["rows"] == {"all": [3, 3], "letter": [3, 3], "group": [1, 1], "no_trigger": [1, 1]}
@@ -283,6 +312,18 @@ def test_ec19_the_table_puts_the_best_first() -> None:
     assert "66.67%" in lines[8]
 
 
+def test_ec38_one_row_of_the_table_has_every_number_in_its_own_column() -> None:
+    rows = {"all": [9, 10], **{name: [number, number + 20] for number, name in enumerate((*evaluate.WEAK_ROWS, *generate.KINDS), start=1)}}
+    result = {"rows": rows, "extra": 7, "extra_no_title": 5, "marked": 28, "words": 400, "seconds": 123.4, "peak_mb": 2048}
+    lines = evaluate.table("t", {"a method": result}).splitlines()
+    head = [cell.strip() for cell in lines[2].strip("|").split("|")]
+    cells = [cell.strip() for cell in lines[4].strip("|").split("|")]
+    assert head == ["method", "recall", "found", *evaluate.WEAK_ROWS, *generate.KINDS, "extra words", "with titles", "marked in a name", "seconds", "peak MB"]
+    expected = ["a method", "90.00%", "9/10", *(f"{number}/{number + 20}" for number in range(1, 14)), "5", "7", "75.0%", "123", "2048"]
+    assert cells == expected
+    assert len(evaluate.WEAK_ROWS) + len(generate.KINDS) == 13
+
+
 def fake_run(dataset: str, skip: frozenset[str] = frozenset()) -> dict:
     """Build the run file of a made-up detector that marks every planted name but the forms in `skip`."""
     documents = data.load(dataset)
@@ -328,6 +369,42 @@ def test_e1_a_run_file_of_another_corpus_or_another_text_is_refused(tmp_path: Pa
     write(tmp_path, "stale.select.json", stale)
     with pytest.raises(ValueError, match=r"stale\.select\.json"):
         evaluate.load_runs(tmp_path, "select", data.digest(data.load("select")))
+
+
+def test_e3_a_run_file_with_no_digest_is_refused(tmp_path: Path) -> None:
+    old = fake_run("select")
+    del old["corpus_sha256"]
+    write(tmp_path, "old.select.json", old)
+    with pytest.raises(ValueError, match=r"old\.select\.json"):
+        evaluate.load_runs(tmp_path, "select", data.digest(data.load("select")))
+
+
+def test_ec39_a_scoring_run_with_a_list_of_names(tmp_path: Path) -> None:
+    write(tmp_path, "nothing.select.json", {**fake_run("select"), "tokens": {document.doc_id: [] for document in data.load("select")}})
+    given = {item.name for document in data.load("select") for item in document.gold if item.counted and item.form == "given"}
+    name_list = evaluate.NameList(frozenset(given), "given.txt, made up")
+    results, methods, _, _ = evaluate.evaluate(tmp_path, ["select"], name_list, [])
+    assert "nothing + list" in methods
+    assert "nothing + titles, list, carry" in methods
+    assert results["select"]["nothing + whole words"]["rows"]["all"][0] == 0
+    found = results["select"]["nothing + list"]["rows"]
+    assert found["given_ordinary"][0] == found["given_ordinary"][1] > 0
+    without, _, _, _ = evaluate.evaluate(tmp_path, ["select"], evaluate.NameList(frozenset(), ""), [])
+    assert not any("list" in name for name in without["select"])
+
+
+def test_ec40_the_title_of_a_table_names_the_list(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    write(tmp_path, "every.select.json", fake_run("select"))
+    names = tmp_path / "names.txt"
+    names.write_text("נועה\n", encoding="utf-8")
+    arguments = argparse.Namespace(runs_dir=tmp_path, datasets=["select"], names_list=names, only=["every + list"], record=None, list_errors=None)
+    evaluate.main(arguments)
+    printed = capsys.readouterr().out
+    assert "### select, list of names: names.txt, 1 names, sha256 " in printed
+    arguments.names_list = None
+    arguments.only = ["every + whole words"]
+    evaluate.main(arguments)
+    assert "### select\n" in capsys.readouterr().out
 
 
 @pytest.mark.parametrize(("datasets", "only"), [(["heldout", "select"], ["a"]), (["e4", "select", "heldout"], ["a"]), (["heldout"], [])])

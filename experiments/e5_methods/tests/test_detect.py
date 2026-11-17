@@ -232,6 +232,26 @@ def test_ec20_ec21_e4_the_weights_are_checked_before_a_run(tmp_path: Path) -> No
         detect.checked_hashes("hf", tmp_path / "missing", None, right)
 
 
+def test_e2_a_part_file_of_the_first_harness_is_refused(tmp_path: Path) -> None:
+    part = tmp_path / "golem.select.json.part"
+    part.write_text(json.dumps({"model": "m", "dataset": "select", "tokens": {}, "seconds": 0.0, "peak_mb": 0, "parts": 1}), encoding="utf-8")
+    with pytest.raises(ValueError, match="another run"):
+        detect.part_state(part, dict(IDENTITY))
+
+
+def test_ec22_a_write_that_fails_leaves_the_older_file_whole(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    out = tmp_path / "run.json.part"
+    detect._write(out, {"parts": 1})
+
+    def failing(source: object, target: object) -> None:
+        raise OSError("stopped in the middle")
+
+    monkeypatch.setattr(detect.os, "replace", failing)
+    with pytest.raises(OSError, match="stopped"):
+        detect._write(out, {"parts": 2})
+    assert json.loads(out.read_text(encoding="utf-8")) == {"parts": 1}
+
+
 def test_ec22_a_file_is_written_whole(tmp_path: Path) -> None:
     out = tmp_path / "run.json.part"
     detect._write(out, {"parts": 1})

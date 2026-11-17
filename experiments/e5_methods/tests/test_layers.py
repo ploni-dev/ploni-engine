@@ -86,7 +86,8 @@ def test_b1_nothing_to_find(paragraph: str) -> None:
 
 @pytest.mark.parametrize(
     ("word", "expected"),
-    [("כהן", "כהן"), ("לכהן", "כהן"), ("ולכהן", "כהן"), ("וכשכהן", "כהן"), ("ולכשכהן", None), ("תכהן", None), ("לוי", None), ("לביא", "לביא")],
+    [("כהן", "כהן"), ("לכהן", "כהן"), ("ולכהן", "כהן"), ("וכשכהן", "כהן"), ("ולכשכהן", None), ("תכהן", None), ("וטכהן", None), ("וכטכהן", None),
+     ("לוי", None), ("לביא", "לביא")],  # fmt: skip
 )
 def test_ec4_to_a1_strip_prefix(word: str, expected: str | None) -> None:
     assert layers.strip_prefix(word, {"כהן", "לביא", "י"}) == expected
@@ -227,6 +228,10 @@ def test_ec26_a_title_beside_a_name_does_not_make_it_strong() -> None:
     per_word = [at(paragraph, "מר"), at(paragraph, "כהן")]
     assert layers.name_words([paragraph], per_word, strong=True) == set()
     assert layers.name_words([paragraph], per_word, strong=False) == {"כהן"}
+    group = "משפחת לוי באה. אחר כך לוי הלך."
+    assert layers.name_words([group], [at(group, "משפחת"), at(group, "לוי")], strong=True) == set()
+    listed = "כהן, לוי חתמו. אחר כך כהן הלך ולוי נשאר."
+    assert layers.name_words([listed], [at(listed, "כהן"), at(listed, "לוי")], strong=True) == set()
     with_initial = "י' כהן חתם."
     assert layers.name_words([with_initial], [at(with_initial, "י'"), at(with_initial, "כהן")], strong=True) == {"כהן"}
 
