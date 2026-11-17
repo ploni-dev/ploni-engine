@@ -55,8 +55,10 @@ Adversarial:
 
 From the second review:
   A3  the block puts a link to a folder outside in the place of its own folder, a symbolic
-      link or a junction    nothing behind it is touched; NotRemoved
-  A4  a file system that gives every file the number 0    every file is still written over
+      link or a junction    nothing behind it is touched; NotRemoved, also when the link
+      leads to nothing
+  A4  a file system that gives every file the number 0    every file is still written over,
+      and a file with a name outside still keeps its bytes
   A5  the removal is interrupted while files are being written over    the folder is gone
       all the same, and the interrupt passes through
   A6  a file and a folder with no permission bit at all    written over, removed
@@ -284,10 +286,13 @@ def test_e3_one_entry_that_cannot_be_made_writable_does_not_stop_the_others(
 def test_ec9_a_file_with_a_second_name_outside_keeps_its_bytes(tmp_path: Path) -> None:
     root, outside = tmp_path / "root", tmp_path / "outside.txt"
     outside.write_text(TEXT, encoding="utf-8")
+    mode = stat.S_IMODE(outside.stat().st_mode)
     with tempfiles.private_dir(root) as folder:
         os.link(outside, folder / "same-file.txt")
     assert list(root.iterdir()) == []
     assert outside.read_text(encoding="utf-8") == TEXT
+    # A file that was writable keeps every bit of its mode: the group's and the others' too.
+    assert stat.S_IMODE(outside.stat().st_mode) == mode
 
 
 def test_ec9_a_read_only_file_with_a_second_name_outside_is_removed_and_keeps_its_bytes(tmp_path: Path) -> None:
@@ -458,10 +463,11 @@ def test_ec4_a_temp_folder_that_other_code_chose_is_put_back_each_time(tmp_path:
     assert tempfile.tempdir == str(later)
 
 
-def access_list(folder: Path) -> str:
+def access_list(folder: Path) -> bytes:
     """Return what the Windows tool icacls prints for a folder: who may do what with it."""
     tool = Path(os.environ["SystemRoot"]) / "System32" / "icacls.exe"
-    return subprocess.run([str(tool), str(folder)], capture_output=True, text=True, check=True).stdout  # noqa: S603 a fixed system tool, on a folder the test made
+    # Read as bytes: the tool writes in the console's code page, and a path with Hebrew letters would not decode.
+    return subprocess.run([str(tool), str(folder)], capture_output=True, check=True).stdout  # noqa: S603 a fixed system tool, on a folder the test made
 
 
 def test_ec6_a_root_that_the_helper_makes_is_for_its_owner_only(tmp_path: Path) -> None:
@@ -474,15 +480,16 @@ def test_ec6_a_root_that_the_helper_makes_is_for_its_owner_only(tmp_path: Path) 
             # in the usual way takes the list of the folder above it, and icacls marks such an entry with (I).
             plain = tmp_path / "plain"
             plain.mkdir()
-            assert "(I)" in access_list(plain)
-            assert "(I)" not in access_list(root)
+            assert b"(I)" in access_list(plain)
+            assert b"(I)" not in access_list(root)
     assert root.is_dir()
 
 
 def test_ec7_the_private_folder_itself_read_only_is_removed(tmp_path: Path) -> None:
     with tempfiles.private_dir(tmp_path) as folder:
         (folder / "page.txt").write_text(TEXT, encoding="utf-8")
-        folder.chmod(stat.S_IREAD | stat.S_IEXEC)
+        # No bit at all: with the read and list bits left, adding the write bit alone would be enough.
+        folder.chmod(0)
     assert list(tmp_path.iterdir()) == []
 
 
@@ -628,6 +635,35 @@ def test_a3_a_link_in_the_place_of_the_private_folder_itself_is_not_gone_through
     assert untouched(outside)
 
 
+@pytest.mark.parametrize("kind", FOLDER_LINKS)
+def test_a3_a_link_to_nothing_in_the_place_of_the_private_folder_is_an_error_too(tmp_path: Path, kind: str) -> None:
+    root, target = tmp_path / "root", tmp_path / "short-lived"
+    target.mkdir()
+    with pytest.raises(tempfiles.NotRemoved), tempfiles.private_dir(root) as folder:
+        folder.rmdir()
+        link(folder, target, kind)
+        target.rmdir()
+    assert [path.name for path in root.iterdir()] == [folder.name]
+
+
+def test_a4_without_file_numbers_a_file_with_a_name_outside_keeps_its_bytes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    real = Path.lstat
+
+    def unnumbered(self: Path) -> os.stat_result:
+        facts = list(real(self))
+        facts[1] = 0  # st_ino
+        return os.stat_result(facts)
+
+    root, outside = tmp_path / "root", tmp_path / "outside.txt"
+    outside.write_text(TEXT, encoding="utf-8")
+    with tempfiles.private_dir(root) as folder:
+        os.link(outside, folder / "same-file.txt")
+        monkeypatch.setattr(Path, "lstat", unnumbered)
+    monkeypatch.setattr(Path, "lstat", real)
+    assert list(root.iterdir()) == []
+    assert outside.read_text(encoding="utf-8") == TEXT
+
+
 def test_a4_a_file_system_that_numbers_no_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, seen_at_removal: dict[str, bytes]) -> None:
     real = Path.lstat
 
@@ -716,6 +752,8 @@ def test_a8_blocks_in_two_threads_hand_out_the_newest_open_folder_to_both(tmp_pa
 
 
 def test_a8_the_temp_folder_of_the_process_is_changed_only_under_the_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # The lock the module really uses is a lock; the watcher below stands in for it only to see when it is held.
+    assert isinstance(tempfiles._LOCK, type(threading.Lock()))
     held, changes = [], []
 
     class Watched:
@@ -727,20 +765,40 @@ def test_a8_the_temp_folder_of_the_process_is_changed_only_under_the_lock(tmp_pa
         def __exit__(self, *details: object) -> None:
             held.pop()
 
-    class Watching(list):  # type: ignore[type-arg]
+    class Watching(list[object]):
         """A list that writes down whether the lock was held at each change."""
 
         def append(self, item: object) -> None:
-            changes.append(bool(held))
+            changes.append(("list", bool(held)))
             super().append(item)
 
         def remove(self, item: object) -> None:
-            changes.append(bool(held))
+            changes.append(("list", bool(held)))
             super().remove(item)
 
+        def clear(self) -> None:
+            changes.append(("list", bool(held)))
+            super().clear()
+
+    class WatchedTempfile:
+        """The tempfile module, writing down whether the lock was held each time its temp folder is set."""
+
+        def __getattr__(self, name: str) -> object:
+            return getattr(tempfile, name)
+
+        def __setattr__(self, name: str, value: object) -> None:
+            changes.append((name, bool(held)))
+            setattr(tempfile, name, value)
+
+    before = tempfile.tempdir
     monkeypatch.setattr(tempfiles, "_LOCK", Watched())
     monkeypatch.setattr(tempfiles, "_OPEN", Watching())
+    monkeypatch.setattr(tempfiles, "tempfile", WatchedTempfile())
     with tempfiles.private_dir(tmp_path), tempfiles.private_dir(tmp_path):
         pass
-    assert changes == [True] * 5
+    # Two blocks: three additions to the list, two removals and one emptying; the temp folder set four times.
+    assert changes.count(("list", True)) == 6
+    assert changes.count(("tempdir", True)) == 4
+    assert len(changes) == 10
     assert held == []
+    assert tempfile.tempdir == before
