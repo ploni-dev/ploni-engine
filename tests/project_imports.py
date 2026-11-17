@@ -83,7 +83,8 @@ def project_imports(root: Path, package: str) -> list[Import]:
         Args: root, the folder that holds the package folder; package, the name of that
             folder, which is also the first part of every importer's name.
         Returns: the imports, ordered by file path and then by line. Only `.py` and `.pyw`
-            files are read. No package folder gives an empty list.
+            files are read, with the suffix in any case of letters. No package folder gives
+            an empty list.
         Raises: SyntaxError or ImportError as `imported` does, with the file named first in
             the message; OSError when a file cannot be read.
 

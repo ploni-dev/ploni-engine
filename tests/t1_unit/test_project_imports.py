@@ -35,8 +35,8 @@ Adversarial:
 project_imports, a folder. Equivalence classes:
   EC12  nested folders        the importer's name comes from the path; __init__.py is its folder
   EC13  what is read          .py and .pyw files under the package folder only, since Python on
-                              Windows imports both: not a .txt or .pyi file in it, not a .py file
-                              beside it
+                              Windows imports both, with the suffix in any case of letters:
+                              not a .txt or .pyi file in it, not a .py file beside it
   EC14  no package folder     nothing, which is today's repository
   EC15  order                 by file path, then by line
 
@@ -262,6 +262,7 @@ def test_ec13_only_python_files_under_the_package_are_read(tmp_path: Path) -> No
     write(
         tmp_path,
         {
+            "ploni/LOUD.PY": "import socket\n",
             "ploni/real.py": "import json\n",
             "ploni/window.pyw": "import socket\n",
             "ploni/notes.txt": "import socket\n",
@@ -271,6 +272,7 @@ def test_ec13_only_python_files_under_the_package_are_read(tmp_path: Path) -> No
         },
     )
     assert reader.project_imports(tmp_path, "ploni") == [
+        Import("ploni/LOUD.PY", 1, "ploni.LOUD", "socket"),
         Import("ploni/real.py", 1, "ploni.real", "json"),
         Import("ploni/window.pyw", 1, "ploni.window", "socket"),
     ]
