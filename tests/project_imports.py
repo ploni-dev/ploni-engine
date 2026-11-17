@@ -20,6 +20,11 @@ from pathlib import Path
 from typing import NamedTuple
 
 
+# What Python imports as source on Windows (importlib.machinery.SOURCE_SUFFIXES there). Elsewhere
+# it imports .py only; reading .pyw there too is the stricter side.
+SOURCE_SUFFIXES = (".py", ".pyw")
+
+
 class Import(NamedTuple):
     """One module that one file may import.
 
@@ -28,6 +33,8 @@ class Import(NamedTuple):
     Contract: `file` is the path below the root given to `project_imports`, with forward
     slashes on every system; `line` is the first line of the import statement, counted
     from 1; `importer` and `module` are absolute dotted names.
+
+    Known limits: `module` may name something that is no module, the `b` of `from a import b`.
     """
 
     file: str
@@ -75,8 +82,8 @@ def project_imports(root: Path, package: str) -> list[Import]:
     Contract:
         Args: root, the folder that holds the package folder; package, the name of that
             folder, which is also the first part of every importer's name.
-        Returns: the imports, ordered by file path and then by line. Only `.py` files are
-            read. No package folder gives an empty list.
+        Returns: the imports, ordered by file path and then by line. Only `.py` and `.pyw`
+            files are read. No package folder gives an empty list.
         Raises: SyntaxError or ImportError as `imported` does, with the file named first in
             the message; OSError when a file cannot be read.
 
@@ -84,8 +91,9 @@ def project_imports(root: Path, package: str) -> list[Import]:
     read like any other.
     """
     found = []
-    for path in sorted(file.relative_to(root).as_posix() for file in (root / package).rglob("*.py")):
-        parts = path.removesuffix(".py").split("/")
+    files = (file for file in (root / package).rglob("*") if file.suffix.lower() in SOURCE_SUFFIXES)
+    for path in sorted(file.relative_to(root).as_posix() for file in files):
+        parts = path.rpartition(".")[0].split("/")
         is_package = parts[-1] == "__init__"
         importer = ".".join(parts[:-1] if is_package else parts)
         try:
@@ -117,7 +125,8 @@ def not_allowed(imports: Iterable[Import], table: Mapping[str, Collection[str]])
         Raises: nothing.
 
     Known limits: an importer whose layer has no row is not judged. The bare top package
-    (`import ploni`) is not judged, so attribute access after it is not seen.
+    (`import ploni`) is not judged, so attribute access after it is not seen. `from ploni
+    import NAME` is judged as the layer `ploni.NAME`, also when NAME is no module.
     """
     found = []
     for item in imports:
