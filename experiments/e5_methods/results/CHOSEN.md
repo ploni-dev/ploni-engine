@@ -29,3 +29,19 @@ So the five methods that are scored on `heldout`, once, are:
 No method with the `list` step is among them: with the list of every name the best such
 method finds 1,592 of 1,595 and marks 1,550 extra words; with the 200 most common names of
 each table, 1,591 and 755.
+
+## Corrected on 2026-11-17, after the review of the findings note
+
+What stands above is kept as it was committed before the held-out corpus was scored. Two
+of its sentences say more than is so.
+
+- **"The commit order is the evidence."** The commit shows that this file was written
+  before the held-out table and its record lines were written (10:02:54 against 10:03:06).
+  It cannot show that nothing was scored to the screen before: all four detectors had been
+  run on `heldout` by 09:50. That no such scoring was made is the author's word.
+- **The rule for the cheapest method** is quoted above as ending "then the name". Point 11
+  of the first amendment ends with "then fewer steps". Three methods tie on its rules:
+  `golem + titles, carry`, `golem + titles, carry strong` and
+  `golem at 0.5 + titles, carry`, each with 1,590 names, 173 seconds, 45 extra words and
+  two steps. The tie was broken by the name, as point 10 does for the tables. That step
+  was added here, at the choosing.
