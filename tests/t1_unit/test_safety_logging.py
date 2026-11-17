@@ -92,6 +92,12 @@ class Chatty:
     __str__ = __repr__
 
 
+class ChattyStr(str):
+    """A string of a class of its own, which could give itself any length."""
+
+    __slots__ = ()
+
+
 class ChattyInt(int):
     """A number whose repr is text."""
 
@@ -153,6 +159,7 @@ def test_ec2_a_number_a_bool_and_none_are_written_as_python_writes_them(
         (ValueError(TEXT), "<ValueError>"),
         (Chatty(), "<Chatty>"),
         (ChattyInt(5), "<ChattyInt>"),
+        (ChattyStr(TEXT), "<ChattyStr>"),
         (Other.DONE, "<Other>"),
     ],
 )
@@ -302,6 +309,36 @@ def test_a1_a_message_whose_formatting_fails(start: Callable[..., io.StringIO], 
     assert capsys.readouterr().err == ""
 
 
+def test_e2_one_bad_key_among_good_ones_is_refused(start: Callable[..., io.StringIO]) -> None:
+    out = start()
+    with pytest.raises(ValueError, match="key"):
+        safe.event(Sample.DONE, **{"pages": 1, TEXT: 2, "seconds": 3})
+    assert out.getvalue() == ""
+
+
+def test_ec4_install_writes_from_info_up_unless_a_level_is_given(logging_restored: None) -> None:
+    stream = io.StringIO()
+    safe.install(stream)
+    safe.event(Sample.DONE, level=logging.DEBUG)
+    safe.event(Sample.FAILED)
+    assert matches(stream, "Sample.FAILED"), stream.getvalue()
+
+
+def test_ec7_exc_info_asked_for_where_no_exception_is_being_handled(start: Callable[..., io.StringIO]) -> None:
+    out = start()
+    logging.error(TEXT, exc_info=True)
+    assert matches(out, "<withheld>", level="ERROR"), out.getvalue()
+
+
+def test_ec9_an_event_sent_by_a_standard_call_without_fields_is_its_name_alone(start: Callable[..., io.StringIO]) -> None:
+    out = start()
+    logging.info(Sample.DONE)
+    logging.info(Sample.FAILED, extra={"ploni_fields": TEXT})
+    assert out.getvalue().count("\n") == 2
+    assert out.getvalue().splitlines()[0].endswith(" Sample.DONE")
+    assert out.getvalue().splitlines()[1].endswith(" Sample.FAILED")
+
+
 def by_hand(level_name: object, file_name: object, line: object) -> logging.LogRecord:
     """Return a record built without a logging call, with the three parts given."""
     record = logging.LogRecord("library", logging.INFO, "path/module.py", 1, TEXT, None, None)
@@ -315,6 +352,7 @@ def by_hand(level_name: object, file_name: object, line: object) -> logging.LogR
         (TEXT, TEXT, TEXT, "LEVEL <file>:0"),
         ("Level 25", "two words.py", 7.5, "LEVEL <file>:0"),
         ("info", "../module.py", True, "LEVEL <file>:0"),
+        ("INFO", "module.py and more", 3, "INFO <file>:3"),
         ("WARNING", "tokenization_utils_base.py", 812, "WARNING tokenization_utils_base.py:812"),
         ("CRITICAL", "<stdin>", 3, "CRITICAL <stdin>:3"),
         ("DEBUG", "window.pyw", 0, "DEBUG window.pyw:0"),
