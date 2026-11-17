@@ -3,6 +3,11 @@
 Committed before any candidate was downloaded and before any detector was run on E5's own
 text. The commit order is the evidence.
 
+**Amended on 2026-11-17, after the first review of the harness and after the first runs:
+see the last section. It says what had been run and seen by then, narrows the candidates
+to those already on the laptop, and settles the points this text left open. What stands
+above it is kept as first written.**
+
 ## Why this experiment exists
 
 Achia decided on 2026-11-16 that a series of experiments comes before the tests demand
@@ -181,3 +186,123 @@ After the choosing, once: the baseline alone; the winning detector alone; the ba
 - Real documents.
 - The three candidates that need a new package.
 - Anything of the product: no file under `ploni/` is touched.
+
+## Amended on 2026-11-17, after the first review of the harness
+
+What stands above is kept as first written. An independent review of the harness
+(PR #92, first pass, 18 findings) came back after the first runs had begun. This section
+says what had been run and seen by then, what the review changed, and how each point the
+text above left open is settled. It is committed before any run with the amended harness
+and before any scoring with it.
+
+### What was run and seen before this amendment
+
+- **Before the first commit of this file.** The scoring code was tried with made-up
+  detectors that mark planted names by construction. Files were made for all three corpora;
+  tables were printed for `e4` and `select` only. Nothing of `heldout` was scored. After
+  that dry run the lists of trigger words were tightened against words that only look like
+  a title (`שמר`, `מרב`, `רב`, `רשם`, `שופט`, `אחים`). The tightening came from thinking of
+  such words, not from a number, but it came after the dry run, and the commit order cannot
+  show that.
+- **After the harness was committed.** Run with the first version of `detect.py`: `joint`,
+  `golem` and `seter_fast` on all three corpora, and `large` on `select`.
+- **Scored once:** `joint` on `select`, with every method that needs only `joint`. Seen:
+  `joint` 398 of 450 (88.44 percent), a surname after a group word 1 of 30;
+  `joint + titles` 428; `joint + carry` and `joint + titles, carry` 446 (99.11 percent);
+  `joint + carry strong` 443, with the fault of finding 1 in it. No other detector and no
+  other corpus was scored. **No file of `heldout` was scored, by any method.**
+- Every run file made before this amendment is thrown away. Each detector is run again with
+  the amended harness, whose run files carry a digest of the text they were made on.
+
+So the points settled below were settled by someone who had seen those five numbers. Where
+a number that was seen bears on a prediction, it is said at the prediction.
+
+### What the review found about fairness, and what it means for the numbers
+
+- **The titles and group words are one closed list.** Every title that any template uses,
+  11 of 11, is on the list of the `titles` step, and two of them, `הרשם` and `המהנדס`,
+  stand only in the held-out templates. The generator writes only `משפחת` and `האחים`,
+  which are the group words of the `group` step. The same author wrote the steps and all
+  three corpora. Measured by the reviewer with no model at all, on the first version of the
+  steps: `group` finds 55 of 55 and 30 of 30 surnames after a group word in `e4` and
+  `select`; `titles, carry` alone finds 873 of 1,145 and 255 of 450.
+- **So:** what the `group` and `titles` steps gain on these corpora is an upper bound. On
+  text with a title that is not on the list, or with a word between the title and the
+  name, they gain less, and E5 cannot say how much less. The held-out corpus does not judge
+  these two steps independently: prediction 6 cannot fail because of them. It can still
+  catch a model, a threshold or the `carry` step that fits the selection text.
+- **A new row, `no_trigger`:** the mentions with no title and no group word before the
+  name. It is printed in every table. It is the part of each corpus that the trigger steps
+  cannot reach by construction, and the row to read for what a method does without them.
+
+### What the review changed in the methods
+
+- `carry strong` now does what the text above says. In the first version "inside a name of
+  two words" never held once spans were widened to whole words. A word now counts when it
+  stands next to another marked word of a name with only white space between.
+- The trigger steps mark the word after a trigger only when nothing but white space lies
+  between them. The form without the article is taken only behind ל, and only for
+  `השופט`, `השופטת`, `הרשם`, `הרשמת`, `המהנדס`, `המהנדסת`, `האחים`, `האחיות`: `למנוחה`,
+  `לרב`, `לאחות` and `כשופט` are ordinary words. This was changed after the five numbers
+  above were seen. It can only make the steps mark less.
+- Stated as limits: a name found only behind attached letters (`לכהן`) is not carried to
+  its bare form; a maqaf or a hyphen ends a word.
+- A run file is tied to its text by a digest, and `evaluate.py` refuses a file made on
+  another text. The held-out corpus is scored only by itself and only for methods named on
+  the command line. The weights of a candidate are hashed and compared before it is loaded.
+
+### The candidates, after the review
+
+The reviewer found that Achia's message of 2026-11-17 is a fair reading of a yes to the
+downloads but is not the yes that `build-plan.md` section 11 asks for per model. The
+question goes to him. When that finding arrived, three candidates and the list of names had
+been fetched on that reading: `golem`, `large`, `seter_fast`, and the given-name tables of
+`alumag/hebrew-names`. **Nothing more is fetched.** `seter` and `seter_fast_int8` are not
+downloaded and not run. The detectors of E5 are therefore `joint`, `golem`, `large` and
+`seter_fast`. If Achia's answer is no, the three folders and the list are deleted, and
+every number that rests on them is marked as such in the findings note.
+
+Of the three candidates that wait for a package: Stanza's Hebrew NER weights are `.pt`
+files on the hub, which are pickles, and rule 2 of this experiment's PR fetches no pickle;
+it would need a safe form of the weights first. The GGUF file of the small language model
+has no pinned source yet. Both facts go to him with the list.
+
+### The points the text above left open, settled
+
+1. **"Alone"** in predictions 1, 2, 4 and 10 and in "the winner" of the detectors means the
+   row `<detector> + whole words`.
+2. **Prediction 1** is already known to have failed: 88.44 percent on `select`, under 90.
+3. **Prediction 2:** the best `<detector> + whole words` on selection is between 94 and
+   98.5 percent, and none reaches 99.
+4. **Prediction 3:** the pooled recall on selection of `joint + titles, carry` minus that
+   of `joint + whole words`, in points. Right when it is between 2 and 5 and the group row
+   of `joint + titles, carry` is 90 percent or more; wrong otherwise, also when the gain is
+   over 5. On `select` alone the gain seen was 10.67 points, so it is likely to be wrong on
+   the side of "more than predicted".
+5. **Prediction 4:** the best union of two detectors, without steps, against the better of
+   its two with whole words. Right when the gain is between 0.5 and 3 points.
+6. **Prediction 7:** the row `lonely` of the winner of all is under 97 percent, and is the
+   lowest in percent of the rows of WEAK_ROWS that hold 30 mentions or more.
+7. **Prediction 8:** extra words are the count without titles, added by the method over
+   `<detector> + whole words`, per 1,000 Hebrew words of the selection text.
+   `joint + titles, carry` adds fewer than 2. `joint + list`, with the list of every name,
+   adds more than 5. The winning detector at a threshold of 0.03 adds more than 5; if that
+   detector's file holds no chances, the best detector whose file does.
+8. **Prediction 9:** the seconds of `large` on selection are 2 to 5 times those of `joint`.
+   `seter` is not run.
+9. **Prediction 10** cannot be tested: `seter_fast_int8` is not fetched.
+10. **Ties** between methods of the same recall go to fewer extra words without titles,
+    then to fewer seconds, then to the name. The table is sorted in that order.
+11. **"The cheapest method within half a point":** among the methods whose pooled recall on
+    selection is within half a point of the winner of all, the one whose detectors' seconds
+    add up to least; then fewer extra words without titles; then fewer steps. The time of
+    the steps themselves is a fraction of a second and is not what decides.
+12. **Labels.** The mark of position that is taken off a label is one of B-, I-, E-, S-,
+    L-, U-. If a run prints a label that is not on the list and that the model's card
+    describes as a person's name, the run is thrown away, the list is amended here with a
+    date, and the model is run again, before any of its numbers is scored.
+13. **Each kind of document** is a column of every table.
+14. **The two lists of names** are two scoring runs. Every table and every record line of a
+    method with the `list` step says which list it used: file name, number of names, and
+    the first 16 characters of the file's SHA-256.
+15. **A detector that was not run on every corpus asked for** is named above the tables.
