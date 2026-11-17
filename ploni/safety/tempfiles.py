@@ -8,27 +8,36 @@ removed; what a crashed run left behind is removed when the next one starts.
 
 Contract: `private_dir` gives a new folder for the length of a `with` block. `sweep` removes
 what earlier runs left under the same root. `NotRemoved` is raised when a folder cannot be
-removed. Nothing outside the folder is written to, changed or removed: a link, of any kind,
-is removed as a link and never followed.
+removed. No file outside the folder is written over or removed: a link, of any kind, is
+never followed, also when it stands in the place of the private folder itself. One thing
+outside can change, the read-only mark of a file that has a name inside too (below).
 
 Known limits:
+- All of this holds while nothing else changes the folder during the removal. Code that
+  swaps a folder for a link between the moment the module looks and the moment it removes
+  is not guarded against: on Windows the standard removal has no such guard either.
 - What is written over is the main content of a file that is still in the folder when the
   block ends, on a disk that writes in place. Not reached: a file its maker deleted inside
   the block; the name of a file; an alternate data stream of a file on NTFS; a file that
   NTFS keeps compressed; any copy of the bytes that a solid-state disk or a file system
   that writes changed blocks elsewhere still holds. Full-disk encryption is what covers
   those.
-- A file that cannot be opened is removed without being written over: one that another
-  handle still holds open on Windows, for one.
+- A file that has a name outside the folder too (a hard link) is not written over: its
+  bytes are not this folder's alone. The name inside is removed.
+- A file that cannot be opened for writing is removed without being written over, and no
+  error says so: a `tempfile.TemporaryFile` that is still open on Windows, for one.
 - Inside the block the temp folder that the `tempfile` module hands out is the private
   one, for the whole process, so that a library that asks `tempfile` for a file gets one
   there. Code that found the temp folder before the block began, native code that asks
   the system, and a process started from inside the block are not redirected: the
   variables TEMP, TMP and TMPDIR are not changed.
 - With several blocks open at once, in threads, a `tempfile` call lands in the folder of
-  the block that was entered last and is still open, whichever thread makes it.
-- A file that is still open when the block ends cannot be removed on Windows. The block
-  then ends with `NotRemoved`, and `sweep` removes the file on the next start.
+  the block that was entered last and is still open, whichever thread makes it. So a file
+  that one thread made through `tempfile` goes when that newest block ends, also when
+  the thread that made it still uses it.
+- A file that other code holds open with a plain `open` when the block ends is written
+  over but cannot be removed on Windows. The block then ends with `NotRemoved`, and
+  `sweep` removes the file on the next start.
 - A read-only file that has a second name outside the folder is made writable there too:
   the mark belongs to the file, not to the name.
 """
@@ -79,7 +88,7 @@ def _is_link(path: Path) -> bool:
 
 
 def _walk(folder: Path) -> Iterator[tuple[Path, list[str], list[str]]]:
-    """Walk the folders under a folder as `os.walk` does, and never go through a link.
+    """Walk the folders under a folder as `os.walk` does, never through a link.
 
     `os.walk` does not follow a symbolic link but does walk into a junction, the folder
     link of Windows, which needs no special right to make. What lies behind a link is
@@ -106,23 +115,26 @@ def _unlock(folder: Path) -> None:
             with suppress(OSError):
                 if not _is_link(entry):
                     mode = entry.lstat().st_mode
-                    entry.chmod(mode | (OWNER_ONLY if stat.S_ISDIR(mode) else stat.S_IWRITE))
+                    # A file is opened for reading and writing to be written over, so it needs both.
+                    entry.chmod(mode | (OWNER_ONLY if stat.S_ISDIR(mode) else stat.S_IREAD | stat.S_IWRITE))
 
 
 def _own_files(folder: Path) -> list[tuple[Path, int]]:
     """Return every regular file under the folder all of whose names are inside it, with its size.
 
     A file that has a name outside the folder too (a hard link) is left out: its bytes are
-    not this folder's alone. A file with several names inside is given once.
+    not this folder's alone. A file with several names inside is given once. Files are told
+    apart by the number the file system gives them; where it gives none, every name is
+    taken as a file of its own.
     """
-    found: dict[tuple[int, int], tuple[Path, os.stat_result]] = {}
-    names: Counter[tuple[int, int]] = Counter()
+    found: dict[object, tuple[Path, os.stat_result]] = {}
+    names: Counter[object] = Counter()
     for directory, _, files in _walk(folder):
         for file in (directory / name for name in files):
             with suppress(OSError):
                 info = file.lstat()
                 if stat.S_ISREG(info.st_mode):
-                    key = (info.st_dev, info.st_ino)
+                    key = (info.st_dev, info.st_ino) if info.st_ino else file
                     names[key] += 1
                     found.setdefault(key, (file, info))
     return [(file, info.st_size) for key, (file, info) in found.items() if names[key] == info.st_nlink]
@@ -149,18 +161,25 @@ def _remove(folder: Path) -> None:
     and when leftovers are swept, and it says so when it fails.
 
     Contract:
-        Args: folder, a folder made by `private_dir`.
+        Args: folder, a folder made by `private_dir`, or one that `sweep` found.
         Returns: nothing. The folder is gone.
         Raises: NotRemoved when the folder is still there afterwards, whatever the cause.
             A file that could not be made writable or written over is still removed when
-            it can be.
+            it can be. A link in the place of the folder is not gone through and not
+            removed, so it gives NotRemoved. An interrupt while files are being written
+            over passes through, after the folder was removed.
 
     Known limits: see the module docstring on what is written over and on open files.
     """
-    _unlock(folder)
-    _overwrite(folder)
-    with suppress(OSError):
-        shutil.rmtree(folder)
+    try:
+        # Looked at here and not only below the folder: a block can put a link in its place.
+        if not _is_link(folder):
+            _unlock(folder)
+            _overwrite(folder)
+    finally:
+        # Also after an interrupt: files not yet written over must not stay on disk.
+        with suppress(OSError):
+            shutil.rmtree(folder)
     # Asked of the disk and not of an error: a removal that failed quietly is found too.
     if folder.exists():
         raise NotRemoved(f"the temp folder {folder.name} could not be removed")
@@ -204,9 +223,10 @@ def private_dir(root: Path) -> Iterator[Path]:
         Yields: the path of the new folder, under root, its name beginning with PREFIX.
             Inside the block it is also the folder that `tempfile` hands out, see the
             module docstring.
-        Raises: OSError when the folder cannot be made; NotRemoved when it cannot be
-            removed at the end, also in place of an error of the block itself. Otherwise
-            an error of the block passes through.
+        Raises: OSError when the folder cannot be made, and ValueError for a root that
+            no path can be (one with a null character); NotRemoved when the folder cannot
+            be removed at the end, also in place of an error of the block itself.
+            Otherwise an error of the block passes through.
 
     Known limits: see the module docstring.
     """
