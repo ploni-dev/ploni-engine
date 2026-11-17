@@ -231,3 +231,43 @@ Achia answered:
 > 1 - but a good model should recognize it from the context (especially when the name appears more than once)
 
 So no fixed rule is set for the letter ה. The product has to work out the real name from the rest of the document and treat every mention of that person alike, and the experiment series measures how well each method does that, with his expectation that a good model recognizes it from the context, above all where the name stands more than once. The forms that still fail (b14, b16, b19, d04) and the three the 100 did not hold go into the same series. The questions above say "six" prefix forms; the count is these four that still fail and three that were never held, and f04 while it stays watched. The series is decided in `docs/findings/2026-11-14-e4-planted-names.md`, "Decided on 2026-11-16". How a test that is expected to fail is marked, and whether such tests count toward Phase 3's gate, was not asked and stays open. So do the last two points above: the cross-check in Phase 6, and whether E3 is run again.
+
+### Decided on 2026-11-17
+
+Achia, 2026-11-17, in the Claude Code session. The second form of the same kind, `ולהכהן` (f04), which the part above left open. Claude asked:
+
+> The first write-up is merged: PR #83 went through the gate as `7c003a7`. The three experiment notes now carry your decisions, each with the question and your answer quoted word for word. GitHub also deleted the merged branch by itself, so the new setting works.
+>
+> Still to write up as text-only PRs: the plan changes (experiment series, held-out batch, analytics record, the product's own window, the reference machine, the name) and the status file.
+>
+> One answer I still need from you before I can finish the prefix part:
+>
+> **Question A: the second word in that prefix test.**
+>
+> You decided that "להלוי" is ל + the surname הלוי. The same test has one more word that I had not shown you: "ולהכהן". By your own reasoning it is ו + ל + the surname הכהן, because a name כהן with ל would be written "לכהן".
+>
+> 1. **Yes, the same rule:** "ולהכהן" is ו + ל + הכהן, and the model was right there too. I recommend this.
+> 2. **No,** this one should be read differently.
+
+Achia answered:
+
+> a new question?
+
+Claude asked again, shorter:
+
+> Yes, one small new one. It is a leftover from your prefix decision, not a new topic.
+>
+> When you decided about "להלוי", the same test had a second word that I had not shown you, and the reviewer caught that. So I can't write it down as decided until you say so.
+>
+> **The word is "ולהכהן". Is it ו + ל + the surname הכהן?**
+>
+> 1. **Yes**, the same rule as "להלוי". I recommend this.
+> 2. **No**, read it differently.
+>
+> After this there is one more small question, and then I go back to building.
+
+Achia answered:
+
+> 1
+
+So `ולהכהן` is read as ו and ל on the surname `הכהן`, and f04 counts as right in Phase 3's tests, as f03 does. Both forms of this kind that the 100 held are now decided, each by an answer of his about that word. The rest of the part above stays as it is. The E3 record of 94 of 100 stays as pre-registered. The forms that still fail are b14, b16, b19 and d04, and f04 is no longer watched with them. The plan's list of prefix combinations still has `לה`; taking it out is a PR to `build-plan.md`, not written yet. What the product does with a surname that begins with ה where the ה stands first, or after another letter than ל, stays with the experiment series, as decided above.

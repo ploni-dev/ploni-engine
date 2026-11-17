@@ -482,3 +482,18 @@ Achia answered:
 > It grows. As the project advances, the batch gets bigger and the bar gets higher. -  not accurate, but i meant the demand ios growing, for example -  if we just tried to mark any name, when the stage comes and we also want to tell the user what we managed, it has to be part of the test, or if we add layer for numbers (example) - then it has to be too in the test u understand?    and to the question -  i agree
 
 So, as he corrected it: the batch is held out, never used while building or tuning; it is measured before every merge and its result is shown in every PR; and what grows is what the test covers, every ability the product has at that stage, not the size of the batch or the bar by themselves. Claude's second point also said that a PR "must not make the numbers worse". He did not speak to that; his own words are "to see if we harm something or keep it safe or even getting better". So whether a PR that makes a number worse fails is not decided here, and it goes to him as a question with the rules PR. It is made of both kinds: invented documents where a script knows every name, which run on every PR, and real public documents, which stay outside the repository and are measured on the laptop with Claude's labels. Three things follow that are not done and not decided in detail here. Which real documents, and from where, is still his to say when they are collected (issue #4). The small recall check on every PR that he decided on 2026-11-15 (`PROMOTION.md` section 11) is the nearest thing in the rules; bringing the rules and `build-plan.md` in line with this decision is a PR to each, not written yet. And that E4 stands in for a person's check of E1 is decided in `docs/findings/2026-11-14-e4-planted-names.md`, "Decided on 2026-11-16".
+
+### Decided on 2026-11-17
+
+Achia, 2026-11-17, in the Claude Code session. The point that the part above left open: whether a PR that makes a number worse fails. Claude asked it through the session's choice dialog. The question and the two offered answers are given as the dialog showed them, and his answer is the one he picked there:
+
+> You asked for a test batch of documents the product never saw while being built, measured before every merge. If a change makes an accuracy number on that batch worse (for example, more names missed than before), what should happen to that change? (Speed is not part of this; speed stays measured only.)
+>
+> 1. **It is blocked (Recommended)** The change does not go in. I bring you the numbers, before and after, in plain words, and you decide: fix it, drop it, or accept it for a reason you state.
+> 2. **It goes in, with a warning** The worse number is shown in the change and saved in the analytics record, but nothing is stopped. We would see the drop only afterwards.
+
+Achia answered:
+
+> It is blocked (Recommended)
+
+So a PR that makes an accuracy number on the held-out batch worse does not merge. Claude brings him the numbers, before and after, in plain words, and he decides: it is fixed, it is dropped, or he accepts it for a reason he states. Speed is not part of this and stays measured only. This is not yet a rule: writing it into `PROMOTION.md` is the rules PR, not written yet. Two things were not asked and are left to that PR as choices of Claude's that only narrow what Claude may do: that any drop counts, however small, and that every accuracy number the PR shows counts by itself.
