@@ -51,12 +51,13 @@ import enum
 import io
 import logging
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
 
 from ploni.safety import logging as safe
+from tests import logging_state
 
 HEBREW, LATIN, DIGITS = "קנרית־יעקב", "Canary-Jacob", "7301946"
 CANARY = f"{HEBREW} {LATIN} {DIGITS}"
@@ -147,6 +148,13 @@ VALUES: dict[str, object] = {
     "int subclass": LoudInt(3),
     "float subclass": LoudFloat(0.5),
 }
+
+
+@pytest.fixture
+def logging_restored() -> Iterator[None]:
+    """Put the logging state of the process back when the test is over."""
+    with logging_state.restored():
+        yield
 
 
 @pytest.fixture

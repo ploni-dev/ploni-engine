@@ -59,12 +59,13 @@ import io
 import logging
 import re
 import warnings
-from collections.abc import Callable
+from collections.abc import Callable, Iterator
 from pathlib import Path
 
 import pytest
 
 from ploni.safety import logging as safe
+from tests import logging_state
 
 LINE = r"\d{{4}}-\d\d-\d\dT\d\d:\d\d:\d\d {level} test_safety_logging\.py:\d+ {rest}\n"
 TEXT = "יעקב כהן / John Smith"
@@ -105,6 +106,13 @@ class ChattyInt(int):
         return TEXT
 
     __str__ = __repr__
+
+
+@pytest.fixture
+def logging_restored() -> Iterator[None]:
+    """Put the logging state of the process back when the test is over."""
+    with logging_state.restored():
+        yield
 
 
 @pytest.fixture
