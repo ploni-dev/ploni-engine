@@ -1,6 +1,6 @@
 # Build Plan v3.0: Local Hebrew-First Document Pseudonymization Tool
 
-Product name: **Ploni** (פלוני). Python package and CLI: `ploni`. Repo: `ploni-engine`. Decided 2026-11-11; trademark check still open with Tomer.
+Product name: **Ploni** (פלוני). Python package and CLI: `ploni`. Repo: `ploni-engine`. Decided 2026-11-11. Since 2026-11-16 it is the working name: Achia decides the public name before launch, and the trademark check and the question of what the name promises stay open until then (section 15, item 6).
 Achia owns engineering. Tomer (lawyer) owns everything legal and regulatory. As of 2026-11-15 Tomer is not involved for now and has no access to the repository: wherever this plan names Tomer, the question goes to Achia (`CLAUDE.md`, "Who decides").
 Implementer: Claude Code, phase by phase.
 Date: 2026-11-01. Supersedes v2.0. Changelog in section 30.
@@ -392,6 +392,50 @@ The user edits the source and re-runs; offset-based ids would discard every prio
 
 One more check runs on every commit and is not a tier: the per-PR recall check that Achia decided on 2026-11-15. A fixed set of invented documents with known names; it fails when a name that was found before is now missed. It starts in Phase 3, which builds the first model that finds names; the phase is Claude's reading, not part of Achia's answer. It does not measure recall: T6 stays the measure. `PROMOTION.md` section 11 says what it is and where it runs.
 
+### The held-out batch
+
+Decided by Achia on 2026-11-16 and 2026-11-17. `docs/findings/2026-11-13-e1-hebrew-recall.md`, "Decided on 2026-11-16" and "Decided on 2026-11-17", has each question and each answer. His words: "we have to have a testing batch that the algorithm did not learn and its like "new" to it -  and test on it to see if we harm something or keep it safe or even getting better, and it has to be part of the tags in each pr that going in so we know where we at in each step".
+
+- **Held out.** A set of documents that is never used while building or tuning. It is only measured on. "Never used while building or tuning" is Claude's wording of his "did not learn".
+- **Two kinds.** Invented documents where a script knows every name: the score is exact, and it runs on every PR. Real public documents: they stay outside the repository, are measured on the reference machine, and their right answers are Claude's labels. Which real documents, and from where, is still Achia's to say (issue #4).
+- **Before every merge, shown in every PR.** Every PR carries the numbers of the batch, before and after.
+- **A worse number blocks.** A PR that makes an accuracy number on the batch worse does not merge. Claude brings Achia the numbers, before and after, in plain words, and he decides: it is fixed, it is dropped, or he accepts it for a reason he states. Speed is not part of this (section 8.2). `PROMOTION.md` section 11 carries the rule.
+- **What grows is what it covers.** Every ability the product has at that stage is in the test, from the PR that adds it. His example: "if we add layer for numbers (example) - then it has to be too in the test".
+- **A line of its own for a name that stands once.** A name that stands once in a document, with no title before it, is a hard case of its own in the batch from the start, and every PR shows its score (Achia, 2026-11-16, `docs/findings/2026-11-14-e4-planted-names.md`, "Decided on 2026-11-16"). No target is set for it, nor for the two weak kinds that E4 found, a family name after `משפחת` or `האחים` and a first name standing alone that is also an everyday word: he asked for the experiment series first (section 11).
+
+The scores start in Phase 3, which builds the first model that finds names. The batch may be prepared earlier. The per-PR recall check above was decided before the batch, and Achia was told of the batch: "Your idea makes it stronger." How the two are built together is settled in Phase 3.
+
+One thing is open and goes to Achia with the plan of the experiment series: a batch that is never used for tuning cannot also be the batch on which the best model is chosen. So the documents on which methods are compared have to be kept apart from the held-out batch.
+
+### The analytics record
+
+Decided by Achia on 2026-11-16. He asked for it first as "analytics" with "a dashboard", and when asked what the dashboard should show he wrote:
+
+> 1  -  but the most important part is not the dashboard, but to have the analytics for each important aspect. if we have thos (including dates and prs etc) we can easily monitor if going forward or backwards regarding performance and monitor which pr and which part fucked us and what helped us. the dahsboard is important just because i need to see as a human in a convinient way whats up
+
+So the record is the thing, and the dashboard only shows it. Claude put the design below to him and asked "Is this list right to start with?". He answered: "great -  maybe for each layer we add -  analytics of how it is doing. but sounds good".
+
+- **One entry per merged PR**, written automatically: the date, the PR number, the exact version of the code, and every measured number.
+- **Kept in the repository** as a plain data file with its full history. Nothing in it is overwritten.
+- **Every experiment writes the same kind of entry**, so that models and methods are compared on equal terms.
+- **Each PR shows its numbers next to the ones before**, so that the PR that hurt and the PR that helped can be named.
+- **The dashboard reads that file** and draws it.
+
+What an entry holds, to start with:
+
+- names found and missed: overall, per kind (the two weak kinds, a name that stands once) and per type of document;
+- the invented part and the real part of the held-out batch, as separate numbers;
+- wrong replacements: ordinary words replaced although they are not names;
+- prefix handling;
+- each later ability, from the PR that adds it;
+- speed per stage and memory use, recorded only;
+- the model and the method that produced the numbers;
+- and, his addition, for each layer that is added, how that layer is doing.
+
+The dashboard starts with three views, the first of the answers he was offered ("All three of these to start."): accuracy over time, as the held-out score after every merged PR; experiments side by side; and weak spots, which kinds of names are still missed and how often.
+
+Three limits are Claude's and only narrow what Claude may do. An entry holds numbers and labels, never text or a name from a real document. The file name, the format and the place of the dashboard are not chosen here; they come with the PR that builds the record. And `eval/results/<git-sha>.json` (section 8.2) stays as planned until that PR says how the two fit.
+
 ### T2: the invariants worth generating against
 
 These are the tests that find the bugs examples miss.
@@ -480,7 +524,9 @@ Run by a human, scripted, on a release candidate.
 
 ### 8.1 Reference machine
 
-Define it once and record it in `docs/REFERENCE_MACHINE.md`: a mainstream business laptop, 8 cores, 16 GB RAM, no GPU, Windows 11. All performance numbers are on this machine, with pinned thread counts.
+The reference machine is Achia's laptop, the machine every measurement so far ran on: Intel Core 5 120U, 10 cores, 7.72 GB RAM, no separate GPU, Windows 11. It is recorded in `docs/REFERENCE_MACHINE.md`. All performance numbers are on this machine, with pinned thread counts.
+
+Decided by Achia on 2026-11-16. He was offered "This laptop." or "Another machine." and wrote: "i mean - it seems that we dont have other choices so it is. but again we just measure and document the speed now but it is not yet a consideration. we aime for a great accuracy now. later we can work on it". Until then this section described a machine nobody had named: a mainstream business laptop, 8 cores, 16 GB RAM. The laptop has more cores and half that memory. The memory row of section 8.2 is not changed by this, and on this machine it is the harder one to meet (`docs/findings/2026-11-11-e2-int8-latency.md`). Whether the product says anything to a user who runs on battery was not asked and stays open.
 
 ### 8.2 Performance budget
 
@@ -644,7 +690,9 @@ Fallback if the joint ONNX export fights back: `onnx-community/dictabert-ner-ONN
 - A detection touching the first or last 32 tokens is `at_window_edge=True`.
 - Fusion prefers the version of an edge detection produced by a window where it is not at the edge. If no such window exists, keep it and set `needs_review`.
 
-**Proclitics.** Letters ו ה ב ל מ כ ש and combinations `ול`, `וב`, `ומ`, `וה`, `ושה`, `כש`, `לכש`, `מה`, `שה`, `וכש`, `מש`, `לה`. Use the model's segmentation, not a regex over a prefix list, because many real names begin with those letters: ברק, משה, הדר, לביא, שרה, כנרת, בן, מיכל, לירון, שירה. Split into prefix, base and suffix; replacement rewrites the base only, so `וליעקב` becomes `ולדוד`.
+**Proclitics.** Letters ו ה ב ל מ כ ש and combinations `ול`, `וב`, `ומ`, `וה`, `ושה`, `כש`, `לכש`, `מה`, `שה`, `וכש`, `מש`. Use the model's segmentation, not a regex over a prefix list, because many real names begin with those letters: ברק, משה, הדר, לביא, שרה, כנרת, בן, מיכל, לירון, שירה. Split into prefix, base and suffix; replacement rewrites the base only, so `וליעקב` becomes `ולדוד`.
+
+Until 2026-11-17 the list of combinations also held `לה`. It is taken out: ל with the article is written ל, so a word that begins with `לה` is ל on a base that begins with ה. Achia decided the two forms that E3 held: `להלוי` is ל on the surname `הלוי` (2026-11-16), and `ולהכהן` is ו and ל on the surname `הכהן` (2026-11-17). For a surname that begins with ה there is no fixed rule: `הכהן`, like `הלוי`, can be a surname of its own or ה on `כהן`. The product works out the real name from the rest of the document and treats every mention of that person alike, and the experiment series (section 11) measures how well each method does that (Achia, 2026-11-16). `docs/findings/2026-11-11-e3-prefix-replacement.md`, "Decided on 2026-11-16" and "Decided on 2026-11-17", has each question and each answer.
 
 **Normalization.** Strip niqqud, normalize final letters (ך ם ן ף ץ), normalize gershayim and geresh variants, fold ktiv male and haser (`יוסף`/`יסף`, `דוד`/`דויד`) under a configurable rule set, normalize maqaf and whitespace. Handle geresh inside transliterated names: `ג'ון`, `צ'רלי`, `ז'אק`, `ג'ורג'`, which break naive tokenizers.
 
@@ -915,6 +963,8 @@ Report, JSON plus PDF (via `reportlab`, not PyMuPDF), per export:
 
 Stack: engine in a worker process, FastAPI on `127.0.0.1` with a random port and a per-launch token, static HTML/CSS/JS front end. Zero license cost, fastest path, keeps the engine shell-agnostic for a native wrapper later.
 
+**Its own window.** The screens are shown in a window of the product's own, not in a tab of the user's browser. Decided by Achia on 2026-11-16: asked "Should the product show its screens in its own window instead of the user's browser?", he chose "Yes, its own window." and wrote "1 -  thats what i want". The pages stay the static HTML/CSS/JS of the line above, served on `127.0.0.1`. The reason is that the user's browser is not ours: an extension can read whatever a page shows, the browser may offer to translate a Hebrew page through an outside service, and some spell-check settings send typed text out. A browser tab also looks like a website to a buyer, which this product is not. With its own window there is one engine to build for; he was told that "Windows 11 already includes the part needed to do this". The window needs one helper library. It is a new dependency, none is chosen here, and it goes to Achia for approval when Phase 12 starts.
+
 ### Screens
 
 1. **First run: the offline self-test, before any file.** Lists the process's open sockets, shows zero outbound connections since launch, offers a run-with-network-disabled check. Prove the claim, then ask for the document. This is a sales tool as much as a feature.
@@ -1050,6 +1100,19 @@ Threshold: below 85 percent, a hand-written rule layer is needed above the model
 
 E1 or E2 failing changes the plan. E3 failing grows Phase 3.
 
+### The experiment series, once the merge gate works
+
+Decided by Achia on 2026-11-16. `docs/findings/2026-11-14-e4-planted-names.md`, "Decided on 2026-11-16", has each question and each answer. Asked what the tests should demand for the two kinds of names the model is weak on, he chose neither answer and asked for this first. His words: "a series of experiments to get the best most fit tools", for "the best model we can have on premis (not too big)", and "not only models, but other methods too"; "we have to have accuracy about 100%"; and if that is not enough, "we will have to re think of other methods to make it better".
+
+- **What is compared.** Several models that run on the laptop, offline and not too big, and other methods, alone and together. The examples Claude gave him: two finders together, rules for the known weak kinds, and a name found once replaced everywhere in the document.
+- **What is also measured.** How well each method works out the real name where a surname begins with ה (Phase 3, Proclitics). The prefix forms that still fail (b14, b16, b19, d04) and the three that the 100 forms of E3 did not hold. The two weak kinds of E4 and a name that stands once. Targets for these come back to him with the numbers.
+- **Every model needs his yes before it is downloaded.** Claude brings him a short list of candidates with size and license. The license limits of `CLAUDE.md` stand.
+- **Every experiment writes an entry in the analytics record** (section 7).
+- **If the best is still not enough**, work stops and the method is thought over again, as he wrote.
+- **When.** He was offered two answers and chose the first: "Right after the gate is complete." So the series starts when the merge gate works in the sense of `PROMOTION.md` section 11, and not before.
+
+Three things are not decided, and each goes to him with the plan of the series. The question he answered said "All scored on the held-out batch". That cannot stand as it was put: a batch on which the best method is chosen is no longer held out (section 7, "The held-out batch"). The same question called the series "the next big thing" after the gate; how it is ordered against the rest of Phase 0 and against Phase 1 was not asked. And Phase 3 names `dicta-il/dictabert-joint` as the model: if the series finds a better one, changing the model is a change to this plan and a decision of his, and until then Phase 3 stands as written.
+
 ## 12. Risk register
 
 | # | Risk | Severity | Mitigation, and where |
@@ -1124,7 +1187,7 @@ Nothing here is needed for v1.
 3. **Public entity policy.** Keep courts, laws, ministries and precedents by default? Recommended yes; confirm with Tomer and a pilot lawyer.
 4. **Identifier surrogate style.** Marked pseudo-identifiers (`[מזהה-1]`) by default, or checksum-valid non-issued values?
 5. **Passphrase or OS keystore** as the mapping default. Portability against friction.
-6. ~~**Product name.**~~ Decided 2026-11-11: **Ploni** (פלוני), the word Israeli legal writing already uses for an unnamed party. Package and CLI `ploni`, repo `ploni-engine`. Still open and owned by Tomer: a trademark check, and whether the name's association with anonymity conflicts with the rule in section 1 that the product never claims anonymity.
+6. ~~**Product name.**~~ Decided 2026-11-11: **Ploni** (פלוני), the word Israeli legal writing already uses for an unnamed party. Package and CLI `ploni`, repo `ploni-engine`. Still open and owned by Tomer: a trademark check, and whether the name's association with anonymity conflicts with the rule in section 1 that the product never claims anonymity. On 2026-11-16 both were put to Achia, who decides alone for now. Of three offered answers he chose the first: "Keep "Ploni" as the working name for now, and decide the public name before launch." So the package, the CLI and the repo keep the name, and both questions stay open and are his to settle with the public name, before launch. Claude does a first look in the public trademark registers, "which is not a lawyer's opinion" and does not close the trademark check.
 7. **Pilot users.** Who are the first three who will let you measure recall on their documents, on their machines?
 
 ## 16. First instruction to Claude Code
