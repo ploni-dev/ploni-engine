@@ -74,7 +74,8 @@ def imported(source: str | bytes, importer: str, is_package: bool = False) -> li
             it is anything else. A relative name in a call is resolved against the
             importer's package when the call gives the bare name `__package__`, against
             the package the call gives when that is a string literal, and is UNREADABLE
-            otherwise; so is a call of `__import__` with a level other than 0. A place that names one of the two functions without calling it
+            otherwise; so is a call of `__import__` with a level other than 0, and a call
+            that spreads arguments with `*` or `**`. A place that names one of the two functions without calling it
             there is UNREADABLE too, see `_mentions`. The same import twice is given
             twice.
         Raises: SyntaxError when the source is not Python. ImportError when a relative
@@ -118,14 +119,16 @@ def _called(node: ast.Call, package: str) -> str | None:
     a string literal. Any other name, and a relative name with any other package or none,
     gives UNREADABLE. So does a call of `__import__` whose fifth argument, `level`, is
     anything but the number 0: a level makes the name relative to a package that the call
-    takes from a mapping, which cannot be read.
+    takes from a mapping, which cannot be read. And so does a call that spreads arguments
+    with `*` or `**`: they can carry a level or a package that is not written out.
     """
     function = node.func
     name = function.id if isinstance(function, ast.Name) else getattr(function, "attr", None)
     if name not in IMPORT_CALLS:
         return None
     given = _argument(node, 0, "name")
-    if not (isinstance(given, ast.Constant) and isinstance(given.value, str)):
+    spread = any(isinstance(item, ast.Starred) for item in node.args) or any(item.arg is None for item in node.keywords)
+    if spread or not (isinstance(given, ast.Constant) and isinstance(given.value, str)):
         return UNREADABLE
     level = _argument(node, 4, "level")
     if level is not None and not (isinstance(level, ast.Constant) and level.value == 0):
