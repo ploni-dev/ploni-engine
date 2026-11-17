@@ -35,7 +35,8 @@ Adversarial:
       when that is a string literal. Given as UNREADABLE when the name is anything else (a
       variable, an f-string, a sum, no argument) or a relative name has no package that can
       be read, or `__import__` is given a level other than the number 0, which makes its
-      name relative. A call of another function is nothing, also one whose name only ends like an
+      name relative, or the call spreads arguments with `*` or `**`, which can carry a
+      level or a package that is not written out. A call of another function is nothing, also one whose name only ends like an
       import function's. What is still not seen is pinned too: exec of source text
   A7  an import function that is named and not called there (assigned to another name, handed
       to map or partial, fetched with getattr or from __builtins__ by its name as a string,
@@ -340,6 +341,11 @@ def test_a7_an_import_function_under_its_own_name_is_read_as_before(source: str)
         "__import__('write', globals(), locals(), ['edits'], 3)",
         "__import__('socket', globals(), locals(), [], level=1)",
         "__import__('socket', level=depth)",
+        "__import__('client', {'__package__': 'http'}, None, ['x'], **{'level': 1})",
+        "__import__('client', *[{'__package__': 'http'}, None, ['x'], 1])",
+        "__import__('client', {'__package__': 'http'}, *[None, ['x'], 1])",
+        "importlib.import_module('socket', *rest)",
+        "importlib.import_module('.client', **{'package': 'http'})",
     ],
 )
 def test_a2_an_import_made_by_a_call_with_any_other_name_is_unreadable(call: str) -> None:
