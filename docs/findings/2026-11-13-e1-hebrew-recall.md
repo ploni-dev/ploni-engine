@@ -485,7 +485,7 @@ So, as he corrected it: the batch is held out, never used while building or tuni
 
 ### Decided on 2026-11-17
 
-Achia, 2026-11-17, in the Claude Code session. The point that the part above left open: whether a PR that makes a number worse fails. Claude asked it through the session's choice dialog. The question and the two offered answers are given as the dialog showed them, and his answer is the one he picked there:
+Achia, 2026-11-17, in the Claude Code session. The point that the part above left open: whether a PR that makes a number worse fails. Claude asked it through the session's choice dialog. The question and the two offered answers are given in the words Claude put into the dialog; the numbers and the bold are added here, and the dialog's short heading, "Worse number", is left out. His answer is the one he picked there:
 
 > You asked for a test batch of documents the product never saw while being built, measured before every merge. If a change makes an accuracy number on that batch worse (for example, more names missed than before), what should happen to that change? (Speed is not part of this; speed stays measured only.)
 >
@@ -496,4 +496,4 @@ Achia answered:
 
 > It is blocked (Recommended)
 
-So a PR that makes an accuracy number on the held-out batch worse does not merge. Claude brings him the numbers, before and after, in plain words, and he decides: it is fixed, it is dropped, or he accepts it for a reason he states. Speed is not part of this and stays measured only. This is not yet a rule: writing it into `PROMOTION.md` is the rules PR, not written yet. Two things were not asked and are left to that PR as choices of Claude's that only narrow what Claude may do: that any drop counts, however small, and that every accuracy number the PR shows counts by itself.
+So a PR that makes an accuracy number on the held-out batch worse does not merge. Claude brings him the numbers, before and after, in plain words, and he decides: it is fixed, it is dropped, or he accepts it for a reason he states. Speed is not part of this and stays measured only. This is not yet written into the rules: writing it into `PROMOTION.md` is the rules PR, not written yet. Two things were not asked and are left to that PR as choices of Claude's that only narrow what Claude may do: that any drop counts, however small, and that every accuracy number measured on the batch counts by itself.
