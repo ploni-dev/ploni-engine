@@ -793,7 +793,7 @@ class NoClass:
     """An object that cannot say what class it is."""
 
     @property
-    def __class__(self) -> type:  # type: ignore[override]
+    def __class__(self) -> type:
         raise RuntimeError(TEXT)
 
 
@@ -801,7 +801,7 @@ def claiming(kind: type) -> object:
     """Return an object whose `__class__` says it is of another class than it is."""
 
     class Liar:
-        __class__ = kind  # type: ignore[assignment]
+        __class__ = kind
 
     return Liar()
 
@@ -839,7 +839,7 @@ def test_a12_an_object_in_exc_info_that_lies_about_its_class_keeps_the_line(
 def test_a12_an_object_that_says_it_is_an_event_is_refused_by_event(start: Callable[..., io.StringIO]) -> None:
     out = start()
     with pytest.raises(TypeError, match="member of an Event class"):
-        safe.event(claiming(Sample))  # type: ignore[arg-type]
+        safe.event(claiming(Sample))
     assert out.getvalue() == ""
 
 
@@ -847,7 +847,7 @@ def test_a13_the_event_class_in_place_of_a_member_is_refused(start: Callable[...
     out = start()
     for no_member in (Sample, safe.Event):
         with pytest.raises(TypeError, match="member of an Event class"):
-            safe.event(no_member)  # type: ignore[arg-type]
+            safe.event(no_member)
     assert out.getvalue() == ""
 
 
@@ -868,16 +868,45 @@ def test_a13_a_time_before_1970_is_a_time_or_the_mark_and_the_line_is_kept(start
     assert re.fullmatch(r"(19(69|70)-\d\d-\d\dT\d\d:\d\d:\d\d|0000-00-00T00:00:00) INFO module\.py:3 <withheld>\n", out.getvalue())
 
 
-def test_the_state_helper_puts_back_the_handler_of_last_resort_and_the_level_of_every_logger() -> None:
-    last, named = logging.lastResort, logging.getLogger("tests.logging_state.named")
+def test_the_state_helper_puts_back_everything_it_says_it_does() -> None:
+    root, named = logging.getLogger(), logging.getLogger("tests.logging_state.named")
+    # Made before the block: a logger first made inside one keeps what the block gave it, a stated limit.
+    logging.getLogger(safe.LOGGER)
+    own, of_root = logging.NullHandler(), logging.NullHandler()
+    named.addHandler(own)
+    named.propagate = False
     named.setLevel(logging.ERROR)
+    root.addHandler(of_root)
+    try:
+        before = (list(root.handlers), root.level, logging.lastResort, warnings.showwarning)
+        with logging_state.restored():
+            safe.install(io.StringIO(), level=logging.DEBUG)
+            named.setLevel(logging.DEBUG)
+            logging.getLogger(safe.LOGGER).setLevel(logging.DEBUG)
+            assert (root.handlers, named.handlers, named.propagate) != (before[0], [own], False)
+        assert (list(root.handlers), root.level, logging.lastResort, warnings.showwarning) == before
+        assert (named.handlers, named.propagate, named.level) == ([own], False, logging.ERROR)
+        assert logging.getLogger(safe.LOGGER).level == logging.NOTSET
+    finally:
+        root.removeHandler(of_root)
+        named.removeHandler(own)
+        named.propagate = True
+        named.setLevel(logging.NOTSET)
+
+
+def test_the_state_helper_sets_a_level_only_where_it_changed(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Setting a level empties a cache on every logger of the process, so setting all of them costs the square of their number.
+    calls = []
+    real = logging.Logger.setLevel
+    untouched, changed = logging.getLogger("tests.logging_state.untouched"), logging.getLogger("tests.logging_state.changed")
     with logging_state.restored():
-        safe.install(io.StringIO())
-        named.setLevel(logging.DEBUG)
-        logging.getLogger(safe.LOGGER).setLevel(logging.DEBUG)
-    assert logging.lastResort is last
-    assert named.level == logging.ERROR
-    assert logging.getLogger(safe.LOGGER).level == logging.NOTSET
+        changed.setLevel(logging.DEBUG)
+        monkeypatch.setattr(logging.Logger, "setLevel", lambda self, level: (calls.append(self.name), real(self, level))[1])
+    monkeypatch.setattr(logging.Logger, "setLevel", real)
+    assert changed.level == logging.NOTSET
+    assert "tests.logging_state.changed" in calls
+    assert untouched.name not in calls
+    assert len(calls) <= 2
 
 
 def test_the_state_helper_puts_back_a_handler_of_last_resort_that_a_test_set_by_hand() -> None:

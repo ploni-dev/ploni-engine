@@ -40,7 +40,7 @@ Through event, the sanctioned call:
 
 The canary: one string with Hebrew letters, Latin letters, digits and a space, so that a
 leak of any part is caught: each of its parts is searched for by itself, in the bytes of
-what was written, in three encodings, in lower case and as backslash escapes. The standard
+what was written, in five encodings, in lower case and as backslash escapes. The standard
 streams are read as bytes, so that nothing is lost when they are decoded.
 
 Positive control: an event with number fields is written, with its numbers. Without it a
