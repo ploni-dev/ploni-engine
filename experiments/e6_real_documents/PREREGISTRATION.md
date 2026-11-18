@@ -6,7 +6,7 @@ first two. For the third there is no evidence but the author's word and the date
 run files.
 
 **Changed on 2026-11-18, after each of the three passes of the review of PR #99 and before
-any labelling, the last time after a fourth pass: see the last four sections, which list
+any labelling, the last time after a fifth pass: see the last five sections, which list
 every change. No document had been
 read for names, no label and no key existed, and no detector had been run when it was
 changed.**
@@ -180,10 +180,13 @@ is made by E5's `layers.after_triggers`, with three titles added that E1's list 
 E5's lacks (`הנשיא`, `הנשיאה`, `כב'`). Both are made from the labels and from no
 detector's output. The third pass decides each difference and each such place by the rules
 above and writes the key. It adds nothing of its own beyond those places, and the harness
-holds it to that before the freeze. These stop the freeze: a label of the key that holds
-a word which is in neither labeller's file and at no listed place; a label both labellers
-have that the key lacks, cuts or has with another kind; one label of the key over two
-labels that both have. Where a listed word turns out to be part of a name that both
+holds it to that before the freeze. These stop the freeze: a label of the key that
+touches no label of either labeller and no listed place; a label both labellers have that
+the key lacks, cuts, has with another kind, or makes longer by a word that is in neither
+labeller's file and at no listed place; one label of the key over two labels that both
+have. A label of the key at a listed place, or at a label only one labeller has, takes
+the whole name as the rules above ask ("a full name written together is one mention"),
+also where the list or that label holds only a part of it. Where a listed word turns out to be part of a name that both
 labellers marked too short (an initial before a surname, a second surname), the third
 pass makes that label longer; it does not add the word as a name of its own. Where the
 name ends is the guide's rule alone: the harness cannot tell such a word, added as a
@@ -445,3 +448,15 @@ cannot hold. Nothing had been read for names, labelled or run.
    listed too, as E5's function does for its own titles.
 2. **A hyphen that stands by itself inside a name** no longer stops the freeze.
 3. **What the check cannot hold** is said in full: where one name ends and the next begins.
+
+## Changed on 2026-11-18, after the fifth review, before any labelling
+
+The fifth pass of the review (1 finding, taken) found that the check of the third round
+was applied wider than it should be. Nothing had been read for names, labelled or run.
+
+1. **The whole name at a listed place.** The check asked of every label of the key that
+   each of its words be in a labeller's file or at a listed place. A list often gives one
+   word of a name (the given name after `עו"ד`), and the key then could not take the whole
+   name that both labellers had missed. The word-by-word rule now holds only for a label of
+   the key that covers a label both labellers have; any other label of the key must touch a
+   labeller's label or a listed place, and takes the whole name.

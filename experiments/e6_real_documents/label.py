@@ -174,17 +174,24 @@ def key_faults(paragraphs: list[str], a: list, b: list, key: list) -> tuple[int,
     of its own" (PREREGISTRATION.md, "How the two are put together"). That is checked
     here, by a script, before the key is frozen.
 
-    Contract: returns two counts that are both 0 for a key made by the rule. The first:
-    labels of the key that hold a run of characters between spaces, with a letter in
-    it, which shares no character with a label of either labeller or with a listed
-    place (`places`); a hyphen that stands by itself inside a name is no such run. The
+    Contract: returns two counts that are both 0 for a key made by the rule. The first
+    counts the labels of the key that the third pass had no ground for. A label of
+    the key that covers no label both labellers have needs to share a character with
+    a label of either labeller or with a listed place (`places`): it may then hold the
+    whole name, which is often longer than the one word a list gives. A label of the
+    key that covers a label both have is held word by word: every run of characters
+    between spaces in it, with a letter in it, must share a character with a label of
+    either labeller or with a listed place; a hyphen that stands by itself is no such
+    run. The
     second: places that both labellers label with the same kind and that the key does
     not keep. Such a label is kept when one label of the key, of that kind, covers all
     of it and covers no other label that both have. So the key may make it longer by
     a listed word (an initial before a surname, a second surname), and may not drop
     it, cut it, give it another kind or join it with another.
 
-    Known limits: the check cannot tell where one name ends and the next begins. A
+    Known limits: a label of the key at a listed place, or at a label only one
+    labeller has, can reach as far as the third pass wrote it. And the check cannot
+    tell where one name ends and the next begins. A
     listed word that belongs to the name before it can be added as a label of its
     own; and a listed word, or a label only one labeller has, can be joined to the
     name before it though it is another person's. It looks at places and kinds, not
@@ -194,14 +201,16 @@ def key_faults(paragraphs: list[str], a: list, b: list, key: list) -> tuple[int,
     allowed = [*first, *second, *places(paragraphs, [*a, *b])]
     agreed = {place: kind for place, kind in first.items() if second.get(place) == kind}
 
+    def covers(outer: Place, inner: Place) -> bool:
+        return outer[0] == inner[0] and outer[1] <= inner[1] and inner[2] <= outer[2]
+
     def strange(place: Place) -> bool:
+        if not any(covers(place, more) for more in agreed):
+            return not _shares(place, allowed)
         index, start, end = place
         text = paragraphs[index][start:end]
         parts = [(index, start + low, start + high) for low, high in real.runs(text) if any(character.isalpha() for character in text[low:high])]
         return any(not _shares(part, allowed) for part in parts)
-
-    def covers(outer: Place, inner: Place) -> bool:
-        return outer[0] == inner[0] and outer[1] <= inner[1] and inner[2] <= outer[2]
 
     def kept(place: Place, kind: str) -> bool:
         return any(kind == other_kind and covers(other, place) and sum(covers(other, more) for more in agreed) == 1 for other, other_kind in final.items())
