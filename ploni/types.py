@@ -66,13 +66,14 @@ class Anchor:
 class TableCell:
     """Where one table cell lies in the projected text.
 
-    Why: a cell is a hard boundary for a name, and the writer needs to know which cell a
-    replacement falls in.
+    Why: a cell is a hard boundary for a name (build-plan.md section 5, the comment on
+    `TextProjection.block_breaks`).
 
     Contract: `row` and `col` count from 0; `span` is a place in the projection's text.
 
     Known limits: not in section 5 as a class; written out from the comment on
-    `TextProjection.table_cells` ("table_id, row, col, span"). A merged cell is one entry.
+    `TextProjection.table_cells` ("table_id, row, col, span"). How a merged cell is written
+    is the adapter's, and not settled here.
     """
 
     table_id: str

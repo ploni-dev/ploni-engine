@@ -21,15 +21,20 @@ class PloniError(Exception):
     Why: one class to catch Ploni's own failures by, apart from errors of the system.
 
     Contract: an Exception; its message names ids, counts and kinds, never document text.
+
+    Known limits: not every error is one; see the module docstring.
     """
 
 
 class NotApprovedError(PloniError):
-    """An export was asked for while a must-resolve review item is still open.
+    """An export was asked for before the review was approved.
 
     Why: the user's review is the product's last line of defence; an export must not go
     around it (build-plan.md section 4.1, journey S7).
 
-    Contract: raised by the export before anything is written; the message names the
-    open items by id.
+    Contract: raised before anything is written (build-plan.md Phase 8: `apply()` raises it
+    "unless `approve()` has succeeded"); when must-resolve items are still open, the message
+    names them by id.
+
+    Known limits: nothing raises it yet; Phase 8 does.
     """
