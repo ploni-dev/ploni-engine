@@ -17,8 +17,9 @@ with text stays in DIR.
 
 Known limits: a name that neither labeller marked, that stands after no title and shares
 no word with a label, is in no list here. `freeze` checks where the key's labels stand and
-of which kind they are, not which person each is given to, and cannot tell a listed word
-that was wrongly added as a name of its own from a real second name.
+of which kind they are, not which person each is given to. It cannot tell where one name
+ends and the next begins: a listed word wrongly added as a name of its own, or a listed
+word or a label of one labeller wrongly joined to the name before it, passes.
 """
 
 from __future__ import annotations
@@ -123,13 +124,23 @@ def _name_words(gold: list) -> set[str]:
 
 
 def _after_more_titles(paragraphs: list[str]) -> list[Place]:
-    """Return the word right after each title of MORE_TITLES, with nothing but white space between."""
+    """Return the word right after each title of MORE_TITLES, as `layers.after_triggers` does for its own.
+
+    Contract: the word after the title, with nothing but white space between, and the
+    word after that when the first is an initial or a name particle (`הנשיא א' ברק`), so
+    that every word of the name is a listed place.
+    """
     found = []
     for index, paragraph in enumerate(paragraphs):
         tokens = layers.words(paragraph)
-        for title, word in zip(tokens, tokens[1:], strict=False):
-            if layers.is_trigger(title[2], MORE_TITLES) and not paragraph[title[1] : word[0]].strip():
-                found.append((index, word[0], word[1]))
+        for position, title in enumerate(tokens[:-1]):
+            first = tokens[position + 1]
+            if not layers.is_trigger(title[2], MORE_TITLES) or paragraph[title[1] : first[0]].strip():
+                continue
+            found.append((index, first[0], first[1]))
+            joins = first[2] in layers.NAME_PARTICLES or layers.INITIAL.fullmatch(first[2])
+            if joins and position + 2 < len(tokens) and not paragraph[first[1] : tokens[position + 2][0]].strip():
+                found.append((index, tokens[position + 2][0], tokens[position + 2][1]))
     return found
 
 
@@ -164,17 +175,20 @@ def key_faults(paragraphs: list[str], a: list, b: list, key: list) -> tuple[int,
     here, by a script, before the key is frozen.
 
     Contract: returns two counts that are both 0 for a key made by the rule. The first:
-    labels of the key that hold a run of characters between spaces which shares no
-    character with a label of either labeller or with a listed place (`places`). The
+    labels of the key that hold a run of characters between spaces, with a letter in
+    it, which shares no character with a label of either labeller or with a listed
+    place (`places`); a hyphen that stands by itself inside a name is no such run. The
     second: places that both labellers label with the same kind and that the key does
     not keep. Such a label is kept when one label of the key, of that kind, covers all
     of it and covers no other label that both have. So the key may make it longer by
     a listed word (an initial before a surname, a second surname), and may not drop
     it, cut it, give it another kind or join it with another.
 
-    Known limits: a listed word that belongs to the name before it can still be added
-    as a label of its own; the check cannot tell that from a real second name. It
-    looks at places and kinds, not at person keys.
+    Known limits: the check cannot tell where one name ends and the next begins. A
+    listed word that belongs to the name before it can be added as a label of its
+    own; and a listed word, or a label only one labeller has, can be joined to the
+    name before it though it is another person's. It looks at places and kinds, not
+    at person keys.
     """
     first, second, final = _kinds(a), _kinds(b), _kinds(key)
     allowed = [*first, *second, *places(paragraphs, [*a, *b])]
@@ -182,7 +196,8 @@ def key_faults(paragraphs: list[str], a: list, b: list, key: list) -> tuple[int,
 
     def strange(place: Place) -> bool:
         index, start, end = place
-        parts = [(index, start + low, start + high) for low, high in real.runs(paragraphs[index][start:end])]
+        text = paragraphs[index][start:end]
+        parts = [(index, start + low, start + high) for low, high in real.runs(text) if any(character.isalpha() for character in text[low:high])]
         return any(not _shares(part, allowed) for part in parts)
 
     def covers(outer: Place, inner: Place) -> bool:

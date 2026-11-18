@@ -6,7 +6,8 @@ first two. For the third there is no evidence but the author's word and the date
 run files.
 
 **Changed on 2026-11-18, after each of the three passes of the review of PR #99 and before
-any labelling: see the last three sections, which list every change. No document had been
+any labelling, the last time after a fourth pass: see the last four sections, which list
+every change. No document had been
 read for names, no label and no key existed, and no detector had been run when it was
 changed.**
 
@@ -184,9 +185,10 @@ a word which is in neither labeller's file and at no listed place; a label both 
 have that the key lacks, cuts or has with another kind; one label of the key over two
 labels that both have. Where a listed word turns out to be part of a name that both
 labellers marked too short (an initial before a surname, a second surname), the third
-pass makes that label longer; it does not add the word as a name of its own. That last
-rule is the guide's alone: the harness cannot tell such a word, added as a label of its
-own, from a real second name.
+pass makes that label longer; it does not add the word as a name of its own. Where the
+name ends is the guide's rule alone: the harness cannot tell such a word, added as a
+label of its own, from a real second name; nor a listed word, or a label only one
+labeller has, that was wrongly joined to the name before it.
 
 **Whose person keys.** The key takes labeller A's key for each person. A label that only
 B has, or that comes from a listed place, gets A's key for that person, or a new key when
@@ -430,3 +432,16 @@ freeze held less than the text said. Nothing had been read for names, labelled o
    and at no listed place, and a key label over two labels that both have.
 2. **What it cannot hold** is said where the rule stands: a listed word added as a name of
    its own instead of making the name before it longer.
+
+## Changed on 2026-11-18, after the fourth review, before any labelling
+
+The fourth pass of the review (3 findings, all taken) found that the stricter check of the
+round before refused two right keys, and that the text named one of three things the check
+cannot hold. Nothing had been read for names, labelled or run.
+
+1. **An initial or a name particle after one of the three added titles.** The list held
+   only the word right after such a title, so the key could not take `א' ברק` after
+   `הנשיא` when both labellers had missed it. The word after an initial or a particle is
+   listed too, as E5's function does for its own titles.
+2. **A hyphen that stands by itself inside a name** no longer stops the freeze.
+3. **What the check cannot hold** is said in full: where one name ends and the next begins.
