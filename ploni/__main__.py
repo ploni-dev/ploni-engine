@@ -67,10 +67,10 @@ def inventory(models: Path) -> list[str]:
     """
     lines = []
     for name in sorted(path for path in models.glob("*") if path.is_dir()):
-        for revision in sorted(path for path in name.iterdir() if path.is_dir()):
+        for revision in sorted(path for path in name.glob("*") if path.is_dir()):
             files = [path for path in revision.rglob("*") if path.is_file()]
             lines.append(f"{name.name} {revision.name} {len(files)} files {sum(path.stat().st_size for path in files)} bytes")
-        loose = [path for path in name.iterdir() if path.is_file()]
+        loose = [path for path in name.glob("*") if path.is_file()]
         if loose:
             lines.append(f"{name.name}: {len(loose)} files outside a revision folder, {sum(path.stat().st_size for path in loose)} bytes")
     return lines or [f"no models in {models}"]
