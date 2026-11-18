@@ -18,17 +18,38 @@ Error paths (a crash simulated in the process):
                                        or there is still no file; no partial file is left; the
                                        error passes through
   E3  the folder does not exist        FileNotFoundError; nothing is made
-  E4  the error is not an Exception (KeyboardInterrupt)    the partial file is removed all the same
+  E4  the error is not an Exception (KeyboardInterrupt, SystemExit), at the write and at the
+       rename                         the partial file is removed all the same
+  E5  the clean-up fails (the partial file cannot be removed)    the first error passes through,
+                                      not the clean-up's; the partial file stays for the sweep
+  E6  the folder flush after the rename fails (POSIX)    the error passes through, and the
+                                      target already holds all the new bytes
+  E7  the target is a folder          an OSError; the folder is as it was; no partial file
+  E8  the name is too long for its partial file (the partial name is 33 characters longer)
+                                      an OSError; the target is as it was; no partial file
 Adversarial:
   A1  the target's name holds Hebrew letters and spaces
   A2  a file that already has the partial file's name: a write does not reuse or remove it
   A3  the random name of the partial file is taken (two writers drew the same)    FileExistsError;
        the file that has that name is neither written over nor removed (found by a hand mutant)
-  EC7 the bytes are flushed to disk before the rename (os.fsync on the partial file, then os.replace)
+Durability:
+  EC7 the bytes are flushed to disk before the rename: at the moment of os.fsync the partial
+       file holds all of them, and os.replace comes after
+  EC8 _sync_folder: on POSIX a descriptor of the folder is flushed; on Windows nothing is opened
+  EC9 the random part of the partial name is 16 hex characters
+Targets:
+  EC10 a target that is a symbolic link    the link is replaced by a file with the new bytes; what
+       it pointed to is not changed (skipped where links cannot be made)
 
 sweep_partials. Equivalence classes:
   EC4  partial files left in the folder by a crash    removed; their number is returned
-  EC5  other files, a folder with the prefix, a file with the prefix in a deeper folder    left
+  EC5  other files, a folder with the prefix, a file with the prefix in a deeper folder,
+       `.ploni-notes`, a name with the prefix not at its start    left; `.ploni-partial` with no
+       tail is removed (it begins with the prefix)
+  EC11 a symbolic link with the prefix, to a file and to a folder outside    the link is removed,
+       what it points to is not (skipped where links cannot be made)
+  E9  a partial file that cannot be removed    every other partial file is still removed, then the
+       first error is raised
   EC6  a folder that does not exist, an empty folder    0
 """
 
@@ -88,7 +109,7 @@ class Broken:
 def test_e1_the_write_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     target = tmp_path / "out.docx"
     target.write_bytes(b"old")
-    real_open = atomic.open_partial
+    real_open = atomic._open_partial
     monkeypatch.setattr(atomic, "open_partial", lambda path: Broken(real_open(path)))
     with pytest.raises(OSError, match="No space"):
         atomic.write_atomic(target, TEXT)
@@ -174,3 +195,148 @@ def test_ec7_flushed_before_the_rename(tmp_path: Path, monkeypatch: pytest.Monke
     monkeypatch.setattr(atomic.os, "replace", lambda source, target: (calls.append("replace"), real_replace(source, target))[1])
     atomic.write_atomic(tmp_path / "out.docx", TEXT)
     assert calls[:2] == ["fsync", "replace"]
+
+
+@pytest.mark.parametrize("stop", [KeyboardInterrupt, SystemExit])
+@pytest.mark.parametrize("where", ["write", "replace"])
+def test_e4_a_stop_that_is_not_an_exception(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, stop: type[BaseException], where: str) -> None:
+    def halt(*_: object) -> None:
+        raise stop
+
+    if where == "replace":
+        monkeypatch.setattr(atomic.os, "replace", halt)
+    else:
+        monkeypatch.setattr(atomic.os, "fsync", halt)
+    with pytest.raises(stop):
+        atomic.write_atomic(tmp_path / "out.docx", TEXT)
+    assert os.listdir(tmp_path) == []
+
+
+def test_e5_a_failed_clean_up_keeps_the_first_error(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def crash(source: object, destination: object) -> None:
+        raise OSError(28, "No space left on device")
+
+    def locked(self: Path, missing_ok: bool = False) -> None:
+        raise PermissionError(13, "held by another program")
+
+    monkeypatch.setattr(atomic.os, "replace", crash)
+    monkeypatch.setattr(Path, "unlink", locked)
+    with pytest.raises(OSError, match="No space"):
+        atomic.write_atomic(tmp_path / "out.docx", TEXT)
+    monkeypatch.undo()
+    assert len([name for name in os.listdir(tmp_path) if name.startswith(atomic.PARTIAL_PREFIX)]) == 1
+
+
+def test_e6_a_failed_folder_flush_after_the_rename(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def broken(folder: Path) -> None:
+        raise OSError(5, "Input/output error")
+
+    monkeypatch.setattr(atomic, "_sync_folder", broken)
+    with pytest.raises(OSError, match="Input/output"):
+        atomic.write_atomic(tmp_path / "out.docx", TEXT)
+    assert (tmp_path / "out.docx").read_bytes() == TEXT and leftovers(tmp_path, "out.docx") == []
+
+
+def test_e7_a_target_that_is_a_folder(tmp_path: Path) -> None:
+    (tmp_path / "out.docx").mkdir()
+    (tmp_path / "out.docx" / "inside").write_bytes(b"x")
+    with pytest.raises(OSError):
+        atomic.write_atomic(tmp_path / "out.docx", TEXT)
+    assert os.listdir(tmp_path / "out.docx") == ["inside"] and leftovers(tmp_path, "out.docx") == []
+
+
+def test_e8_a_name_too_long_for_its_partial_file(tmp_path: Path) -> None:
+    name = "א" * 230 + ".docx"
+    try:
+        (tmp_path / name).write_bytes(b"old")
+    except OSError:
+        pytest.skip("this file system takes no name of 235 characters")
+    with pytest.raises(OSError):
+        atomic.write_atomic(tmp_path / name, TEXT)
+    assert (tmp_path / name).read_bytes() == b"old" and leftovers(tmp_path, name) == []
+
+
+def test_ec7_all_bytes_are_on_disk_at_the_flush(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    sizes: list[int] = []
+    real_fsync = atomic.os.fsync
+    monkeypatch.setattr(atomic.os, "fsync", lambda descriptor: (sizes.append(os.fstat(descriptor).st_size), real_fsync(descriptor))[1])
+    atomic.write_atomic(tmp_path / "out.docx", TEXT)
+    assert sizes[0] == len(TEXT)
+
+
+def test_ec8_sync_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    opened: list[object] = []
+    flushed: list[int] = []
+    real_open = atomic.os.open
+    monkeypatch.setattr(atomic.os, "open", lambda path, flags: (opened.append(path), real_open(path, flags))[1])
+    monkeypatch.setattr(atomic.os, "fsync", flushed.append)
+    atomic._sync_folder(tmp_path)
+    if os.name == "nt":
+        assert (opened, flushed) == ([], [])
+    else:
+        assert opened == [tmp_path] and len(flushed) == 1
+
+
+def test_ec9_the_random_part_of_the_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    names: list[str] = []
+    real_replace = atomic.os.replace
+    monkeypatch.setattr(atomic.os, "replace", lambda source, target: (names.append(Path(source).name), real_replace(source, target))[1])
+    atomic.write_atomic(tmp_path / "out.docx", TEXT)
+    tail = names[0].removeprefix(f"{atomic.PARTIAL_PREFIX}out.docx.")
+    assert len(tail) == 16 and all(character in "0123456789abcdef" for character in tail)
+
+
+def make_link(link: Path, target: Path, folder: bool = False) -> None:
+    """Make a symbolic link, or skip the test where the system does not let this user make one."""
+    try:
+        link.symlink_to(target, target_is_directory=folder)
+    except OSError:
+        pytest.skip("symbolic links cannot be made here")
+
+
+def test_ec10_a_target_that_is_a_link(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    outside.mkdir()
+    (outside / "real.docx").write_bytes(b"old")
+    folder = tmp_path / "out"
+    folder.mkdir()
+    make_link(folder / "out.docx", outside / "real.docx")
+    atomic.write_atomic(folder / "out.docx", TEXT)
+    assert not (folder / "out.docx").is_symlink() and (folder / "out.docx").read_bytes() == TEXT
+    assert (outside / "real.docx").read_bytes() == b"old"
+
+
+def test_ec5_names_that_only_look_like_a_partial_file(tmp_path: Path) -> None:
+    for name in (".ploni-notes", "x.ploni-partial-y", ".ploni", ".ploni-partialX"):
+        (tmp_path / name).write_bytes(b"keep")
+    (tmp_path / atomic.PARTIAL_PREFIX).write_bytes(b"part")
+    assert atomic.sweep_partials(tmp_path) == 1
+    assert sorted(os.listdir(tmp_path)) == sorted([".ploni-notes", "x.ploni-partial-y", ".ploni", ".ploni-partialX"])
+
+
+def test_ec11_a_link_with_the_prefix(tmp_path: Path) -> None:
+    outside = tmp_path / "outside"
+    (outside / "folder").mkdir(parents=True)
+    (outside / "file").write_bytes(b"keep")
+    folder = tmp_path / "out"
+    folder.mkdir()
+    make_link(folder / f"{atomic.PARTIAL_PREFIX}to-file", outside / "file")
+    make_link(folder / f"{atomic.PARTIAL_PREFIX}to-folder", outside / "folder", folder=True)
+    assert atomic.sweep_partials(folder) == 2
+    assert os.listdir(folder) == [] and (outside / "file").read_bytes() == b"keep" and (outside / "folder").is_dir()
+
+
+def test_e9_the_sweep_tries_every_file(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    for name in ("a", "b", "c"):
+        (tmp_path / f"{atomic.PARTIAL_PREFIX}{name}").write_bytes(b"part")
+    real_unlink = atomic.os.unlink
+
+    def unlink(path: str) -> None:
+        if path.endswith(f"{atomic.PARTIAL_PREFIX}a"):
+            raise PermissionError(32, "in use")
+        real_unlink(path)
+
+    monkeypatch.setattr(atomic.os, "unlink", unlink)
+    with pytest.raises(PermissionError, match="in use"):
+        atomic.sweep_partials(tmp_path)
+    assert os.listdir(tmp_path) == [f"{atomic.PARTIAL_PREFIX}a"]
