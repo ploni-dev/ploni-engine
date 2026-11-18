@@ -61,11 +61,16 @@ def write_atomic(path: Path, data: bytes) -> None:
     Contract: `path` is the target; its folder must exist (FileNotFoundError otherwise).
     The bytes go to a new partial file in the same folder, are flushed to disk, and the
     partial file then replaces the target. On any error, also one that is not an
-    Exception, the partial file is removed and the error passes through.
+    Exception, the partial file is removed and the error passes through. When the random
+    name of the partial file is already taken, FileExistsError is raised and the file that
+    has the name is left as it is.
     """
     partial = path.with_name(f"{PARTIAL_PREFIX}{path.name}.{secrets.token_hex(NAME_BYTES)}")
+    # Opened before the try: a name that is taken raises here, and the file that has it is
+    # another writer's, which must not be removed.
+    handle = open_partial(partial)
     try:
-        with open_partial(partial) as handle:
+        with handle:
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
