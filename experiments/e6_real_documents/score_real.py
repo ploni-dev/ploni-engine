@@ -8,12 +8,12 @@ sense for a key made by readers.
 Contract: `python -I score_real.py --corpus DIR --runs-dir R --pile open|closed
 [--only METHOD ...] [--key-dir K] [--record FILE] [--lists-to FILE]`. R holds the files
 `detect_real.py` wrote, `<detector>.e6-<pile>.json`. Prints one table: a row per method,
-best recall first. The key is the frozen one unless `--key-dir` names another folder, and
-the table's title says which. `--record` appends a JSON line per method, numbers and
+best recall first. The key is the frozen one unless `--key-dir` names another folder, which
+only the open pile takes, and the table's title says which. `--record` appends a JSON line per method, numbers and
 labels only. `--lists-to` writes every name a method did not find and every word it marked
 for nothing, with the text around each, to a file that must be outside the repository.
-The closed pile is scored only for methods named with `--only`, and only once
-`results/CHOSEN.md` exists. Nothing of a document is printed.
+The closed pile is scored only for methods named with `--only`, only once
+`results/CHOSEN.md` exists, and only for methods that file names. Nothing of a document is printed.
 
 Known limits: as E5's `evaluate.py`. That the closed pile is scored once is the runner's
 to keep; this script cannot count its own runs.
@@ -79,6 +79,9 @@ def rows_of(document: generate.Document) -> dict[str, set[int]]:
 def row_counts(documents: list[generate.Document], missed: list) -> dict[str, list[int]]:
     """Count, per row, how many names a method found.
 
+    Why: E5's scorer counts the rows of generated text; a key made by readers has
+    rows of its own, counted here from what E5's scorer says was not found.
+
     Contract: `missed` is what `evaluate.measure` returns under that name: every counted
     name that is not found by E4's strict rule, with its document. Returns `all` and
     every name of ROWS, each as `[found, total]`.
@@ -93,18 +96,28 @@ def row_counts(documents: list[generate.Document], missed: list) -> dict[str, li
     return counts
 
 
-def check_request(pile: str, only: list[str]) -> None:
+def check_request(pile: str, only: list[str], key_dir: Path | None = None) -> None:
     """Refuse a request that would score the closed pile for choosing.
 
     Why: the closed pile judges methods that were already chosen and written down
     (PREREGISTRATION.md, "What is judged on the closed pile").
 
-    Contract: raises ValueError for the closed pile before `real.CHOSEN` exists, or
-    when no method is named.
+    Contract: raises ValueError for the closed pile before `real.CHOSEN` exists, when
+    no method is named, when a named method does not stand in that file between
+    backticks, or when another key than the frozen one is asked for: the closed pile is
+    scored once, by the frozen key.
     """
     real.check_closed(pile)
-    if pile == real.CLOSED and not only:
+    if pile != real.CLOSED:
+        return
+    if key_dir is not None:
+        raise ValueError("the closed pile is scored by the frozen key only")
+    if not only:
         raise ValueError("the closed pile is scored only for methods named with --only")
+    chosen = real.CHOSEN.read_text(encoding="utf-8")
+    unnamed = [name for name in only if f"`{name}`" not in chosen]
+    if unnamed:
+        raise ValueError(f"{real.CHOSEN.name} does not name: {', '.join(unnamed)}")
 
 
 def score(corpus_dir: Path, runs_dir: Path, pile: str, only: list[str], key_dir: Path | None = None) -> tuple[dict, dict, dict, list[generate.Document]]:
@@ -120,7 +133,7 @@ def score(corpus_dir: Path, runs_dir: Path, pile: str, only: list[str], key_dir:
     the files of that folder without the check. Raises ValueError as `check_request` and
     `evaluate.score_corpora` do, and as `real.load` does.
     """
-    check_request(pile, only)
+    check_request(pile, only, key_dir)
     documents = real.load(corpus_dir, pile, key_dir, frozen=key_dir is None)
     name = f"e6-{pile}"
     results, methods, runs, _ = evaluate.score_corpora(runs_dir, {name: documents}, evaluate.NameList(frozenset(), ""), only)
@@ -245,12 +258,19 @@ def write_private(path: Path, lines: list[str]) -> None:
 
 
 def main(arguments: argparse.Namespace) -> None:
-    """Print the table of one scoring run, and write the record lines and the listing when asked."""
+    """Print the table of one scoring run, and write the record lines and the listing when asked.
+
+    Why: the command line of the experiment; a test runs it on made-up files.
+
+    Contract: the record lines are added to the end of the record file, whose folder
+    is made when it is missing. The listing goes through `write_private`.
+    """
     key = "frozen" if arguments.key_dir is None else arguments.key_dir.name
     results, methods, runs, documents = score(arguments.corpus, arguments.runs_dir, arguments.pile, arguments.only, arguments.key_dir)
     title = "frozen key" if arguments.key_dir is None else f"key of {key}, not the frozen one"
     print(table(f"e6 {arguments.pile}, {title}", results), end="\n\n")
     if arguments.record:
+        arguments.record.parent.mkdir(parents=True, exist_ok=True)
         with arguments.record.open("a", encoding="utf-8") as handle:
             handle.write("\n".join(record_lines(arguments.pile, key, results, methods, runs)) + "\n")
     if arguments.lists_to:

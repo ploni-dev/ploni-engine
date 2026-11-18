@@ -35,6 +35,9 @@ def run(
 ) -> None:  # fmt: skip
     """Run one detector over one pile.
 
+    Why: the one way a detector reaches a real document: after its key is frozen,
+    and for the closed pile after the methods to be judged are written down.
+
     Contract: as `detect.run_documents`, on the documents `real.load` gives for the pile,
     under the name `e6-<pile>`. Raises ValueError for the closed pile before
     `real.CHOSEN` exists, and as `real.load` and `detect.run_documents` do.

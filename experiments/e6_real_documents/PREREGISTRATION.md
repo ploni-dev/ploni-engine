@@ -5,6 +5,10 @@ existed, and before any detector was run on them. The commit order is the eviden
 first two. For the third there is no evidence but the author's word and the dates of the
 run files.
 
+**Changed on 2026-11-18, after the first review of PR #99 and before any labelling: see
+the last section, which lists every change. No document had been read for names, no label
+and no key existed, and no detector had been run when it was changed.**
+
 ## Why this experiment exists
 
 E5 compared ways of finding names on generated text
@@ -102,7 +106,8 @@ not made again.
 
 - **The open pile** may be scored as often as wanted, and its errors may be read.
 - **The closed pile** is scored once, at the end, for the methods named under "What is
-  judged on the closed pile". No detector is run on it before that list is committed. The
+  judged on the closed pile". No detector is run on it before that list is committed, and
+  the harness scores it for no method that the committed list does not name. The
   session that runs the experiment opens no document, worksheet, label or key of the closed
   pile before that one scoring; it sees counts only. No method, list or rule is changed
   after a closed number is seen. If one must be, the note says so and the number is
@@ -117,19 +122,27 @@ any detector is run on any of the twenty, and none of its makers sees a detector
 here. Two labellers, A and B, each mark every document alone. A third pass settles where
 they differ. **No person checks the key.** Achia said of E1's hand check on 2026-11-14 that
 he does not want to read documents, and asked for a method that checks itself
-(`docs/findings/2026-11-13-e1-hebrew-recall.md`, where his words are quoted). A key made
+(`docs/findings/2026-11-13-e1-hebrew-recall.md`, where his words are quoted). That those
+words carry over to E6's key is Claude's reading: he was not asked about E6's key. Two
+nearer sources: on 2026-11-13 he decided that Claude counts E1's names
+(`experiments/e1_hebrew_recall/PREREGISTRATION.md`, "Who counts"), and `build-plan.md`
+section 7 says of real public documents that "their right answers are Claude's labels". A key made
 by readers is not that; the two labellers and the count of where they differ are the nearest
 thing to it that real documents allow.
 
 **From what.** A worksheet per document, written by the harness from the reader's
 paragraphs: every paragraph with its number, every run of characters without white space
-with its number. The worksheets do not say which pile a document is in.
+with its number. The worksheets do not say which pile a document is in. The readers work
+from `LABELLING.md` in this folder, which restates the rules below and is committed with
+the harness.
 
 **What a label is.** One line per name: the paragraph, the first and the last numbered run
 it stands in, the name exactly as written there, a key for the person, and a kind. The
 harness finds the place of the name inside those runs; a line whose name does not stand
 there exactly once is refused. A name is marked without its title, without attached
-letters and without punctuation around it.
+letters and without punctuation around it. The worksheet shows every gap as one space; where
+the text holds two spaces, a tab or a line break between two words of a name, the label
+is written with one space and the name is taken as it stands in the text.
 
 **What counts** is E1's rule (`experiments/e1_hebrew_recall/PREREGISTRATION.md`, "What
 counts as a person name" and "Names in citations"), with the cases E1's readers' guide
@@ -155,26 +168,47 @@ or a registrar, an elected or appointed official named in that role, and a lawye
 expert that a reader of the news would know by name. Everyone else is private, and so is
 every unsure case.
 
-**How the two are put together.** The harness lists, per document, every label that only
-one labeller has or that the two have with another kind, and two lists of places to look
-at, as in E1: every other place where a word of a labelled name stands in the document,
-also behind attached letters; and every word that stands right after a title. Those two
-lists are made by the functions of E5's `carry` and `titles` steps, run on the labels and
-on no detector's output. The third pass decides each difference and each such place by the
-rules above and writes the key. It adds nothing of its own beyond those places.
+**How the two are put together.** The harness lists, per document: every label that only
+one labeller has or that the two have with another kind; every place where the two divide
+the names among people in another way; and two lists of places to look at, after E1's:
+every other place where a word of a labelled name stands in the document, bare or behind
+attached letters; and every word that stands right after a title. The first list is made
+from the words of the labels' own text, looked for by E5's `layers.from_list`. The second
+is made by E5's `layers.after_triggers`, with three titles added that E1's list held and
+E5's lacks (`הנשיא`, `הנשיאה`, `כב'`). Both are made from the labels and from no
+detector's output. The third pass decides each difference and each such place by the rules
+above and writes the key. It adds nothing of its own beyond those places, and the harness
+holds it to that before the freeze: a label of the key that is in neither labeller's file
+and at no listed place, or a label both labellers have that the key lacks or has with
+another kind, stops the freeze.
+
+**Whose person keys.** The key takes labeller A's key for each person. A label that only
+B has, or that comes from a listed place, gets A's key for that person, or a new key when
+A has none. Where the two divide the names among people in another way, the third pass
+decides by the text. The harness does not check the person keys of the key.
 
 **Frozen.** The SHA-256 of every key file is committed to the repository before any
 detector is run on any of the twenty. The harness refuses a key file with another hash.
+The freeze is made once: the harness does not write the table when it is already there.
 
 **What the key cannot be trusted for.** A name that both labellers miss, that stands after
-no title and whose words stand nowhere else in a label, is not in the key. A detector that
-marks it is charged with a word marked for nothing, and a detector that misses it is not
-charged. So recall is flattered for every method alike, and the key is most complete
-exactly where `carry` and `titles` reach. To bound this: after a pile is scored, every
-word that the methods judged on the closed pile marked outside the key is read in that
-pile. A person's name among them that the key lacks is counted, and the pile's numbers
-are given a second time with those names added. The numbers by the frozen key stay the
-ones the predictions are held to.
+no listed title and whose words stand nowhere in a label, is not in the key. A detector
+that marks it is charged with a word marked for nothing, and a detector that misses it is
+not charged. So recall is flattered for every method. It is not flattered alike. A name
+both labellers miss gets into the key only where the two lists reach, and those are the
+places `carry` and `titles` reach. So the share of `joint`'s errors that `carry` finds,
+which the verdict below rests on, is an upper bound.
+
+To bound this on the open pile: after it is scored, every word that the methods of "What
+is judged on the closed pile" marked outside the key is read. A person's name among them
+that the key lacks is counted, and the open pile's numbers are given a second time with
+those names added, beside the numbers by the frozen key. The note says in its first lines
+when a prediction comes out differently by the two. On the closed pile there is no second
+scoring: Achia's words are "scored only once". After its one scoring the same words are
+read there, and the names the key lacks are counted, apart for those `joint + carry`
+marked and those it did not; the two counts are given beside the verdict. Neither reading
+can see a name that no judged method marked. The numbers by the frozen key are the ones
+the predictions and the verdict are held to.
 
 ## What is run
 
@@ -183,7 +217,11 @@ weights hash of `docs/THIRD_PARTY.md`, in this order as time allows; one that wa
 is reported as not run: `joint` (`dicta-il/dictabert-joint`, the plan's model), `golem`
 (`CordwainerSmith/GolemPII-v2-small`), `seter_fast` (`shoresh-labs/seter-pii-he-ar-fast`),
 `large` (`dicta-il/dictabert-large-ner`). Nothing is downloaded. The three models Achia
-allowed on 2026-11-18 come after this experiment, in the order he chose.
+allowed on 2026-11-18 come after this experiment, in the order he chose. His yes of
+2026-11-17 to the three models fetched for E5 was "for this experiment only"
+(`docs/THIRD_PARTY.md`, "On whose word they were fetched"). That they may also be run in
+E6, the next experiment of the same series, is Claude's reading; it adds no download and
+no use in the product.
 
 **Methods**, on the open pile: every method of E5's grid for those detectors, built and
 scored by E5's own code (`experiments/e5_methods/evaluate.py` and `layers.py`), unchanged:
@@ -219,12 +257,12 @@ Written before any labelling and any run. On the open pile unless it says otherw
 | 2 | `joint + carry` finds 1 to 3.5 points more than `joint + whole words` | less than 1, or more than 3.5 |
 | 3 | `joint + carry` finds 97 to 99.6 percent | outside that range |
 | 4 | `joint + carry` marks fewer than 5 more words per 1,000 for nothing than `joint + whole words` (titles left out) | 5 or more |
-| 5 | `joint + titles, carry` marks more than 5 more per 1,000 than `joint + whole words`: in a real decision a title is often followed by a word that is no name (`השופט קבע`), the step marks it, and `carry` spreads it | 5 or fewer |
+| 5 | `joint + titles, carry` marks more than 5 more per 1,000 than `joint + whole words` (titles left out): in a real decision a title is often followed by a word that is no name (`השופט קבע`), the step marks it, and `carry` spreads it | 5 or fewer |
 | 6 | `golem + whole words` finds fewer names than `joint + whole words`: the order of E5 turns around on real text | as many or more |
 | 7 | For `joint + whole words`, `public` is 0 to 8 points over `private` (E1: 99.43 against 93.20) | outside that range; not read unless each row holds 30 or more |
 | 8 | For `joint + carry`, `lonely` is the lowest in percent of the rows that hold 30 or more | another row is lower |
 | 9 | On the closed pile `joint + carry` is within 2.5 points of its open number, either way | further away |
-| 10 | The two labellers mark the same counted name, at the same place, for at least 90 percent of the counted names that either marks | under 90 percent: the key is weak, and the note says so in its first lines |
+| 10 | Over all twenty documents, the two labellers mark the same counted name, at the same place, for at least 90 percent of the counted names that either marks | under 90 percent: the key is weak, and the note says so in its first lines |
 | 11 | `joint` takes 20 to 60 seconds per 1,000 (E5: 602 seconds for 16,871) | outside that range |
 
 A prediction that fails is reported as failed, with the number.
@@ -232,14 +270,26 @@ A prediction that fails is reported as failed, with the number.
 ## What "holds on real documents" means
 
 Decided on the closed pile, for the plan's model, by the frozen key. `errors` are the
-counted names that `joint + whole words` does not find.
+counted names that `joint + whole words` does not find. "More words" is the number of
+words `joint + carry` marks for nothing, titles left out, minus that of
+`joint + whole words`, per 1,000 Hebrew words of the text.
 
+- **Too few to say** comes first: when there are fewer than 15 such errors on the closed
+  pile, none of the three answers below is given for it.
 - **Holds:** `joint + carry` finds at least one third of those errors, and marks fewer than
-  5 more words per 1,000 for nothing than `joint + whole words`.
-- **Does not hold:** it finds fewer than one in six of them, or marks 10 or more per 1,000.
+  5 more words per 1,000.
+- **Does not hold:** it finds fewer than one in six of them, or marks 10 or more words
+  more per 1,000.
 - **In between** otherwise, reported as that.
-- **Too few to say** when there are fewer than 15 such errors on the closed pile. The note
-  then gives the open and the closed pile together, named as a number that is not blind.
+
+**"Too few to say" is the likely answer for the closed pile alone.** At E1's 95.53 percent,
+about 250 names give about 11 errors, under 15. The same rules are then applied to the
+open and the closed pile together, in the same order, with the same limits, and the answer
+is named as one that is not blind: `joint + carry` is E5's function, unchanged, but the
+open pile's errors were read before the closed pile was scored. If the two piles together
+hold fewer than 15 such errors, the answer is "too few to say" and no other. Achia chose
+two piles to have a fair judge; he is told before the labelling starts that the closed
+pile alone will most likely be too small to give this answer.
 
 No fraction is rounded before it is compared.
 
@@ -264,7 +314,9 @@ Once, after the file `results/CHOSEN.md` is committed, which names them:
 7. the open pile's method with the highest recall, by E5's order (then fewer words marked
    for nothing without titles, then fewer seconds, then the name), if it is not above
 8. the open pile's method with the highest recall among those that mark fewer than 5 more
-   words per 1,000 for nothing than their detector with whole words, if it is not above
+   words per 1,000 for nothing, titles left out, than their base row, if it is not above.
+   The base row of a method of one detector, at any threshold, is `<detector> + whole
+   words`; of a union of detectors, that union with whole words and no step
 9. up to three fitted methods
 
 ## What stays out of the repository, the PR and the chat
@@ -286,6 +338,11 @@ printed tables and the note. The labellers answer with counts only.
 - The key is made by one model in three passes, and no person checks it. The two labellers
   can share a blind spot. "What the key cannot be trusted for" says where that bends the
   numbers.
+- The harness holds the order by files: no run without a frozen key, no closed pile
+  without `results/CHOSEN.md`, and then only for the methods it names. It cannot see that
+  those files were committed before the runs, that the closed pile is scored once, that
+  the session that runs the experiment opened nothing of the closed pile, or that no
+  labeller saw a detector's output. Those rest on the author's word.
 - Ten documents and about 250 names per pile: one document with one hard name moves a
   pooled number by several points. E1 had such a document (13 of its 21 errors).
 - Mentions inside one document are not independent.
@@ -302,3 +359,36 @@ printed tables and the note. The labellers answer with counts only.
   built was not asked and is not settled here.
 - Whether the closed pile becomes the real part of the plan's held-out batch
   (`build-plan.md` section 7): not asked, not settled here.
+
+## Changed on 2026-11-18, after the first review, before any labelling
+
+An independent review of the pre-registration and the harness (PR #99, first pass, 16
+findings, all taken) came back before any document was read for names. This file was
+changed in place; the first version is commit `de5db48`. What changed:
+
+1. **"Holds on real documents".** The first version said "marks 10 or more per 1,000" for
+   "does not hold", which could be true together with "holds". Both limits are now on the
+   words `joint + carry` marks more than `joint + whole words`, titles left out. "Too few to
+   say" comes first; it is said to be the likely answer for the closed pile alone, and the
+   rule for the two piles together is written down.
+2. **The closed pile is scored once.** The first version gave the closed pile's numbers a
+   second time with a changed key. That is a second scoring, which is more than Achia's
+   words. On the closed pile the names the key lacks are now only counted.
+3. **The lists the third pass looks at.** The first is made from the words of the labels'
+   own text, so that a name labelled only behind attached letters gives its bare form; the
+   first version used E5's `carry` function, which takes the whole word. The second has
+   three titles more, from E1's list. The text now says that the share of errors `carry`
+   finds is an upper bound, and why.
+4. **The third pass is checked.** The freeze refuses a key that adds a label of its own or
+   drops or changes a label both labellers have, and is made once.
+5. **Person keys.** The key takes labeller A's; places where the two divide the names among
+   people in another way are listed for the third pass.
+6. **White space inside a name.** A label is written with one space where the text holds
+   two, a tab or a line break.
+7. **Three rules name their number:** prediction 5 and item 8 of the closed list (titles
+   left out; the base row of a union and of a threshold), prediction 10 (all twenty).
+8. **The closed pile is scored only for methods `CHOSEN.md` names**, held by the harness.
+9. **Two readings are marked as readings:** that Achia's words about E1's check carry over
+   to E6's key, and that the models fetched for E5 may be run in E6. What rests on the
+   author's word is listed under the known limits.
+10. `LABELLING.md`, the readers' guide, is named and committed with the harness.

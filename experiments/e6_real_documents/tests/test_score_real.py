@@ -29,6 +29,7 @@ score / row counts
   E2   the closed pile without named methods, or before CHOSEN.md exists    ValueError
   EC11 the closed pile, named, CHOSEN.md there    scored
   E6   the closed pile for a method CHOSEN.md does not name    ValueError (review 1, finding 8)
+  E8   the closed pile with another key than the frozen one    ValueError (review 1, finding 6)
   EC20 two documents in one pile with the same labels    a name missed in one is not counted
                                               as missed in the other
 
@@ -338,3 +339,9 @@ def test_e7_detect_real_needs_the_frozen_key(corpus: Path, tmp_path: Path, monke
     with pytest.raises(real.CorpusError, match="t01"):
         detect_real.run(corpus, real.OPEN, "joint", tmp_path / "m", tmp_path / "out.json")
     assert calls == []
+
+
+def test_e8_the_closed_pile_takes_the_frozen_key_only(corpus: Path, tmp_path: Path) -> None:
+    real.CHOSEN.write_text("1. `d + carry`\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="frozen key only"):
+        score_real.score(corpus, tmp_path / "runs", real.CLOSED, ["d + carry"], corpus / "key")

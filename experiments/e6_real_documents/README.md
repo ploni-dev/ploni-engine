@@ -9,8 +9,9 @@ was committed before any document was read for names.
 | File | What it does |
 |---|---|
 | `PREREGISTRATION.md` | the plan of the experiment, with the predictions |
+| `LABELLING.md` | the guide the readers work from when they mark the names |
 | `real.py` | which documents there are, their piles and hashes; reads a document and its labels into the shape E5's scorer reads |
-| `label.py` | writes the labellers' worksheets, puts two labellers side by side, freezes the key |
+| `label.py` | writes the labellers' worksheets, checks a folder of label files, puts two labellers side by side, checks the key against them and freezes it |
 | `detect_real.py` | runs one model over one pile, by E5's runner |
 | `score_real.py` | scores E5's methods on one pile against the key; loads no model |
 | `key_sha256.tsv` | the hash of every key file; added by the commit that freezes the key, before any run |
@@ -28,10 +29,11 @@ folder, in this order. `<models>` is the `models/` folder of the repository.
 
 ```
 python -I label.py worksheets --corpus <corpus>
-    # two labellers each write <corpus>/labels_a/<id>.tsv and <corpus>/labels_b/<id>.tsv
+    # two labellers each write <corpus>/labels_a/<id>.tsv and <corpus>/labels_b/<id>.tsv, from LABELLING.md
+python -I label.py check --corpus <corpus> --a <corpus>/labels_a      # each labeller, on their own folder
 python -I label.py compare --corpus <corpus> --a <corpus>/labels_a --b <corpus>/labels_b
     # a third pass decides every line of <corpus>/compare/<id>.tsv and writes <corpus>/key/<id>.tsv
-python -I label.py freeze --corpus <corpus>          # writes key_sha256.tsv here; commit it
+python -I label.py freeze --corpus <corpus> --a <corpus>/labels_a --b <corpus>/labels_b   # once; writes key_sha256.tsv here; commit it
 python -I detect_real.py --corpus <corpus> --pile open --detector joint --model-dir <models>/dictabert-joint/<revision> --out <out>/runs/joint.e6-open.json
 python -I detect_real.py --corpus <corpus> --pile open --detector hf --model-dir <models>/golem/<revision> --sha256 <hash of its weights, from docs/THIRD_PARTY.md> --out <out>/runs/golem.e6-open.json
 python -I score_real.py --corpus <corpus> --runs-dir <out>/runs --pile open --record results/record.jsonl --lists-to <out>/open_lists.txt

@@ -116,7 +116,11 @@ def draw(topics: dict[str, str], seed: str = SEED) -> dict[str, str]:
 
 
 def runs(paragraph: str) -> list[tuple[int, int]]:
-    """Return the place of every run of characters without white space, as (start, end)."""
+    """Return the place of every run of characters without white space, as (start, end).
+
+    Why: the worksheet numbers these runs and a label names them, so both must cut a
+    paragraph in the same way.
+    """
     return [(match.start(), match.end()) for match in RUN.finditer(paragraph)]
 
 
@@ -139,11 +143,16 @@ def worksheet(paragraphs: list[str]) -> str:
 def _place(fields: list[str], paragraphs: list[str]) -> tuple[int, int, int]:
     """Find where the name of one label stands.
 
+    Why: the worksheet shows every gap as one space, and the text may hold two spaces,
+    a tab or a line break there. A label copied from the worksheet must still fit.
+
     Contract: the first three fields are the paragraph, the first run and the last run,
-    the fourth is the name. Returns (paragraph, start, end). Raises ValueError, with a
-    reason that holds none of the fields, when a number is no number or names nothing,
-    when the name does not stand exactly once inside those runs, or when it leaves the
-    first or the last run untouched.
+    the fourth is the name, its words separated by one space each. In the text any
+    white space may stand between two words of the name. Returns (paragraph, start,
+    end). Raises ValueError, with a reason that holds none of the fields, when a
+    number is no number or names nothing, when the name is empty or has white space
+    around it, when it does not stand exactly once inside those runs, or when it
+    leaves the first or the last run untouched.
     """
     try:
         paragraph, first, last = (int(field) for field in fields[:3])
@@ -155,13 +164,16 @@ def _place(fields: list[str], paragraphs: list[str]) -> tuple[int, int, int]:
     if not 0 <= first <= last < len(found):
         raise ValueError("no such runs")
     low, high = found[first][0], found[last][1]
-    segment, text = paragraphs[paragraph][low:high], fields[3]
-    if not text or text != text.strip() or segment.count(text) != 1:
+    if not fields[3] or fields[3] != fields[3].strip():
+        raise ValueError("the name is empty or has white space around it")
+    pattern = r"\s+".join(re.escape(word) for word in fields[3].split())
+    matches = list(re.finditer(pattern, paragraphs[paragraph][low:high]))
+    if len(matches) != 1:
         raise ValueError("the name does not stand exactly once in its runs")
-    start = low + segment.index(text)
-    if start >= found[first][1] or start + len(text) <= found[last][0]:
+    start, end = low + matches[0].start(), low + matches[0].end()
+    if start >= found[first][1] or end <= found[last][0]:
         raise ValueError("the runs reach further than the name")
-    return paragraph, start, start + len(text)
+    return paragraph, start, end
 
 
 def _attached(paragraph: str, start: int, end: int) -> str:
@@ -188,7 +200,8 @@ def _attached(paragraph: str, start: int, end: int) -> str:
 def _gold(fields: list[str], paragraphs: list[str]) -> generate.Gold:
     """Turn one label line into a name of the key.
 
-    Contract: six fields as in HEADER. A counted name (`private` or `public`) carries
+    Contract: six fields as in HEADER. The name is taken as it stands in the text, with
+    the white space it has there. A counted name (`private` or `public`) carries
     its person and its kind as its one class; one that is `not_counted` has the person
     `*`, as in E4. `alone` says that nothing else on the line is a letter. Raises
     ValueError with a reason that holds none of the fields.
@@ -205,14 +218,14 @@ def _gold(fields: list[str], paragraphs: list[str]) -> generate.Gold:
     text = paragraphs[paragraph]
     alone = not any(character.isalpha() for character in text[:start] + text[end:])
     classes = frozenset({kind}) if counted else frozenset()
-    return generate.Gold(paragraph, start, end, fields[3], person if counted else "*", FORM, _attached(text, start, end), alone, classes, counted)
+    return generate.Gold(paragraph, start, end, text[start:end], person if counted else "*", FORM, _attached(text, start, end), alone, classes, counted)
 
 
 def _clashes(gold: dict[int, generate.Gold]) -> dict[int, str]:
     """Find the lines that cannot stand beside an earlier line.
 
     Contract: `gold` maps a line number to its name. Returns line number -> reason for a
-    name that shares a character with a name that begins before it, and for a person
+    name that shares a character with any name that begins before it, and for a person
     who has another kind than on an earlier line.
     """
     bad = {}
@@ -221,9 +234,13 @@ def _clashes(gold: dict[int, generate.Gold]) -> dict[int, str]:
         if item.counted and kinds.setdefault(item.person, item.classes) != item.classes:
             bad[number] = "this person has another kind on an earlier line"
     ordered = sorted(gold.items(), key=lambda pair: (pair[1].paragraph, pair[1].start, pair[1].end))
-    for (_, before), (number, item) in zip(ordered, ordered[1:], strict=False):
-        if item.paragraph == before.paragraph and item.start < before.end:
+    paragraph, furthest = -1, 0
+    for number, item in ordered:
+        if item.paragraph != paragraph:
+            paragraph, furthest = item.paragraph, 0
+        if item.start < furthest:
             bad[number] = "shares characters with another label"
+        furthest = max(furthest, item.end)
     return bad
 
 
@@ -260,6 +277,9 @@ def parse_labels(doc_id: str, text: str, paragraphs: list[str]) -> list[generate
 def ids(pile: str | None = None) -> list[str]:
     """Return the ids of the documents that are still in the corpus, in order.
 
+    Why: every command goes through the documents in the same order and leaves out
+    the same deleted ones.
+
     Contract: of one pile, or of both when `pile` is None. Raises ValueError for a pile
     that does not exist.
     """
@@ -291,6 +311,9 @@ def read_document(corpus_dir: Path, doc_id: str) -> list[str]:
 def frozen_hashes() -> dict[str, str]:
     """Return the committed SHA-256 of every key file, by document.
 
+    Why: a key is the frozen one when its hash is the one that was committed before
+    the first run, not when a file by its name is in the folder.
+
     Contract: FROZEN holds a line per document, the id and the hash separated by white
     space. Raises CorpusError when the file does not exist.
     """
@@ -301,6 +324,9 @@ def frozen_hashes() -> dict[str, str]:
 
 def read_labels(folder: Path, doc_id: str, paragraphs: list[str], expected: str | None = None) -> list[generate.Gold]:
     """Read the label file of one document from a folder.
+
+    Why: the two labellers' files and the key are the same kind of file, read and
+    checked by the same code.
 
     Contract: reads `<folder>/<doc_id>.tsv`, UTF-8. With `expected`, the SHA-256 of the
     file must be that. Raises CorpusError when the file is missing or has another hash,
