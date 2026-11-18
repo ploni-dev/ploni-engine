@@ -40,13 +40,19 @@ write_worksheets / compare / freeze (on a made-up corpus folder)
 """
 
 import hashlib
+import sys
 from pathlib import Path
 
 import docx
 import pytest
 
-import label
+# The harness is a folder of scripts, not a package: its folder goes on the import path here,
+# and `real` adds the three experiments whose code it reuses. No pytest settings file is needed.
+sys.path[:0] = [str(Path(__file__).resolve().parents[1])]
+
 import real
+
+import label
 
 P0 = "מר משה כהן נ' חברת לוי בע\"מ"
 P1 = "כהן טען. גב' רות ברק השיבה לכהן וללוי."

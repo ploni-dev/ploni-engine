@@ -54,13 +54,19 @@ load / read_document
 """
 
 import hashlib
+import sys
 from pathlib import Path
 
 import docx
 import pytest
 
-import data
+# The harness is a folder of scripts, not a package: its folder goes on the import path here,
+# and `real` adds the three experiments whose code it reuses. No pytest settings file is needed.
+sys.path[:0] = [str(Path(__file__).resolve().parents[1])]
+
 import real
+
+import data
 
 P0 = "1. משה כהן"
 P1 = "מר משה כהן אמר לכהן, ולגב' לוי (א' ברק) כי ג'ון בן־גוריון הלך."

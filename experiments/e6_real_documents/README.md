@@ -38,7 +38,7 @@ python -I score_real.py --corpus <corpus> --runs-dir <out>/runs --pile open --re
     # write and commit results/CHOSEN.md; only then:
 python -I detect_real.py --corpus <corpus> --pile closed ... --out <out>/runs/joint.e6-closed.json
 python -I score_real.py --corpus <corpus> --runs-dir <out>/runs --pile closed --only "joint + whole words" "joint + carry" ...
-python -m pytest
+python -m pytest tests
 ```
 
 On a machine with little memory free, add `--budget-seconds 420` to a `detect_real.py`

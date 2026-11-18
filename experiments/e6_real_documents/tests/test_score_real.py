@@ -53,14 +53,20 @@ detect_real
 import argparse
 import hashlib
 import json
+import sys
 from pathlib import Path
 
 import docx
 import pytest
 
+# The harness is a folder of scripts, not a package: its folder goes on the import path here,
+# and `real` adds the three experiments whose code it reuses. No pytest settings file is needed.
+sys.path[:0] = [str(Path(__file__).resolve().parents[1])]
+
+import real
+
 import data
 import detect_real
-import real
 import score_real
 
 P0 = "מר משה כהן נ' רות ברק"
