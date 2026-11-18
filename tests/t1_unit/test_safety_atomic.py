@@ -26,8 +26,8 @@ Error paths (a crash simulated in the process):
                                       target already holds all the new bytes
   E7  the target is a folder          an OSError; the folder is as it was; no partial file
   E8  the name is too long for its partial file (the partial name is 32 characters longer): a
-       name sized to fit the system's limit (255 bytes on POSIX; a path of 259 characters on
-       Windows) and to break it with the tail
+       name of 230 characters, under the limit of one name (255) and over it with the tail; where
+       the target itself cannot be made (a path limit of 260), a name sized to a path of 259
                                       an OSError; the target is as it was; no partial file
 Adversarial:
   A1  the target's name holds Hebrew letters and spaces
@@ -252,15 +252,21 @@ def test_e7_a_target_that_is_a_folder(tmp_path: Path) -> None:
 
 
 def test_e8_a_name_too_long_for_its_partial_file(tmp_path: Path) -> None:
-    # The name fits; the partial name, 32 characters longer, does not.
-    length = 259 - len(str(tmp_path)) - 1 if os.name == "nt" else 230
-    if length < 20:
-        pytest.skip("the temp folder's path leaves no room for the test")
-    name = "n" * (length - 5) + ".docx"
+    # The name fits; the partial name, 32 characters longer, does not: 230 characters breaks the
+    # limit of one name (255 on ext4 and NTFS). Where the whole path is the tighter limit (Windows
+    # without long paths), the name is sized to a path of 259 characters instead.
+    name = "n" * 225 + ".docx"
     try:
         (tmp_path / name).write_bytes(b"old")
     except OSError:
-        pytest.skip("this file system refuses a name of this length")
+        length = 259 - len(str(tmp_path)) - 1
+        if length < 20:
+            pytest.skip("the temp folder's path leaves no room for the test")
+        name = "n" * (length - 5) + ".docx"
+        try:
+            (tmp_path / name).write_bytes(b"old")
+        except OSError:
+            pytest.skip("this file system refuses a name of this length")
     with pytest.raises(OSError):
         atomic.write_atomic(tmp_path / name, TEXT)
     assert (tmp_path / name).read_bytes() == b"old" and leftovers(tmp_path, name) == []
