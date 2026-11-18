@@ -1,7 +1,7 @@
 """The errors that Ploni's public API raises on purpose.
 
 Why: a caller of the public API catches Ploni's own failures by one base class, and the one
-failure the plan names, an export before every must-resolve item is resolved, by its own
+failure the plan names, an export before the review was approved, by its own
 (build-plan.md section 4.1: `apply()` "raises NotApprovedError if any ReviewItem is
 unresolved"; journey S7 of section 7).
 
