@@ -25,7 +25,9 @@ Error paths (a crash simulated in the process):
   E6  the folder flush after the rename fails (POSIX)    the error passes through, and the
                                       target already holds all the new bytes
   E7  the target is a folder          an OSError; the folder is as it was; no partial file
-  E8  the name is too long for its partial file (the partial name is 33 characters longer)
+  E8  the name is too long for its partial file (the partial name is 32 characters longer): a
+       name sized to fit the system's limit (255 bytes on POSIX; a path of 259 characters on
+       Windows) and to break it with the tail
                                       an OSError; the target is as it was; no partial file
 Adversarial:
   A1  the target's name holds Hebrew letters and spaces
@@ -35,7 +37,8 @@ Adversarial:
 Durability:
   EC7 the bytes are flushed to disk before the rename: at the moment of os.fsync the partial
        file holds all of them, and os.replace comes after
-  EC8 _sync_folder: on POSIX a descriptor of the folder is flushed; on Windows nothing is opened
+  EC8 _sync_folder: on POSIX a descriptor of the folder is flushed and closed; on Windows nothing
+       is opened
   EC12 write_atomic flushes the target's folder, after the rename
   EC9 the random part of the partial name is 16 hex characters
 Targets:
@@ -49,9 +52,9 @@ sweep_partials. Equivalence classes:
        tail is removed (it begins with the prefix)
   EC11 a symbolic link with the prefix, to a file and to a folder outside    the link is removed,
        what it points to is not (skipped where links cannot be made)
-  E9  a partial file that cannot be removed    every other partial file is still removed, then the
-       first error is raised
-  EC6  a folder that does not exist, an empty folder    0
+  E9  two partial files that cannot be removed, with two kinds of OSError    every other partial
+       file is still removed, then the first error is raised, not the last
+  EC6  a folder that does not exist, an empty folder, a path that is a file    0
 """
 
 import os
@@ -178,6 +181,8 @@ def test_ec4_ec5_sweep_partials(tmp_path: Path) -> None:
 def test_ec6_sweep_partials_of_nothing(tmp_path: Path) -> None:
     assert atomic.sweep_partials(tmp_path / "missing") == 0
     assert atomic.sweep_partials(tmp_path) == 0
+    (tmp_path / "a file").write_bytes(b"x")
+    assert atomic.sweep_partials(tmp_path / "a file") == 0
 
 
 def test_a3_a_taken_partial_name_is_neither_written_nor_removed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -247,11 +252,15 @@ def test_e7_a_target_that_is_a_folder(tmp_path: Path) -> None:
 
 
 def test_e8_a_name_too_long_for_its_partial_file(tmp_path: Path) -> None:
-    name = "א" * 230 + ".docx"
+    # The name fits; the partial name, 32 characters longer, does not.
+    length = 259 - len(str(tmp_path)) - 1 if os.name == "nt" else 230
+    if length < 20:
+        pytest.skip("the temp folder's path leaves no room for the test")
+    name = "n" * (length - 5) + ".docx"
     try:
         (tmp_path / name).write_bytes(b"old")
     except OSError:
-        pytest.skip("this file system takes no name of 235 characters")
+        pytest.skip("this file system refuses a name of this length")
     with pytest.raises(OSError):
         atomic.write_atomic(tmp_path / name, TEXT)
     assert (tmp_path / name).read_bytes() == b"old" and leftovers(tmp_path, name) == []
@@ -267,15 +276,18 @@ def test_ec7_all_bytes_are_on_disk_at_the_flush(tmp_path: Path, monkeypatch: pyt
 
 def test_ec8_sync_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     opened: list[object] = []
+    descriptors: list[int] = []
     flushed: list[int] = []
-    real_open = atomic.os.open
-    monkeypatch.setattr(atomic.os, "open", lambda path, flags: (opened.append(path), real_open(path, flags))[1])
+    closed: list[int] = []
+    real_open, real_close = atomic.os.open, atomic.os.close
+    monkeypatch.setattr(atomic.os, "open", lambda path, flags: (opened.append(path), descriptors.append(real_open(path, flags)), descriptors[-1])[2])
     monkeypatch.setattr(atomic.os, "fsync", flushed.append)
+    monkeypatch.setattr(atomic.os, "close", lambda descriptor: (closed.append(descriptor), real_close(descriptor))[1])
     atomic._sync_folder(tmp_path)
     if os.name == "nt":
-        assert (opened, flushed) == ([], [])
+        assert (opened, flushed, closed) == ([], [], [])
     else:
-        assert opened == [tmp_path] and len(flushed) == 1
+        assert opened == [tmp_path] and flushed == descriptors and closed == descriptors
 
 
 def test_ec9_the_random_part_of_the_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -332,15 +344,21 @@ def test_e9_the_sweep_tries_every_file(tmp_path: Path, monkeypatch: pytest.Monke
         (tmp_path / f"{atomic.PARTIAL_PREFIX}{name}").write_bytes(b"part")
     real_unlink = atomic.os.unlink
 
+    order = sorted(entry.name for entry in os.scandir(tmp_path))
+    errors = {order[0]: PermissionError(32, "in use"), order[1]: FileNotFoundError(2, "gone meanwhile")}
+
     def unlink(path: str) -> None:
-        if path.endswith(f"{atomic.PARTIAL_PREFIX}a"):
-            raise PermissionError(32, "in use")
+        name = Path(path).name
+        if name in errors:
+            raise errors[name]
         real_unlink(path)
 
     monkeypatch.setattr(atomic.os, "unlink", unlink)
-    with pytest.raises(PermissionError, match="in use"):
+    with pytest.raises(OSError) as caught:
         atomic.sweep_partials(tmp_path)
-    assert os.listdir(tmp_path) == [f"{atomic.PARTIAL_PREFIX}a"]
+    scanned_first = next(name for name in (entry.name for entry in os.scandir(tmp_path)) if name in errors)
+    assert caught.value is errors[scanned_first]
+    assert sorted(os.listdir(tmp_path)) == sorted(errors)
 
 
 def test_ec12_the_folder_of_the_target_is_flushed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
