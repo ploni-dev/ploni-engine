@@ -36,6 +36,7 @@ Durability:
   EC7 the bytes are flushed to disk before the rename: at the moment of os.fsync the partial
        file holds all of them, and os.replace comes after
   EC8 _sync_folder: on POSIX a descriptor of the folder is flushed; on Windows nothing is opened
+  EC12 write_atomic flushes the target's folder, after the rename
   EC9 the random part of the partial name is 16 hex characters
 Targets:
   EC10 a target that is a symbolic link    the link is replaced by a file with the new bytes; what
@@ -110,7 +111,7 @@ def test_e1_the_write_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> 
     target = tmp_path / "out.docx"
     target.write_bytes(b"old")
     real_open = atomic._open_partial
-    monkeypatch.setattr(atomic, "open_partial", lambda path: Broken(real_open(path)))
+    monkeypatch.setattr(atomic, "_open_partial", lambda path: Broken(real_open(path)))
     with pytest.raises(OSError, match="No space"):
         atomic.write_atomic(target, TEXT)
     assert target.read_bytes() == b"old" and leftovers(tmp_path, "out.docx") == []
@@ -340,3 +341,10 @@ def test_e9_the_sweep_tries_every_file(tmp_path: Path, monkeypatch: pytest.Monke
     with pytest.raises(PermissionError, match="in use"):
         atomic.sweep_partials(tmp_path)
     assert os.listdir(tmp_path) == [f"{atomic.PARTIAL_PREFIX}a"]
+
+
+def test_ec12_the_folder_of_the_target_is_flushed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    flushed: list[Path] = []
+    monkeypatch.setattr(atomic, "_sync_folder", flushed.append)
+    atomic.write_atomic(tmp_path / "out.docx", TEXT)
+    assert flushed == [tmp_path] and (tmp_path / "out.docx").read_bytes() == TEXT
