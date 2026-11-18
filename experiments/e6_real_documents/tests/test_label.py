@@ -30,6 +30,10 @@ places (the two lists of places to look at)
   EC17 a title of E1's list that E5's list lacks (`הנשיא`, `הנשיאה`, `כב'`), also behind ל    the word after it
                                               is listed (review 1, finding 4)
   EC18 a name particle, an initial            no place of its own
+  EC33 an initial or a name particle right after a title of E1's list    the word after it is
+                                              listed too, so the whole name can go into the key
+                                              (review 4, finding 25)
+  EC34 a hyphen that stands by itself inside a name    no fault of the key (review 4, finding 26)
 
 person_splits (review 1, finding 9)
   EC19 places that one labeller gives to one person and the other to two    listed, each once
@@ -383,3 +387,26 @@ def test_ec29_compare_writes_a_name_on_one_line(tmp_path: Path, monkeypatch: pyt
     label.compare(folder, folder / "labels_a", folder / "labels_b")
     lines = (folder / "compare" / "t01.tsv").read_text(encoding="utf-8").splitlines()
     assert lines[1:] == ["0\t1\t2\tרות ברק\tprivate\t\tdiffer"]
+
+
+@pytest.mark.parametrize(("title", "first"), [("הנשיא", "א'"), ("הנשיאה", "א׳"), ("כב'", "בן"), ("לנשיא", "א'")])
+def test_ec33_an_initial_or_a_particle_after_a_title_of_e1s_list(title: str, first: str) -> None:
+    paragraphs = [f"{title} {first} ברק קבע"]
+    start = len(title) + 1
+    surname = start + len(first) + 1
+    assert label.places(paragraphs, []) == [(0, start, start + len(first), "title"), (0, surname, surname + 3, "title")]
+    key = real.parse_labels("t01", HEADER + f"\n0\t1\t2\t{first} ברק\tp1\tpublic\n", paragraphs)
+    assert label.key_faults(paragraphs, [], [], key) == (0, 0)
+
+
+def test_ec34_a_hyphen_that_stands_by_itself_inside_a_name() -> None:
+    paragraphs = ["גב' דנה כהן - לוי באה", "לוי חתמה"]
+
+    def of(*lines: str) -> list:
+        return real.parse_labels("t01", "\n".join([HEADER, *lines]) + "\n", paragraphs)
+
+    agreed = of("0\t1\t2\tדנה כהן\tp1\tprivate", "1\t0\t0\tלוי\tp1\tprivate")
+    key = of("0\t1\t4\tדנה כהן - לוי\tp1\tprivate", "1\t0\t0\tלוי\tp1\tprivate")
+    assert label.key_faults(paragraphs, agreed, agreed, key) == (0, 0)
+    wrong = of("0\t1\t5\tדנה כהן - לוי באה\tp1\tprivate", "1\t0\t0\tלוי\tp1\tprivate")
+    assert label.key_faults(paragraphs, agreed, agreed, wrong) == (1, 0)
