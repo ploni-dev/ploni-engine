@@ -18,10 +18,12 @@ Boundaries:
   B2  an empty models folder         one line that says so
 
 network_modules_loaded. Equivalence classes:
-  EC6  after every module of ploni/ is imported, in this process    no networking module is
-                                     loaded
+  EC6  after every module of ploni/ is imported, in a fresh interpreter    no networking module
+                                     is loaded (pytest's own process holds modules other tests load)
   EC7  a networking module loaded (one of the list, and a submodule of one)    named
   EC8  the list                      the same names as the no-network list of pyproject.toml
+  EC11 the imports at the top of __main__    every module of ploni/ on disk but __main__ is among
+                                     them, so that selftest sees what each one loads
 
 selftest. Equivalence classes:
   EC9  nothing loaded                the inventory, then "offline OK"; 0
@@ -29,6 +31,7 @@ selftest. Equivalence classes:
 """
 
 import io
+import subprocess
 import sys
 import tomllib
 from pathlib import Path
@@ -78,7 +81,9 @@ def test_b1_b2_no_models(tmp_path: Path) -> None:
 
 
 def test_ec6_no_networking_module_after_ploni_is_imported() -> None:
-    assert cli.network_modules_loaded() == []
+    program = "import ploni.__main__ as cli; print(cli.network_modules_loaded())"
+    done = subprocess.run([sys.executable, "-c", program], cwd=ROOT, capture_output=True, text=True, timeout=60, check=False)  # noqa: S603 fixed argv, no shell
+    assert (done.returncode, done.stdout.strip()) == (0, "[]"), done.stderr
 
 
 def test_ec7_a_networking_module_is_named(monkeypatch: pytest.MonkeyPatch) -> None:
@@ -104,3 +109,13 @@ def test_ec9_ec10_selftest(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> N
     monkeypatch.setattr(cli, "network_modules_loaded", lambda: ["socket"])
     assert cli.selftest(tmp_path, out) == 1
     assert out.getvalue() == "m r 1 files 1 bytes\nnot offline: socket is loaded\n"
+
+
+def test_ec11_every_module_of_ploni_is_imported() -> None:
+    on_disk = {
+        ".".join(path.relative_to(ROOT).with_suffix("").parts)
+        for path in (ROOT / "ploni").rglob("*.py")
+        if path.name not in ("__init__.py", "__main__.py")
+    }
+    imported = {name for name, module in vars(cli).items() if getattr(module, "__name__", "").startswith("ploni.")}
+    assert on_disk <= {getattr(vars(cli)[name], "__name__", "") for name in imported}
