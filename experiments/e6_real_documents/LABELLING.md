@@ -130,9 +130,13 @@ names among people in another way: one sees one person where the other sees two.
 by the text who is who.
 
 Then write `key/<id>.tsv`, a label file as above: every label the two agree on, as it
-is; every difference as you decided it; every place that you found to be a name. Add no
+is; every difference as you decided it; every place that you found to be a name. Where a
+listed word is part of a name that both labellers marked too short (an initial before a
+surname, a second surname), make that label longer; do not add the word as a label of
+its own. Add no
 label that is neither in a labeller's file nor on a line of the compare file: the freeze
-refuses a key that does, and a key that drops or changes a label both labellers have.
+refuses a key that does, and a key that drops, cuts or gives another kind to a label both
+labellers have.
 Person keys: take labeller A's key for each person. A label that only B has, or that
 comes from a listed place, gets A's key for that person, or a new key when A has none.
 Write what you decided, line by line, into `key/<id>_decisions.txt`. Check the key with

@@ -165,12 +165,19 @@ def key_faults(paragraphs: list[str], a: list, b: list, key: list) -> tuple[int,
     Contract: returns two counts that are both 0 for a key made by the rule. The first:
     labels of the key that share no character with a label of either labeller or with a
     listed place (`places`). The second: places that both labellers label with the same
-    kind and that the key lacks or has with another kind.
+    kind and that no label of the key of that kind covers whole. So the key may make
+    such a label longer, when a listed word turns out to be part of the name (an
+    initial before a surname, a second surname), and may not drop it, cut it or give
+    it another kind.
     """
     first, second, final = _kinds(a), _kinds(b), _kinds(key)
     allowed = [*first, *second, *places(paragraphs, [*a, *b])]
     outside = sum(not _shares(place, allowed) for place in final)
-    changed = sum(final.get(place) != kind for place, kind in first.items() if second.get(place) == kind)
+
+    def kept(place: Place, kind: str) -> bool:
+        return any(kind == other_kind and other[0] == place[0] and other[1] <= place[1] and place[2] <= other[2] for other, other_kind in final.items())
+
+    changed = sum(not kept(place, kind) for place, kind in first.items() if second.get(place) == kind)
     return outside, changed
 
 
@@ -226,7 +233,8 @@ def compare(corpus_dir: Path, a_dir: Path, b_dir: Path) -> dict[str, dict[str, i
     difference (`why` is `differ`, with each labeller's kind), per place where the two
     divide the names among people in another way (`person`, with each labeller's key)
     and per place to look at (`carry` or `title`), each with its paragraph, its first
-    and last run and its text. Returns per document: the labels of `a` and of `b`,
+    and last run and its text, written with one space where the text has other white
+    space, as a label is. Returns per document: the labels of `a` and of `b`,
     `same` and `either` as `agreement` counts them, and the numbers of differences, of
     person places and of places to look at. Raises as `real.read_document` and
     `real.read_labels` do.
@@ -242,7 +250,8 @@ def compare(corpus_dir: Path, a_dir: Path, b_dir: Path) -> dict[str, dict[str, i
         lines = ["paragraph\tfirst\tlast\ttext\ta\tb\twhy"]
         for paragraph, start, end, first, second, why in sorted(rows):
             low, high = run_span(paragraphs[paragraph], start, end)
-            lines.append(f"{paragraph}\t{low}\t{high}\t{paragraphs[paragraph][start:end]}\t{first}\t{second}\t{why}")
+            text = " ".join(paragraphs[paragraph][start:end].split())
+            lines.append(f"{paragraph}\t{low}\t{high}\t{text}\t{first}\t{second}\t{why}")
         (folder / f"{doc_id}.tsv").write_text("\n".join(lines) + "\n", encoding="utf-8", newline="\n")
         same, either = agreement(a, b)
         counts[doc_id] = {"a": len(a), "b": len(b), "same": same, "either": either, "differ": len(differ), "persons": len(persons), "places": len(look)}

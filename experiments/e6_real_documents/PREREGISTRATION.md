@@ -5,9 +5,10 @@ existed, and before any detector was run on them. The commit order is the eviden
 first two. For the third there is no evidence but the author's word and the dates of the
 run files.
 
-**Changed on 2026-11-18, after the first review of PR #99 and before any labelling: see
-the last section, which lists every change. No document had been read for names, no label
-and no key existed, and no detector had been run when it was changed.**
+**Changed on 2026-11-18, after the first and after the second review of PR #99 and before
+any labelling: see the last two sections, which list every change. No document had been
+read for names, no label and no key existed, and no detector had been run when it was
+changed.**
 
 ## Why this experiment exists
 
@@ -179,8 +180,10 @@ E5's lacks (`הנשיא`, `הנשיאה`, `כב'`). Both are made from the label
 detector's output. The third pass decides each difference and each such place by the rules
 above and writes the key. It adds nothing of its own beyond those places, and the harness
 holds it to that before the freeze: a label of the key that is in neither labeller's file
-and at no listed place, or a label both labellers have that the key lacks or has with
-another kind, stops the freeze.
+and at no listed place, or a label both labellers have that the key lacks, cuts or has
+with another kind, stops the freeze. Where a listed word turns out to be part of a name
+that both labellers marked too short (an initial before a surname, a second surname),
+the third pass makes that label longer; it does not add the word as a name of its own.
 
 **Whose person keys.** The key takes labeller A's key for each person. A label that only
 B has, or that comes from a listed place, gets A's key for that person, or a new key when
@@ -240,7 +243,10 @@ where it is longer than the model takes, read by E1's reader.
   word); `prefixed` (letters are attached before it); `alone` (nothing else on its line but
   digits and punctuation); `lonely` (the person is named once in the document); and
   `no_trigger` (the `titles` step, run on the document with nothing marked, does not touch
-  the name). A row is read only when it holds 30 mentions or more.
+  the name). A row is read only when it holds 30 mentions or more. A surname that stands
+  for several people (`האחים` and the surname) is a person of its own in the key, so one
+  that stands once is in `lonely`; E5's `lonely` left group names out, so the row is not
+  the same as E5's in this.
 - **Words marked for nothing**: Hebrew words that a method marks and that lie in no name of
   the key, counted or not, as in E5; titles and initials are counted apart.
 - **Time and memory**: seconds inside the detector and the most memory the process held,
@@ -303,7 +309,9 @@ three fitted methods go there.
 
 ## What is judged on the closed pile
 
-Once, after the file `results/CHOSEN.md` is committed, which names them:
+Once, after the file `results/CHOSEN.md` is committed, which names them. That file puts
+between backticks the methods that are judged and nothing else: the harness scores the
+closed pile for a name it finds there between backticks.
 
 1. `joint + whole words`
 2. `joint + carry`
@@ -324,7 +332,7 @@ Once, after the file `results/CHOSEN.md` is committed, which names them:
 Every name and every sentence of the twenty. The documents, worksheets, labels, key, run
 files and lists of errors are in two folders outside the repository
 (`C:\Users\Achia\ploni-e6-corpus`, `C:\Users\Achia\ploni-e6-out`). The harness prints
-counts and ids only, and refuses to write a list of errors inside the repository. A record
+counts, ids and line numbers only, and refuses to write a list of errors inside the repository. A record
 line holds numbers and labels. The repository gets the harness, the hashes of the key, the
 printed tables and the note. The labellers answer with counts only.
 
@@ -392,3 +400,18 @@ changed in place; the first version is commit `de5db48`. What changed:
    to E6's key, and that the models fetched for E5 may be run in E6. What rests on the
    author's word is listed under the known limits.
 10. `LABELLING.md`, the readers' guide, is named and committed with the harness.
+
+## Changed on 2026-11-18, after the second review, before any labelling
+
+The second pass of the review (6 findings, all taken) found that the first round of
+changes left four things to say. Nothing had been read for names, labelled or run.
+
+1. **The third pass may make a label longer.** The check before the freeze, as first
+   changed, refused a key in which a label both labellers have was made longer by a listed
+   word (`י'` before a surname, a second surname), and passed the key that added the word
+   as a name of its own, which is two names where the rules say one. An agreed label now
+   counts as kept when a label of the key of the same kind covers all of it.
+2. **A group surname in `lonely`.** Said under the rows.
+3. **What `CHOSEN.md` holds between backticks.** Only the methods that are judged.
+4. The harness also prints line numbers; the sentence that said "counts and ids only" is
+   corrected.

@@ -39,7 +39,8 @@ python -I detect_real.py --corpus <corpus> --pile open --detector hf --model-dir
 python -I score_real.py --corpus <corpus> --runs-dir <out>/runs --pile open --record results/record.jsonl --lists-to <out>/open_lists.txt
     # write and commit results/CHOSEN.md; only then:
 python -I detect_real.py --corpus <corpus> --pile closed ... --out <out>/runs/joint.e6-closed.json
-python -I score_real.py --corpus <corpus> --runs-dir <out>/runs --pile closed --only "joint + whole words" "joint + carry" ...
+python -I score_real.py --corpus <corpus> --runs-dir <out>/runs --pile closed --only "joint + whole words" "joint + carry" ... --record results/record.jsonl --lists-to <out>/closed_lists.txt
+    # once: the listing is what is read afterwards, so it is asked for in this one run
 python -m pytest tests
 ```
 
