@@ -61,3 +61,16 @@ the key, with the text around it, in a file outside the repository: 155 differen
   name. With carry strong the first of these is gone.
 
 Nothing of the closed pile was seen but the counts of its labels.
+
+## Corrected after the closed pile was scored, on the review of the note
+
+What stands above is kept as it was committed before the closed pile was touched. The
+review of the findings note found two things in it that are not exact. Neither changes
+which methods were judged.
+
+- **Item 8.** Three of the eight methods that find every name of the open pile pass the
+  limit, not two: the union of all four detectors with no step is its own base row as
+  well. E5's order still puts joint with titles and carry strong first, so item 8 is
+  item 7.
+- **"155 different words".** They are 155 places in the text; the different word forms
+  among them are 39.
