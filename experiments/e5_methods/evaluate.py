@@ -454,7 +454,21 @@ def evaluate(runs_dir: Path, datasets: list[str], name_list: NameList, only: lis
     ValueError as `check_request` and `load_runs` do.
     """
     check_request(datasets, only)
-    corpora = {dataset: data.load(dataset) for dataset in datasets}
+    return score_corpora(runs_dir, {dataset: data.load(dataset) for dataset in datasets}, name_list, only)
+
+
+def score_corpora(runs_dir: Path, corpora: dict[str, list[generate.Document]], name_list: NameList, only: list[str]) -> tuple[dict, dict, dict, list[str]]:
+    """Score every method on corpora that are already loaded.
+
+    Why: E6 scores real documents with a key made by readers, by the same code as E5's
+    generated corpora, so that the two kinds of numbers come from one rule.
+
+    Contract: `corpora` maps the name a corpus goes by to its documents, in the order
+    they are scored; the run files of a corpus are `<detector>.<name>.json`. Returns what
+    `evaluate` returns. Nothing is checked about which corpus may be scored with which:
+    that is the caller's (`check_request` here, the rule of the closed pile in E6).
+    """
+    datasets = list(corpora)
     runs = {dataset: load_runs(runs_dir, dataset, data.digest(corpora[dataset])) for dataset in datasets}
     detectors = sorted(set.intersection(*(set(found) for found in runs.values())))
     left_out = sorted(set.union(*(set(found) for found in runs.values())) - set(detectors))

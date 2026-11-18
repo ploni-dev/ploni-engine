@@ -49,6 +49,10 @@ file_sha256 / checked_hashes / _write
   EC21 weights with the expected hash                  the hashes of the folder's files
   E4   weights with another hash, no expected hash, an ONNX file with another hash   ValueError
   EC22 a file written over an older one                the new content, and nothing left beside it
+
+run_documents (with a made-up detector; E6 calls it with documents of its own)
+  EC23 documents that are already loaded, under any name    one run file: that name, the
+                                                       digest of their text, the rows of each
 """
 
 import hashlib
@@ -59,6 +63,7 @@ from types import SimpleNamespace
 import numpy
 import pytest
 
+import data
 import detect
 
 
@@ -258,3 +263,15 @@ def test_ec22_a_file_is_written_whole(tmp_path: Path) -> None:
     detect._write(out, {"parts": 2, "name": "יעקב"})
     assert json.loads(out.read_text(encoding="utf-8")) == {"parts": 2, "name": "יעקב"}
     assert [path.name for path in tmp_path.iterdir()] == ["run.json.part"]
+
+
+def test_ec23_run_documents_takes_documents_that_are_already_loaded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    documents = DOCUMENTS[:2]
+    monkeypatch.setattr(detect, "checked_hashes", lambda *_: {"model.safetensors": "abc"})
+    monkeypatch.setattr(detect, "joint_tokens", lambda _: (lambda paragraphs: [[0, 0, len(paragraphs[0]), 1.0, 1]], ["PER"]))
+    out = tmp_path / "runs" / "joint.hand.json"
+    detect.run_documents("joint", tmp_path / "model", "hand", documents, out)
+    written = json.loads(out.read_text(encoding="utf-8"))
+    assert (written["dataset"], written["corpus_sha256"]) == ("hand", data.digest(documents))
+    assert written["tokens"] == {"doc01": [[0, 0, 11, 1.0, 1]], "doc02": [[0, 0, 11, 1.0, 1]]}
+    assert (written["hashes"], written["person_labels"], written["parts"]) == ({"model.safetensors": "abc"}, ["PER"], 1)
