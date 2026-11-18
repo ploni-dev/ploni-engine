@@ -17,7 +17,8 @@ with text stays in DIR.
 
 Known limits: a name that neither labeller marked, that stands after no title and shares
 no word with a label, is in no list here. `freeze` checks where the key's labels stand and
-of which kind they are, not which person each is given to.
+of which kind they are, not which person each is given to, and cannot tell a listed word
+that was wrongly added as a name of its own from a real second name.
 """
 
 from __future__ import annotations
@@ -163,21 +164,35 @@ def key_faults(paragraphs: list[str], a: list, b: list, key: list) -> tuple[int,
     here, by a script, before the key is frozen.
 
     Contract: returns two counts that are both 0 for a key made by the rule. The first:
-    labels of the key that share no character with a label of either labeller or with a
-    listed place (`places`). The second: places that both labellers label with the same
-    kind and that no label of the key of that kind covers whole. So the key may make
-    such a label longer, when a listed word turns out to be part of the name (an
-    initial before a surname, a second surname), and may not drop it, cut it or give
-    it another kind.
+    labels of the key that hold a run of characters between spaces which shares no
+    character with a label of either labeller or with a listed place (`places`). The
+    second: places that both labellers label with the same kind and that the key does
+    not keep. Such a label is kept when one label of the key, of that kind, covers all
+    of it and covers no other label that both have. So the key may make it longer by
+    a listed word (an initial before a surname, a second surname), and may not drop
+    it, cut it, give it another kind or join it with another.
+
+    Known limits: a listed word that belongs to the name before it can still be added
+    as a label of its own; the check cannot tell that from a real second name. It
+    looks at places and kinds, not at person keys.
     """
     first, second, final = _kinds(a), _kinds(b), _kinds(key)
     allowed = [*first, *second, *places(paragraphs, [*a, *b])]
-    outside = sum(not _shares(place, allowed) for place in final)
+    agreed = {place: kind for place, kind in first.items() if second.get(place) == kind}
+
+    def strange(place: Place) -> bool:
+        index, start, end = place
+        parts = [(index, start + low, start + high) for low, high in real.runs(paragraphs[index][start:end])]
+        return any(not _shares(part, allowed) for part in parts)
+
+    def covers(outer: Place, inner: Place) -> bool:
+        return outer[0] == inner[0] and outer[1] <= inner[1] and inner[2] <= outer[2]
 
     def kept(place: Place, kind: str) -> bool:
-        return any(kind == other_kind and other[0] == place[0] and other[1] <= place[1] and place[2] <= other[2] for other, other_kind in final.items())
+        return any(kind == other_kind and covers(other, place) and sum(covers(other, more) for more in agreed) == 1 for other, other_kind in final.items())
 
-    changed = sum(not kept(place, kind) for place, kind in first.items() if second.get(place) == kind)
+    outside = sum(strange(place) for place in final)
+    changed = sum(not kept(place, kind) for place, kind in agreed.items())
     return outside, changed
 
 

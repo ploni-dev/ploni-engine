@@ -135,8 +135,8 @@ listed word is part of a name that both labellers marked too short (an initial b
 surname, a second surname), make that label longer; do not add the word as a label of
 its own. Add no
 label that is neither in a labeller's file nor on a line of the compare file: the freeze
-refuses a key that does, and a key that drops, cuts or gives another kind to a label both
-labellers have.
+refuses a key that does, a key that drops, cuts or gives another kind to a label both
+labellers have, and a key that puts one label over two labels both have.
 Person keys: take labeller A's key for each person. A label that only B has, or that
 comes from a listed place, gets A's key for that person, or a new key when A has none.
 Write what you decided, line by line, into `key/<id>_decisions.txt`. Check the key with

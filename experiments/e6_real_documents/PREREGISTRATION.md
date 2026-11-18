@@ -5,8 +5,8 @@ existed, and before any detector was run on them. The commit order is the eviden
 first two. For the third there is no evidence but the author's word and the dates of the
 run files.
 
-**Changed on 2026-11-18, after the first and after the second review of PR #99 and before
-any labelling: see the last two sections, which list every change. No document had been
+**Changed on 2026-11-18, after each of the three passes of the review of PR #99 and before
+any labelling: see the last three sections, which list every change. No document had been
 read for names, no label and no key existed, and no detector had been run when it was
 changed.**
 
@@ -179,11 +179,14 @@ is made by E5's `layers.after_triggers`, with three titles added that E1's list 
 E5's lacks (`הנשיא`, `הנשיאה`, `כב'`). Both are made from the labels and from no
 detector's output. The third pass decides each difference and each such place by the rules
 above and writes the key. It adds nothing of its own beyond those places, and the harness
-holds it to that before the freeze: a label of the key that is in neither labeller's file
-and at no listed place, or a label both labellers have that the key lacks, cuts or has
-with another kind, stops the freeze. Where a listed word turns out to be part of a name
-that both labellers marked too short (an initial before a surname, a second surname),
-the third pass makes that label longer; it does not add the word as a name of its own.
+holds it to that before the freeze. These stop the freeze: a label of the key that holds
+a word which is in neither labeller's file and at no listed place; a label both labellers
+have that the key lacks, cuts or has with another kind; one label of the key over two
+labels that both have. Where a listed word turns out to be part of a name that both
+labellers marked too short (an initial before a surname, a second surname), the third
+pass makes that label longer; it does not add the word as a name of its own. That last
+rule is the guide's alone: the harness cannot tell such a word, added as a label of its
+own, from a real second name.
 
 **Whose person keys.** The key takes labeller A's key for each person. A label that only
 B has, or that comes from a listed place, gets A's key for that person, or a new key when
@@ -415,3 +418,15 @@ changes left four things to say. Nothing had been read for names, labelled or ru
 3. **What `CHOSEN.md` holds between backticks.** Only the methods that are judged.
 4. The harness also prints line numbers; the sentence that said "counts and ids only" is
    corrected.
+
+## Changed on 2026-11-18, after the third review, before any labelling
+
+The third pass of the review (2 findings, both taken) found that the check before the
+freeze held less than the text said. Nothing had been read for names, labelled or run.
+
+1. **What the check holds.** As changed after the second review it let a label both
+   labellers have grow by any words, and let one label of the key stand over two that both
+   have. It now refuses a key label that holds a word which is in neither labeller's file
+   and at no listed place, and a key label over two labels that both have.
+2. **What it cannot hold** is said where the rule stands: a listed word added as a name of
+   its own instead of making the name before it longer.
