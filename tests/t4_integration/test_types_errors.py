@@ -9,8 +9,10 @@ Matrix:
   M1  a projection of one table cell, two detections of one person in it, an entity that holds
       both and a surrogate with a form for each surface: every place points into the text
   M2  two entities built from the same detections list: they share it (a list is not copied)
-  M3  an open must-resolve item: NotApprovedError raised, caught as PloniError, its message
-      holds the item id and no text of the document
+  M3  an open must-resolve item, as the test's own export does it: NotApprovedError carries the
+      message and is caught as PloniError; the item's defaults leave it open. That the message
+      holds no text of the document binds the code that raises it (Phase 8), not this type: the
+      check of it here is of the test's own message
 """
 
 import pytest

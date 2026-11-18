@@ -8,9 +8,10 @@ contracts" (build-plan.md Phase 0, "Tests added").
 Test matrix:
 
 Equivalence classes:
-  EC1  each of the eight types of section 5: its fields, by name and in order, as the plan
-       writes them (Span, Anchor, TableCell, TextProjection, Detection, Surrogate, Entity,
-       ReviewItem)
+  EC1  each of the eight types of section 5: its fields, by name and in order, each with the type
+       the plan writes (Span, Anchor, TableCell, TextProjection, Detection, Surrogate, Entity,
+       ReviewItem). The type is compared as written, a string: the module uses postponed
+       annotations
   EC2  the defaults the plan gives (Detection: prefix, suffix, lemma, gender, at_window_edge,
        needs_review, review_reason, metadata; Entity: decision, ambiguous; ReviewItem:
        resolved, resolution); every other field has none
@@ -42,23 +43,37 @@ import pytest
 
 from ploni import errors, types
 
-# build-plan.md section 5, field by field, in the order the plan writes them.
-FIELDS = {
-    "Span": ["start", "end"],
-    "Anchor": ["proj_start", "proj_end", "node_path", "node_offset"],
-    "TableCell": ["table_id", "row", "col", "span"],
-    "TextProjection": ["part", "text", "anchors", "block_breaks", "table_cells"],
+# build-plan.md section 5, field by field, in the order the plan writes them, each with the
+# type the plan writes. A bare `dict` in the plan is `dict[Any, Any]`, which is what it means.
+TYPED = {
+    "Span": [("start", "int"), ("end", "int")],
+    "Anchor": [("proj_start", "int"), ("proj_end", "int"), ("node_path", "str"), ("node_offset", "int")],
+    "TableCell": [("table_id", "str"), ("row", "int"), ("col", "int"), ("span", "Span")],
+    "TextProjection": [
+        ("part", "PartId"), ("text", "str"), ("anchors", "list[Anchor]"), ("block_breaks", "list[int]"),
+        ("table_cells", "list[TableCell]"),
+    ],
     "Detection": [
-        "detection_id", "part", "span", "surface", "entity_type", "confidence", "band", "detector", "base_span",
-        "prefix", "suffix", "lemma", "gender", "at_window_edge", "needs_review", "review_reason", "metadata",
+        ("detection_id", "str"), ("part", "PartId"), ("span", "Span"), ("surface", "str"), ("entity_type", "str"),
+        ("confidence", "float"), ("band", "str"), ("detector", "str"), ("base_span", "Span | None"), ("prefix", "str"),
+        ("suffix", "str"), ("lemma", "str | None"), ("gender", "str | None"), ("at_window_edge", "bool"),
+        ("needs_review", "bool"), ("review_reason", "str | None"), ("metadata", "dict[Any, Any]"),
     ],
-    "Surrogate": ["value", "given", "surname", "gender", "script", "forms", "translit"],
+    "Surrogate": [
+        ("value", "str"), ("given", "str | None"), ("surname", "str | None"), ("gender", "str | None"), ("script", "str"),
+        ("forms", "dict[str, str]"), ("translit", "list[str]"),
+    ],
     "Entity": [
-        "entity_id", "entity_type", "canonical", "variants", "detections", "gender", "family_group", "surrogate",
-        "decision", "ambiguous",
+        ("entity_id", "str"), ("entity_type", "str"), ("canonical", "str"), ("variants", "set[str]"),
+        ("detections", "list[Detection]"), ("gender", "str | None"), ("family_group", "str | None"),
+        ("surrogate", "Surrogate | None"), ("decision", "str"), ("ambiguous", "bool"),
     ],
-    "ReviewItem": ["item_id", "kind", "severity", "message_key", "target", "resolved", "resolution"],
+    "ReviewItem": [
+        ("item_id", "str"), ("kind", "str"), ("severity", "str"), ("message_key", "str"), ("target", "str"),
+        ("resolved", "bool"), ("resolution", "str | None"),
+    ],
 }  # fmt: skip
+FIELDS = {name: [field for field, _ in fields] for name, fields in TYPED.items()}
 DEFAULTS = {
     "Detection": {
         "prefix": "", "suffix": "", "lemma": None, "gender": None, "at_window_edge": False, "needs_review": False,
@@ -84,7 +99,7 @@ def detection(**changes: object) -> types.Detection:
 def test_ec1_the_fields_of_each_type(name: str) -> None:
     cls = getattr(types, name)
     assert dataclasses.is_dataclass(cls)
-    assert [field.name for field in dataclasses.fields(cls)] == FIELDS[name]
+    assert [(field.name, field.type) for field in dataclasses.fields(cls)] == TYPED[name]
 
 
 @pytest.mark.parametrize("name", sorted(FIELDS))
