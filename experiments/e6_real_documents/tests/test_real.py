@@ -27,15 +27,19 @@ parse_labels (a label is paragraph, first run, last run, name, person, kind)
   EC16 lines in any order                     the names in reading order
   EC17 the same name twice in a paragraph     two names, told apart by their runs
   B3   the first and the last run of a paragraph
+  EC22 two spaces, a tab or a line break inside a name      the name as it stands in the text,
+                                              labelled with one space (review 1, finding 1)
+  EC23 a blank line in the file, a byte order mark at its start    read past
   E1   the name is not in the runs
   E2   the name stands twice in the runs, or twice inside one run
   E3   a run or a paragraph that does not exist, the last run before the first, not a number
   E4   a kind that is not one of the three
   E5   a counted name with no person
   E6   one person with two kinds
-  E7   two labels on the same characters
+  E7   two labels on the same characters; every such line is named, also the third of
+       three, and also when a label of another paragraph stands between them in the file
   E8   a name that begins or ends inside a word
-  E9   another header, a line with a column too few
+  E9   another header, a line with a column too few, a name with a space before it
   E10  runs that reach further than the name
   A1   the error names the document and line numbers, and holds no word of the file
 
@@ -342,3 +346,29 @@ def test_e14_a_document_that_the_frozen_table_does_not_name(corpus: Path) -> Non
 def test_e16_a_corpus_folder_inside_the_repository() -> None:
     with pytest.raises(real.CorpusError, match="repository"):
         real.read_document(real.HERE / "tests", "r01")
+
+
+@pytest.mark.parametrize("gap", ["  ", "\t", "\n", " \t "])
+def test_ec22_white_space_inside_a_name(gap: str) -> None:
+    paragraphs = [f"גב' רות{gap}ברק הלכה"]
+    (gold,) = real.parse_labels("t01", labels("0\t1\t2\tרות ברק\tp1\tprivate"), paragraphs)
+    assert paragraphs[0][gold.start : gold.end] == f"רות{gap}ברק" == gold.name
+
+
+def test_ec23_a_blank_line_and_a_byte_order_mark(tmp_path: Path) -> None:
+    assert len(real.parse_labels("t01", labels(GOOD[1], "", GOOD[3]), PARAGRAPHS)) == 2
+    (tmp_path / "t01.tsv").write_bytes(b"\xef\xbb\xbf" + labels(GOOD[1]).encode("utf-8"))
+    assert len(real.read_labels(tmp_path, "t01", PARAGRAPHS)) == 1
+
+
+def test_e7_every_line_that_shares_characters_is_named() -> None:
+    lines = ["0\t0\t2\tמשה דוד כהן\tp1\tprivate", "0\t1\t1\tדוד\tp1\tprivate", "0\t2\t2\tכהן\tp1\tprivate"]
+    with pytest.raises(real.LabelError, match=r"t01: bad lines 3 \(.*\), 4 \("):
+        real.parse_labels("t01", labels(*lines), ["משה דוד כהן"])
+    with pytest.raises(real.LabelError, match=r"t01: bad lines 4 \("):
+        parsed(GOOD[1], GOOD[6], "1\t2\t2\tכהן\tp1\tprivate")
+
+
+def test_e9_a_name_with_a_space_before_it() -> None:
+    with pytest.raises(real.LabelError, match=r"t01: bad lines 2 \("):
+        parsed("1\t6\t6\t לוי\tp2\tprivate")

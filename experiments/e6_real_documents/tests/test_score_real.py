@@ -17,7 +17,8 @@ rows_of (PREREGISTRATION.md, "How it is scored")
   EC5  lonely                                 a person named once in the document
   EC6  no_trigger                             a name the titles step does not touch when
                                               nothing is marked; a name after `מר` is not one
-  EC7  a name that is not counted             in no row
+  EC7  a name that is not counted             in no row, not in `all`, and a detector that marks
+                                              it is not charged (review 1, finding 10)
 
 score / row counts
   EC8  a detector that misses two names       all 4/6, and each row by what was missed
@@ -27,6 +28,9 @@ score / row counts
   E1   a run file made on another text        ValueError that names the file
   E2   the closed pile without named methods, or before CHOSEN.md exists    ValueError
   EC11 the closed pile, named, CHOSEN.md there    scored
+  E6   the closed pile for a method CHOSEN.md does not name    ValueError (review 1, finding 8)
+  EC20 two documents in one pile with the same labels    a name missed in one is not counted
+                                              as missed in the other
 
 extra_places
   EC12 a marked word outside every name       listed; a title is listed as one
@@ -34,20 +38,24 @@ extra_places
 
 table / record_lines / listing / write_private / main
   EC14 the table                              best recall first; a row's numbers in its columns;
-                                              words marked for nothing per 1,000 words
+                                              words marked for nothing per 1,000 words, titles
+                                              left out
   EC15 a record line                          the experiment, the pile, the key, the method, the
                                               rows; no word of the document
   EC16 the listing of one method              every name not found and every word marked for
                                               nothing, each with text around it
   E3   a listing inside the repository        ValueError; outside, it is written
   EC17 the command line                       the table titled with pile and key; a record line
-                                              per method; the listing where it was asked for
+                                              per method, added to the record file and never
+                                              written over it, its folder made when missing;
+                                              the listing where it was asked for
 
 detect_real
   EC18 the open pile                          E5's runner gets the pile's documents under the
                                               name `e6-open`
   E4   the closed pile before CHOSEN.md       ValueError, and nothing is run
   EC19 the closed pile after it               run under the name `e6-closed`
+  E7   a key that is not the frozen one       CorpusError, and nothing is run
 """
 
 import argparse
@@ -175,11 +183,13 @@ def test_e1_a_run_file_made_on_another_text(corpus: Path, tmp_path: Path) -> Non
 def test_e2_ec11_the_closed_pile(corpus: Path, tmp_path: Path) -> None:
     with pytest.raises(ValueError, match="CHOSEN"):
         score_real.score(corpus, tmp_path / "runs", real.CLOSED, ["d + carry"])
-    real.CHOSEN.write_text("chosen\n", encoding="utf-8")
+    real.CHOSEN.write_text("1. `d + carry`\n", encoding="utf-8")
     with pytest.raises(ValueError, match="named"):
         score_real.score(corpus, tmp_path / "runs", real.CLOSED, [])
     results, *_ = score_real.score(corpus, tmp_path / "runs", real.CLOSED, ["d + carry"])
     assert results["d + carry"]["real_rows"]["all"] == [5, 6]
+    with pytest.raises(ValueError, match="d \\+ titles"):
+        score_real.score(corpus, tmp_path / "runs", real.CLOSED, ["d + carry", "d + titles"])
 
 
 def test_ec12_ec13_extra_places(corpus: Path) -> None:
@@ -273,3 +283,58 @@ def test_e5_a_key_that_was_changed_after_the_freeze(corpus: Path, tmp_path: Path
         score_real.score(corpus, tmp_path / "runs", real.OPEN, [])
     results, *_ = score_real.score(corpus, tmp_path / "runs", real.OPEN, ["d + carry"], corpus / "key")
     assert results["d + carry"]["real_rows"]["all"] == [5, 5]
+
+
+def rewrite_run(corpus: Path, runs: Path, tokens: dict[str, list]) -> None:
+    """Write the open pile's run file again, for the documents and spans given."""
+    run = json.loads((runs / "d.e6-open.json").read_text(encoding="utf-8"))
+    run.update(corpus_sha256=data.digest(real.load(corpus, real.OPEN)), tokens={doc_id: [[*span, 1.0, 1] for span in spans] for doc_id, spans in tokens.items()})
+    (runs / "d.e6-open.json").write_text(json.dumps(run), encoding="utf-8")
+
+
+def test_ec7_a_name_that_is_not_counted_is_not_scored(corpus: Path, tmp_path: Path) -> None:
+    other = corpus / "key_other"
+    other.mkdir()
+    (other / "t01.tsv").write_text("\n".join([HEADER, *KEY[:5], "2\t0\t0\tדוד\t-\tnot_counted"]) + "\n", encoding="utf-8", newline="\n")
+    rewrite_run(corpus, tmp_path / "runs", {"t01": [*MARKED, at(2, "דוד")]})
+    results, *_ = score_real.score(corpus, tmp_path / "runs", real.OPEN, ["d + whole words"], other)
+    result = results["d + whole words"]
+    assert result["real_rows"]["all"] == [4, 5] and result["real_rows"]["alone"] == [0, 0]
+    assert (result["extra"], result["extra_no_title"]) == (1, 1)
+
+
+def test_ec14_per_thousand_leaves_titles_out(corpus: Path, tmp_path: Path) -> None:
+    rewrite_run(corpus, tmp_path / "runs", {"t01": [*MARKED, at(0, "מר")]})
+    results, *_ = score_real.score(corpus, tmp_path / "runs", real.OPEN, ["d + whole words"])
+    assert "| 1 | 2 | 62.50 |" in score_real.table("open", results)
+
+
+def test_ec20_two_documents_with_the_same_labels(corpus: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setitem(real.DOCUMENTS, "t03", ("sale", real.OPEN, write_docx(corpus / "docs" / "t03.docx")))
+    (corpus / "key" / "t03.tsv").write_bytes((corpus / "key" / "t01.tsv").read_bytes())
+    lines = real.FROZEN.read_text(encoding="utf-8").splitlines()
+    real.FROZEN.write_text("\n".join([*lines, lines[0].replace("t01", "t03")]) + "\n", encoding="utf-8")
+    everything = [*MARKED, at(1, "ולברק"), at(2, "דוד")]
+    rewrite_run(corpus, tmp_path / "runs", {"t01": MARKED, "t03": everything})
+    results, *_ = score_real.score(corpus, tmp_path / "runs", real.OPEN, ["d + whole words"])
+    assert results["d + whole words"]["real_rows"] == {
+        "all": [10, 12], "private": [8, 10], "public": [2, 2], "one_word": [4, 6], "prefixed": [1, 2],
+        "alone": [1, 2], "lonely": [3, 4], "no_trigger": [6, 8],
+    }  # fmt: skip
+
+
+def test_ec17_the_record_is_added_to(corpus: Path, tmp_path: Path, capsys: pytest.CaptureFixture) -> None:
+    record = tmp_path / "new folder" / "record.jsonl"
+    arguments = argparse.Namespace(corpus=corpus, runs_dir=tmp_path / "runs", pile=real.OPEN, only=["d + carry"], key_dir=None, record=record, lists_to=None)
+    score_real.main(arguments)
+    score_real.main(arguments)
+    assert len(record.read_text(encoding="utf-8").splitlines()) == 2
+
+
+def test_e7_detect_real_needs_the_frozen_key(corpus: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = []
+    monkeypatch.setattr(detect_real.detect, "run_documents", lambda *arguments: calls.append(arguments))
+    (corpus / "key" / "t01.tsv").write_text("\n".join([HEADER, *KEY[:5]]) + "\n", encoding="utf-8", newline="\n")
+    with pytest.raises(real.CorpusError, match="t01"):
+        detect_real.run(corpus, real.OPEN, "joint", tmp_path / "m", tmp_path / "out.json")
+    assert calls == []
