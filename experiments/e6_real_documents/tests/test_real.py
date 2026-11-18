@@ -28,7 +28,7 @@ parse_labels (a label is paragraph, first run, last run, name, person, kind)
   EC17 the same name twice in a paragraph     two names, told apart by their runs
   B3   the first and the last run of a paragraph
   E1   the name is not in the runs
-  E2   the name stands twice in the runs
+  E2   the name stands twice in the runs, or twice inside one run
   E3   a run or a paragraph that does not exist, the last run before the first, not a number
   E4   a kind that is not one of the three
   E5   a counted name with no person
@@ -47,8 +47,10 @@ load / read_document
   E11  a file with another hash than the committed one
   E12  a file that is missing and not listed as deleted
   E13  no key file for a document
-  E14  a key file with another hash than the frozen one; no frozen table at all
+  E14  a key file with another hash than the frozen one; no frozen table at all; a document
+       that the frozen table does not name
   E15  a pile that does not exist
+  E16  a corpus folder inside the repository
 """
 
 import hashlib
@@ -201,7 +203,8 @@ def test_ec16_ec17_b3_reading_order_and_the_same_name_twice() -> None:
         ("3\t0\t0\tון\tp1\tprivate", "E8 begins inside a word"),
         ("3\t1\t1\tלוי\tp1\tprivate", "E8 ends inside a word"),
         ("1\t6\t6\tלוי\tp1", "E9 columns"),
-        ("1\t1\t3\tמשה כהן\tp1\tprivate", "E10"),
+        ("1\t6\t8\tלוי\tp2\tprivate", "E10 the last run is not touched"),
+        ("1\t5\t6\tלוי\tp2\tprivate", "E10 the first run is not touched"),
         ("1\t6\t6\t\tp1\tprivate", "an empty name"),
     ],
 )
@@ -316,3 +319,20 @@ def test_ec21_another_key_folder(corpus: Path) -> None:
 def test_e15_a_pile_that_does_not_exist(corpus: Path) -> None:
     with pytest.raises(ValueError, match="pile"):
         real.load(corpus, "both")
+
+
+def test_e2_the_name_twice_inside_one_run() -> None:
+    with pytest.raises(real.LabelError, match=r"t01: .*\b2\b"):
+        real.parse_labels("t01", labels("0\t0\t0\tכהן\tp1\tprivate"), ["כהן־כהן"])
+
+
+def test_e14_a_document_that_the_frozen_table_does_not_name(corpus: Path) -> None:
+    lines = real.FROZEN.read_text(encoding="utf-8").splitlines()
+    real.FROZEN.write_text("\n".join(line for line in lines if not line.startswith("t03")) + "\n", encoding="utf-8")
+    with pytest.raises(real.CorpusError, match="t03"):
+        real.load(corpus, real.OPEN)
+
+
+def test_e16_a_corpus_folder_inside_the_repository() -> None:
+    with pytest.raises(real.CorpusError, match="repository"):
+        real.read_document(real.HERE / "tests", "r01")

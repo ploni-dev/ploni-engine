@@ -23,6 +23,7 @@ score / row counts
   EC8  a detector that misses two names       all 4/6, and each row by what was missed
   EC9  the same with carry                    the name behind attached letters is found
   EC10 only named methods                     only those are scored
+  E5   a key that was changed after the freeze    CorpusError, unless another key folder is named
   E1   a run file made on another text        ValueError that names the file
   E2   the closed pile without named methods, or before CHOSEN.md exists    ValueError
   EC11 the closed pile, named, CHOSEN.md there    scored
@@ -139,8 +140,8 @@ def test_ec7_a_name_that_is_not_counted_is_in_no_row(corpus: Path, tmp_path: Pat
 
 
 def test_ec8_ec9_a_detector_alone_and_with_carry(corpus: Path, tmp_path: Path) -> None:
-    results, methods, _, left_out, documents = score_real.score(corpus, tmp_path / "runs", real.OPEN, [])
-    assert left_out == [] and [document.doc_id for document in documents] == ["t01"]
+    results, methods, _, documents = score_real.score(corpus, tmp_path / "runs", real.OPEN, [])
+    assert [document.doc_id for document in documents] == ["t01"]
     alone = results["d + whole words"]
     assert alone["real_rows"] == {
         "all": [4, 6], "private": [3, 5], "public": [1, 1], "one_word": [1, 3], "prefixed": [0, 1],
@@ -204,7 +205,7 @@ def test_ec15_a_record_line(corpus: Path, tmp_path: Path) -> None:
 
 
 def test_ec16_the_listing_of_one_method(corpus: Path, tmp_path: Path) -> None:
-    results, methods, runs, _, documents = score_real.score(corpus, tmp_path / "runs", real.OPEN, ["d + carry"])
+    results, methods, runs, documents = score_real.score(corpus, tmp_path / "runs", real.OPEN, ["d + carry"])
     lines = score_real.listing("d + carry", methods["d + carry"], documents, runs, results["d + carry"])
     assert len(lines) == 3
     assert sum("דוד" in line and "missed" in line for line in lines) == 1
@@ -257,3 +258,12 @@ def test_ec18_e4_ec19_detect_real(corpus: Path, tmp_path: Path, monkeypatch: pyt
     real.CHOSEN.write_text("chosen\n", encoding="utf-8")
     detect_real.run(corpus, real.CLOSED, "hf", tmp_path / "m", tmp_path / "out.json", None, 420.0, "abc")
     assert calls[1][2] == "e6-closed" and calls[1][5:] == (None, 420.0, "abc")
+
+
+def test_e5_a_key_that_was_changed_after_the_freeze(corpus: Path, tmp_path: Path) -> None:
+    key = corpus / "key" / "t01.tsv"
+    key.write_text("\n".join([HEADER, *KEY[:5]]) + "\n", encoding="utf-8", newline="\n")
+    with pytest.raises(real.CorpusError, match="t01"):
+        score_real.score(corpus, tmp_path / "runs", real.OPEN, [])
+    results, *_ = score_real.score(corpus, tmp_path / "runs", real.OPEN, ["d + carry"], corpus / "key")
+    assert results["d + carry"]["real_rows"]["all"] == [5, 5]

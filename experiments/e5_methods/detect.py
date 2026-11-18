@@ -306,25 +306,39 @@ def _write(path: Path, content: dict) -> None:
 
 
 def run(detector: str, model_dir: Path, dataset: str, out: Path, onnx_file: Path | None = None, budget: float | None = None, sha256: str | None = None) -> None:
-    """Run one detector over one corpus.
+    """Run one detector over one corpus of E5.
+
+    Why: the command line names a corpus, and its text is generated here.
+
+    Contract: `run_documents` on `data.load(dataset)`. `dataset` is a key of
+    `data.DATASETS`; KeyError otherwise.
+    """
+    run_documents(detector, model_dir, dataset, data.load(dataset), out, onnx_file, budget, sha256)
+
+
+def run_documents(
+    detector: str, model_dir: Path, dataset: str, documents: list, out: Path,
+    onnx_file: Path | None = None, budget: float | None = None, sha256: str | None = None,
+) -> None:  # fmt: skip
+    """Run one detector over documents that are already loaded.
 
     Why: the one entry point of a measurement, so that every candidate is run, timed and
-    recorded in the same way.
+    recorded in the same way, on E5's generated corpora and on E6's real documents alike.
 
-    Contract: writes a JSON object to `out`: `detector`, `model` (the folder's name),
+    Contract: `documents` each have a `doc_id` and `paragraphs`; `dataset` is the name
+    they go by. Writes a JSON object to `out`: `detector`, `model` (the folder's name),
     `hashes`, `dataset`, `corpus_sha256` (`data.digest` of the text that was run),
     `labels`, `person_labels`, `seconds` (the time inside the detector for the whole
     corpus; the loading of the model is left out), `load_seconds` (of the last part),
     `peak_mb` (the largest of any part), `parts`, `threads`, and `tokens`, which maps a
     document's id to its rows. With `budget`, the run stops when that many seconds have
     passed and writes what it has to `<out>.part`; the same command, given again, goes on
-    from there, and the last part removes that file. The corpus is generated and the
-    weights are hashed before the model is loaded, so a broken template or other weights
-    stop the run before any time is spent. Raises ValueError as `checked_hashes` and
-    `part_state` do.
+    from there, and the last part removes that file. The documents are loaded by the
+    caller and the weights are hashed before the model is loaded, so a broken template or
+    other weights stop the run before any time is spent. Raises ValueError as
+    `checked_hashes` and `part_state` do.
     """
     torch.set_num_threads(TORCH_THREADS)
-    documents = data.load(dataset)
     hashes = checked_hashes(detector, model_dir, onnx_file, sha256)
     identity = {
         "detector": detector, "model": model_dir.name, "weights": onnx_file.name if onnx_file is not None else "model.safetensors",

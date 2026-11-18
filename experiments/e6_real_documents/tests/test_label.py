@@ -23,6 +23,7 @@ places (the two lists of places to look at)
                                               attached letters
   EC8  the word after a title                 listed as `title`
   EC9  a place inside a label, counted or not not listed
+  EC14 a word of which a label covers only a part (a name behind attached letters)    not listed
   B2   nothing labelled                       only the words after titles
 
 run_span
@@ -173,3 +174,10 @@ def test_ec13_freeze(corpus: Path) -> None:
     lines = label.freeze(corpus)
     expected = hashlib.sha256((corpus / "key" / "t01.tsv").read_bytes()).hexdigest()
     assert lines == [f"t01\t{expected}", f"t02\t{expected}"]
+
+
+def test_ec14_a_word_that_a_label_covers_in_part() -> None:
+    behind = "1\t6\t6\tכהן\tp1\tprivate"
+    found = label.places(PARAGRAPHS, gold(FULL, SURNAME, behind))
+    assert not any(place[:3] == at(1, "לכהן") for place in found)
+    assert [place[3] for place in found] == ["title"]
