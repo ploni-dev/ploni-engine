@@ -73,6 +73,10 @@ load_runs / check_request / evaluate / record_lines / read_name_list
                                        per method and table, each with its own corpus's model,
                                        the list's label only where the method uses the list
 
+score_corpora (E6 calls it with documents of its own)
+  EC42 corpora that are already loaded, under any name    scored like a corpus of E5, by the
+                                       run files of that name
+
 data
   EC20 the three corpora               the sizes the pre-registration names
   EC21 lonely                          a person named once, never a group mention
@@ -501,3 +505,11 @@ def test_ec34_the_digest_of_a_corpus() -> None:
     changed = [DOCUMENT._replace(paragraphs=[*PARAGRAPHS, "עוד שורה."])]
     assert data.digest([DOCUMENT]) != data.digest(changed)
     assert data.digest([DOCUMENT]) == data.digest([DOCUMENT._replace(gold=[])])
+
+
+def test_ec42_score_corpora_takes_corpora_that_are_already_loaded(tmp_path: Path) -> None:
+    file = {**run(FULL, SURNAME), "dataset": "hand", "corpus_sha256": data.digest([DOCUMENT])}
+    (tmp_path / "d.hand.json").write_text(json.dumps(file), encoding="utf-8")
+    results, methods, runs, left_out = evaluate.score_corpora(tmp_path, {"hand": [DOCUMENT]}, evaluate.NameList(frozenset(), ""), ["d + whole words"])
+    assert results["hand"]["d + whole words"]["rows"]["all"] == [2, 3]
+    assert (list(results), list(methods), list(runs), left_out) == (["hand"], ["d + whole words"], ["hand"], [])
