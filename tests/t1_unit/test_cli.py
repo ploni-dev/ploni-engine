@@ -154,20 +154,33 @@ def test_ec13_a_hebrew_name_on_an_output_that_cannot_encode_it(tmp_path: Path, m
     assert raw.getvalue().decode("cp1252").splitlines() == ["\\u05e9\\u05de\\u05d5\\u05ea rev1 1 files 1 bytes", "offline OK"]
 
 
-def test_ec14_a_name_folder_it_cannot_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+def deny_reading(folder: Path) -> None:
+    """Take away the right to list a folder: an ACL entry on Windows, mode 0 on POSIX.
+
+    Skips the test where that cannot be done (root reads every folder).
+    """
+    if os.name == "nt":
+        subprocess.run(["icacls", str(folder), "/deny", "*S-1-1-0:(RD)"], check=True, capture_output=True)
+    elif os.geteuid() == 0:
+        pytest.skip("root reads every folder")
+    else:
+        folder.chmod(0)
+
+
+def allow_reading(folder: Path) -> None:
+    """Undo deny_reading, so that pytest can remove the folder."""
+    if os.name == "nt":
+        subprocess.run(["icacls", str(folder), "/remove:d", "*S-1-1-0"], check=True, capture_output=True)
+    else:
+        folder.chmod(0o700)
+
+
+def test_ec14_a_name_folder_it_cannot_read(tmp_path: Path) -> None:
     (tmp_path / "locked" / "rev").mkdir(parents=True)
     (tmp_path / "m" / "rev").mkdir(parents=True)
     (tmp_path / "m" / "rev" / "w").write_bytes(b"z")
-    locked = str(tmp_path / "locked")
-    real_scandir, real_listdir = os.scandir, os.listdir
-
-    def refuse(real):  # type: ignore[no-untyped-def]
-        def call(path="."):  # type: ignore[no-untyped-def]
-            if os.fspath(path).rstrip("/" + chr(92)) == locked:
-                raise PermissionError(13, "Access is denied")
-            return real(path)
-        return call
-
-    monkeypatch.setattr(os, "scandir", refuse(real_scandir))
-    monkeypatch.setattr(os, "listdir", refuse(real_listdir))
-    assert cli.inventory(tmp_path) == ["m rev 1 files 1 bytes"]
+    deny_reading(tmp_path / "locked")
+    try:
+        assert cli.inventory(tmp_path) == ["m rev 1 files 1 bytes"]
+    finally:
+        allow_reading(tmp_path / "locked")
