@@ -12,8 +12,9 @@ read for names, no label and no key existed, and no detector had been run when i
 changed.**
 
 **Amended on 2026-11-18, after the two labellers were put side by side and before the third
-pass, the freeze and any run: see the last section. It adds a third labeller, by another
-model, and says what had been seen when it was written.**
+pass, the freeze and any run: see the last two sections. They add a third labeller, by
+another model, name the model of the third pass, and say what had been seen when each was
+written. One sentence of "The subject check" above is corrected there.**
 
 ## Why this experiment exists
 
@@ -522,3 +523,81 @@ less like A than B is, and it is not a person. No person checks the key. That th
 amendment was written after the agreement of A and B was seen, and not before, is the
 reason it is here: the plan should have said that two sessions of one model are not two
 readers.
+
+## Added on 2026-11-18, after the review of the amendment, before the third pass
+
+An independent review of the section above (5 findings, 29 to 33, all taken) found it sound
+and found five things unsaid. This section says them. It is committed before the third
+pass, the freeze and any detector run.
+
+### What had been done and seen by now
+
+- Labeller C finished: four sessions of Claude Opus 5.5 (`claude-opus-5-5`). A and B were
+  sessions of Claude Fable 5.2 (`claude-fable-5-2`), the model that runs the experiment.
+  No session of C raised a flag of the subject check.
+- The session that runs the experiment saw the counts C's sessions reported and, from a
+  script that prints numbers only and writes nothing, how far A and C agree: **the same
+  counted name at the same place for 717 of 728, 98.49 percent**; 240 of 246 in the open
+  pile and 477 of 482 in the closed one. They differ in 32 labels, 10 of them in the kind
+  only; no person split. It also saw, in the sessions' reports, the kinds of case the guide
+  does not settle (a judge's own initials beside an insertion, a typist's initials after
+  the file name, a party who holds an office, a second surname in brackets), with
+  paragraph numbers and no text. It opened no worksheet, label file, doubts file or
+  compare file.
+- That no labelling session read another's files rests on the sessions' word: all three
+  label folders lie in the one corpus folder. What can be seen from outside fits it. A and
+  B wrote their files in the same four minutes (11:00 to 11:04), C began at 11:08, after
+  the commit of the section above (11:07); 16 of the 20 files of A and B are the same
+  byte for byte, and 16 of C's 20 differ in size from A's.
+
+### The model of the third pass (finding 31)
+
+The third pass is made by sessions of Claude Sonnet 5.5 (`claude-sonnet-5-5`): neither
+A's model nor C's, so that no difference between the two is judged by the twin of one of
+them. This is chosen after the count of how far A and C agree was seen, and before any
+of their differences was. It could not be chosen for a result: no detector has been run.
+
+### The way of B's 14 labels, and what stands (finding 30)
+
+Before `compare` runs on A and C, the folder `compare`, which holds A against B, is
+renamed `compare_ab`. The third pass reads, per document: `compare/<id>.tsv` (A against
+C, with the two lists), the lines of `compare_ab/<id>.tsv` whose `why` is `differ`, and
+the doubts files of all three labellers. Where A and C have the same label, that label
+stands, whatever B has: the check before the freeze holds the key to A and C. A label
+that only B has can go into the key only where it touches a label of A or of C or a
+listed place. `LABELLING.md` says the same to the third pass, and settles the four kinds
+of case named above by the rules of this file, so that they are decided alike in every
+document: bare initials are not counted, whoever they stand for; a second surname in
+brackets is a label of its own; a party who holds an office is `public` only where the
+decision gives the office beside the name; a word of which it is unsure that it is a
+person's name, inside the name of a company or a place, is `not_counted`.
+
+### What 477 names in the closed pile mean (finding 29)
+
+"What 'holds on real documents' means" says that "too few to say" is the likely answer
+for the closed pile alone, from about 250 names a pile. The closed pile holds about 477
+by the labels, which at E1's 95.53 percent is about 21 errors, over the 15 the rule asks
+for. So the closed pile alone will most likely give the answer. The rule is unchanged.
+The open pile holds about 241: one name there is 0.4 points, and some rows may hold fewer
+than 30. Achia was told before the labelling that the closed pile would likely be too
+small; he is told this too.
+
+### One document holds 146 of the closed pile's names (finding 32)
+
+The verdict stays on all ten documents of the closed pile. Beside it the note gives, for
+that document and for the other nine apart: the errors of `joint + whole words`, and how
+many of them `joint + carry` finds. If the verdict would be another one without that
+document, the note says so in its first lines. This is written before any run, so that
+the split is not chosen after the result.
+
+### "The subject check", corrected
+
+The text above says that "every hit" of the list of words was read in its sentence: 31
+hits. The script that wrote those sentences dropped a sentence whose only hit stood
+inside one of eleven patterns of everyday words, and the review of PR #100 found that
+four of the patterns could also hide a word that matters (`הקטינים`, `ילדות`, `מנער`,
+the pair `פלוני אלמוני`). A second script counted what the first had dropped, printing
+numbers only: 13 sentence hits by pattern, all of them `נערך` and `נערכ` ("was held"),
+`מינימ`, `זמינ`, `ימיני` and one surname; no dropped sentence matches one of the four.
+So the 31 are every hit but for those, and none of the twelve labelling sessions, which
+read every document whole, raised a flag.
