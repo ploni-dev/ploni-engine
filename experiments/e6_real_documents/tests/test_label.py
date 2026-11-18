@@ -43,6 +43,11 @@ key_faults (review 1, finding 7)
   EC26 a label both have that the key makes longer, with the same kind    no fault; with
                                               another kind, a fault (review 2, finding 17)
   EC27 a place the two label with another kind    the key may take either (review 2, finding 18)
+  EC30 a key label that adds a word which is in no labeller's label and at no listed place,
+       after or before a label both have      counted in the first (review 3, finding 23)
+  EC31 one key label over two labels both have    both counted in the second (review 3, finding 23)
+  EC32 a label both have that the key cuts; a covering label in another paragraph only
+                                              counted in the second (review 3, finding 24)
 
 run_span
   EC10 a place inside one run, over two runs  the numbers of its first and last run
@@ -293,19 +298,48 @@ def test_ec25_e4_the_three_commands(corpus: Path, tmp_path: Path, monkeypatch: p
     assert real.FROZEN.read_bytes() == before
 
 
+LONGER = ["השופט י' כהן קבע כי", "גב' דנה כהן לוי באה", "לוי חתמה", "דוד לוי ורות ברק"]
+AGREED = ["0\t2\t2\tכהן\tp1\tpublic", "1\t1\t2\tדנה כהן\tp2\tprivate", "2\t0\t0\tלוי\tp2\tprivate", "3\t0\t1\tדוד לוי\tp3\tprivate", "3\t2\t3\tרות ברק\tp4\tprivate"]
+
+
+def longer(*changes: tuple[int, str]) -> tuple[int, int]:
+    """Count the faults of a key that is the agreed labels with some lines replaced, each given as (index, line)."""
+    lines = list(AGREED)
+    for index, line in changes:
+        lines[index] = line
+
+    def of(chosen: list[str]) -> list:
+        return real.parse_labels("t01", "\n".join([HEADER, *chosen]) + "\n", LONGER)
+
+    return label.key_faults(LONGER, of(AGREED), of(AGREED), of(lines))
+
+
 def test_ec26_a_label_both_have_that_the_key_makes_longer() -> None:
-    paragraphs = ["השופט י' כהן קבע", "גב' דנה כהן לוי באה"]
+    initial, second_surname = (0, "0\t1\t2\tי' כהן\tp1\tpublic"), (1, "1\t1\t3\tדנה כהן לוי\tp2\tprivate")
+    assert longer() == (0, 0)
+    assert longer(initial, second_surname) == (0, 0)
+    assert longer((0, "0\t1\t2\tי' כהן\tp1\tprivate"), second_surname) == (0, 1)
 
-    def of(*lines: str) -> list:
-        return real.parse_labels("t01", "\n".join([HEADER, *lines]) + "\n", paragraphs)
 
-    short = of("0\t2\t2\tכהן\tp1\tpublic", "1\t1\t2\tדנה כהן\tp2\tprivate")
-    longer = of("0\t1\t2\tי' כהן\tp1\tpublic", "1\t1\t3\tדנה כהן לוי\tp2\tprivate")
-    assert label.key_faults(paragraphs, short, short, longer) == (0, 0)
-    other_kind = of("0\t1\t2\tי' כהן\tp1\tprivate", "1\t1\t3\tדנה כהן לוי\tp2\tprivate")
-    assert label.key_faults(paragraphs, short, short, other_kind) == (0, 1)
-    beside = of("0\t1\t1\tי'\tp1\tpublic", "0\t2\t2\tכהן\tp1\tpublic", "1\t1\t2\tדנה כהן\tp2\tprivate")
-    assert label.key_faults(paragraphs, short, short, beside) == (0, 0)
+def test_ec30_a_key_label_that_adds_a_word_nobody_named() -> None:
+    assert longer((1, "1\t1\t4\tדנה כהן לוי באה\tp2\tprivate")) == (1, 0)
+    assert longer((0, "0\t0\t3\tהשופט י' כהן קבע\tp1\tpublic")) == (1, 0)
+    assert longer((0, "0\t2\t3\tכהן קבע\tp1\tpublic")) == (1, 0)
+
+
+def test_ec31_one_key_label_over_two_labels_both_have() -> None:
+    assert longer((3, "3\t0\t3\tדוד לוי ורות ברק\tp3\tprivate"), (4, "")) == (0, 2)
+
+
+def test_ec32_a_label_both_have_that_the_key_cuts() -> None:
+    assert longer((3, "3\t1\t1\tלוי\tp3\tprivate")) == (0, 1)
+    paragraphs = ["כהן בא", "כהן בא"]
+
+    def of(line: str) -> list:
+        return real.parse_labels("t01", HEADER + "\n" + line + "\n", paragraphs)
+
+    agreed = of("0\t0\t0\tכהן\tp1\tprivate")
+    assert label.key_faults(paragraphs, agreed, agreed, of("1\t0\t0\tכהן\tp1\tprivate")) == (0, 1)
 
 
 def test_ec27_a_place_the_two_label_with_another_kind() -> None:
