@@ -37,7 +37,8 @@ parse_labels (a label is paragraph, first run, last run, name, person, kind)
   E5   a counted name with no person
   E6   one person with two kinds
   E7   two labels on the same characters; every such line is named, also the third of
-       three, and also when a label of another paragraph stands between them in the file
+       three, and also when a label of another paragraph stands between them in the file,
+       or begins between them (review 2, finding 18)
   E8   a name that begins or ends inside a word
   E9   another header, a line with a column too few, a name with a space before it
   E10  runs that reach further than the name
@@ -372,3 +373,9 @@ def test_e7_every_line_that_shares_characters_is_named() -> None:
 def test_e9_a_name_with_a_space_before_it() -> None:
     with pytest.raises(real.LabelError, match=r"t01: bad lines 2 \("):
         parsed("1\t6\t6\t לוי\tp2\tprivate")
+
+
+def test_e7_a_label_of_another_paragraph_that_begins_between_the_two() -> None:
+    lines = ["0\t0\t2\tמשה דוד כהן\tp1\tprivate", "1\t1\t1\tרות\tp2\tprivate", "0\t2\t2\tכהן\tp1\tprivate"]
+    with pytest.raises(real.LabelError, match=r"t01: bad lines 4 \("):
+        real.parse_labels("t01", labels(*lines), ["משה דוד כהן", "גב' רות באה"])

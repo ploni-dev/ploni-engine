@@ -28,7 +28,8 @@ score / row counts
   E1   a run file made on another text        ValueError that names the file
   E2   the closed pile without named methods, or before CHOSEN.md exists    ValueError
   EC11 the closed pile, named, CHOSEN.md there    scored
-  E6   the closed pile for a method CHOSEN.md does not name    ValueError (review 1, finding 8)
+  E6   the closed pile for a method CHOSEN.md does not name, also one whose name is the
+       beginning of a method it does name    ValueError (review 1, finding 8; review 2, 18)
   E8   the closed pile with another key than the frozen one    ValueError (review 1, finding 6)
   EC20 two documents in one pile with the same labels    a name missed in one is not counted
                                               as missed in the other
@@ -345,3 +346,11 @@ def test_e8_the_closed_pile_takes_the_frozen_key_only(corpus: Path, tmp_path: Pa
     real.CHOSEN.write_text("1. `d + carry`\n", encoding="utf-8")
     with pytest.raises(ValueError, match="frozen key only"):
         score_real.score(corpus, tmp_path / "runs", real.CLOSED, ["d + carry"], corpus / "key")
+
+
+def test_e6_a_method_whose_name_is_the_beginning_of_a_named_one(corpus: Path, tmp_path: Path) -> None:
+    real.CHOSEN.write_text("1. `d + carry strong`\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="does not name: d \\+ carry$"):
+        score_real.score(corpus, tmp_path / "runs", real.CLOSED, ["d + carry"])
+    results, *_ = score_real.score(corpus, tmp_path / "runs", real.CLOSED, ["d + carry strong"])
+    assert list(results) == ["d + carry strong"]

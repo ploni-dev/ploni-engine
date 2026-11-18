@@ -40,6 +40,9 @@ key_faults (review 1, finding 7)
   EC22 a key label that neither labeller has and no list names    counted in the first
   EC23 a label both have that the key lacks, or has with another kind    counted in the second
   EC24 a key label inside a listed place, or on a place only one labeller has    no fault
+  EC26 a label both have that the key makes longer, with the same kind    no fault; with
+                                              another kind, a fault (review 2, finding 17)
+  EC27 a place the two label with another kind    the key may take either (review 2, finding 18)
 
 run_span
   EC10 a place inside one run, over two runs  the numbers of its first and last run
@@ -51,8 +54,12 @@ write_worksheets / compare / freeze (on a made-up corpus folder)
                                               differ, how many places; a file with a line per
                                               difference and per place
   E1   a labeller's file that is missing      CorpusError that names the document
+  EC28 compare, a person split                its two places are lines of the file, `why` is `person`
+  EC29 compare, a name with a tab inside      written with one space, on one line of seven
+                                              columns (review 2, finding 19)
   EC13 freeze                                 the id and the SHA-256 of every key file
-  E2   freeze, a key that breaks the rule     CorpusError that names the document and the two counts
+  E2   freeze, a key that breaks the rule     CorpusError that names the document and the two counts,
+                                              also when only one of the two is not 0
   E3   freeze, a key that cannot be read      LabelError
   EC25 the three commands                     counts only on the screen; freeze writes the table
   E4   freeze, when the table is already there    ValueError, and the table is as it was
@@ -284,3 +291,61 @@ def test_ec25_e4_the_three_commands(corpus: Path, tmp_path: Path, monkeypatch: p
     with pytest.raises(ValueError, match="already"):
         label.main(argparse.Namespace(command="freeze", **arguments))
     assert real.FROZEN.read_bytes() == before
+
+
+def test_ec26_a_label_both_have_that_the_key_makes_longer() -> None:
+    paragraphs = ["השופט י' כהן קבע", "גב' דנה כהן לוי באה"]
+
+    def of(*lines: str) -> list:
+        return real.parse_labels("t01", "\n".join([HEADER, *lines]) + "\n", paragraphs)
+
+    short = of("0\t2\t2\tכהן\tp1\tpublic", "1\t1\t2\tדנה כהן\tp2\tprivate")
+    longer = of("0\t1\t2\tי' כהן\tp1\tpublic", "1\t1\t3\tדנה כהן לוי\tp2\tprivate")
+    assert label.key_faults(paragraphs, short, short, longer) == (0, 0)
+    other_kind = of("0\t1\t2\tי' כהן\tp1\tprivate", "1\t1\t3\tדנה כהן לוי\tp2\tprivate")
+    assert label.key_faults(paragraphs, short, short, other_kind) == (0, 1)
+    beside = of("0\t1\t1\tי'\tp1\tpublic", "0\t2\t2\tכהן\tp1\tpublic", "1\t1\t2\tדנה כהן\tp2\tprivate")
+    assert label.key_faults(paragraphs, short, short, beside) == (0, 0)
+
+
+def test_ec27_a_place_the_two_label_with_another_kind() -> None:
+    public = WITNESS.replace("private", "public")
+    a, b = gold(FULL, WITNESS), gold(FULL, public)
+    assert label.key_faults(PARAGRAPHS, a, b, gold(FULL, WITNESS)) == (0, 0)
+    assert label.key_faults(PARAGRAPHS, a, b, gold(FULL, public)) == (0, 0)
+    assert label.key_faults(PARAGRAPHS, a, b, gold(FULL)) == (0, 0)
+
+
+def test_e2_freeze_refuses_on_either_count_alone(corpus: Path) -> None:
+    shutil.copytree(corpus / "labels_a", corpus / "key")
+    key = corpus / "key" / "t02.tsv"
+    key.write_text("\n".join([HEADER, FULL, "1\t5\t5\tהשיבה\tp7\tprivate"]) + "\n", encoding="utf-8", newline="\n")
+    with pytest.raises(real.CorpusError, match=r"t02: 1 .* 0 "):
+        label.freeze(corpus, corpus / "labels_a", corpus / "labels_b")
+    key.write_text("\n".join([HEADER, SURNAME]) + "\n", encoding="utf-8", newline="\n")
+    with pytest.raises(real.CorpusError, match=r"t02: 0 .* 1 "):
+        label.freeze(corpus, corpus / "labels_a", corpus / "labels_b")
+
+
+def test_ec28_compare_writes_a_person_split(corpus: Path) -> None:
+    for doc_id in ("t01", "t02"):
+        (corpus / "labels_b" / f"{doc_id}.tsv").write_text("\n".join([HEADER, FULL, SURNAME.replace("p1", "p9")]) + "\n", encoding="utf-8", newline="\n")
+    counts = label.compare(corpus, corpus / "labels_a", corpus / "labels_b")
+    assert counts["t01"]["persons"] == 2 and counts["t01"]["differ"] == 0
+    lines = (corpus / "compare" / "t01.tsv").read_text(encoding="utf-8").splitlines()
+    assert "0\t1\t2\tמשה כהן\tp1\tp1\tperson" in lines and "1\t0\t0\tכהן\tp1\tp9\tperson" in lines
+
+
+def test_ec29_compare_writes_a_name_on_one_line(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    folder = tmp_path / "corpus"
+    (folder / "docs").mkdir(parents=True)
+    document = docx.Document()
+    document.add_paragraph("גב' רות\tברק באה")
+    document.save(str(folder / "docs" / "t01.docx"))
+    monkeypatch.setattr(real, "DOCUMENTS", {"t01": ("sale", real.OPEN, hashlib.sha256((folder / "docs" / "t01.docx").read_bytes()).hexdigest())})
+    for name, lines in (("labels_a", ["0\t1\t2\tרות ברק\tp1\tprivate"]), ("labels_b", [])):
+        (folder / name).mkdir()
+        (folder / name / "t01.tsv").write_text("\n".join([HEADER, *lines]) + "\n", encoding="utf-8", newline="\n")
+    label.compare(folder, folder / "labels_a", folder / "labels_b")
+    lines = (folder / "compare" / "t01.tsv").read_text(encoding="utf-8").splitlines()
+    assert lines[1:] == ["0\t1\t2\tרות ברק\tprivate\t\tdiffer"]
