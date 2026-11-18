@@ -74,6 +74,8 @@ load_runs / check_request / evaluate / record_lines / read_name_list
                                        the list's label only where the method uses the list
 
 score_corpora (E6 calls it with documents of its own)
+  EC43 more methods than the grid holds   scored with the grid's, and can be named with `only`;
+                                       one whose detector was not run is left out
   EC42 corpora that are already loaded, under any name    scored like a corpus of E5, by the
                                        run files of that name
 
@@ -513,3 +515,16 @@ def test_ec42_score_corpora_takes_corpora_that_are_already_loaded(tmp_path: Path
     results, methods, runs, left_out = evaluate.score_corpora(tmp_path, {"hand": [DOCUMENT]}, evaluate.NameList(frozenset(), ""), ["d + whole words"])
     assert results["hand"]["d + whole words"]["rows"]["all"] == [2, 3]
     assert (list(results), list(methods), list(runs), left_out) == (["hand"], ["d + whole words"], ["hand"], [])
+
+
+def test_ec43_score_corpora_takes_more_methods(tmp_path: Path) -> None:
+    file = {**run(FULL, SURNAME), "dataset": "hand", "corpus_sha256": data.digest([DOCUMENT])}
+    (tmp_path / "d.hand.json").write_text(json.dumps(file), encoding="utf-8")
+    swapped = evaluate.Method("d + carry, group", ("d",), None, True, ("carry", "group"))
+    not_run = evaluate.Method("x + carry", ("x",), None, True, ("carry",))
+    nothing = evaluate.NameList(frozenset(), "")
+    results, methods, *_ = evaluate.score_corpora(tmp_path, {"hand": [DOCUMENT]}, nothing, ["d + carry, group"], [swapped, not_run])
+    assert list(methods) == ["d + carry, group"] and methods["d + carry, group"].steps == ("carry", "group")
+    assert results["hand"]["d + carry, group"]["rows"]["all"] == [3, 3]
+    _, everything, *_ = evaluate.score_corpora(tmp_path, {"hand": [DOCUMENT]}, nothing, [], [swapped, not_run])
+    assert "d + carry, group" in everything and "d + carry" in everything and "x + carry" not in everything

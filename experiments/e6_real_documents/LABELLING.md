@@ -121,11 +121,32 @@ on) is not one of the four.
 
 ## The third pass
 
+Since the amendment of 2026-11-18 to the pre-registration there are three labellers. The
+key is made from A (`labels_a`) and C (`labels_c`): where this part says "the two
+labellers" it means A and C, and "a label only B has" below reads "a label only C has".
+Labeller B (`labels_b`) agreed with A on every counted name; the labels in which B differs
+from A are the lines of `compare_ab/<id>.tsv` whose `why` is `differ`. Decide those too,
+by the same rules. Where A and C have the same label, that label stands whatever B has,
+and a label that only B has can go into the key only where it touches a label of A or of
+C or a listed place: the freeze holds the key to A and C.
+
+Four kinds of case came up that the rules above do not name. Decide them alike in every
+document:
+
+- Bare initials are `not_counted`, whoever they stand for: a judge's own initials beside
+  an insertion or an emphasis, and the letters after the file name in the last lines.
+- A second surname in brackets is a label of its own, with the same person key; no
+  bracket stands inside a label.
+- A party who holds an office is `public` only where the decision gives the office
+  beside the name; otherwise `private`.
+- A word inside the name of a company, a street or a place, of which you are unsure
+  that it is a person's name, is `not_counted`.
+
 For each document, `compare/<id>.tsv` holds a line per label that only one labeller has
 or that the two have with another kind (`why` is `differ`), and a line per place that may
 hold a name no label marks (`why` is `carry` or `title`). Read each line in its paragraph
-in the worksheet and decide it by the rules above. Read the two labellers' doubts for the
-document. A line whose `why` is `person` is a place where the two labellers divide the
+in the worksheet and decide it by the rules above. Read the doubts of all three labellers
+for the document. A line whose `why` is `person` is a place where the two labellers divide the
 names among people in another way: one sees one person where the other sees two. Decide
 by the text who is who.
 

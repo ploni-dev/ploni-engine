@@ -14,8 +14,9 @@ was committed before any document was read for names.
 | `label.py` | writes the labellers' worksheets, checks a folder of label files, puts two labellers side by side, checks the key against them and freezes it |
 | `detect_real.py` | runs one model over one pile, by E5's runner |
 | `score_real.py` | scores E5's methods on one pile against the key; loads no model |
-| `key_sha256.tsv` | the hash of every key file; added by the commit that freezes the key, before any run |
-| `results/CHOSEN.md` | the methods judged on the closed pile; added before that pile is touched |
+| `key_sha256.tsv` | the hash of every key file, committed when the key was frozen, before any run |
+| `results/CHOSEN.md` | the methods judged on the closed pile, committed before that pile was touched |
+| `results/open.md`, `open_fitted.md`, `closed.md`, `record.jsonl` | the tables as printed, and one line per method and pile; numbers and method names only |
 | `tests/` | the tests of all of the above, on made-up sentences |
 
 No name and no sentence of the twenty decisions is in this folder. The documents, the
@@ -56,5 +57,10 @@ counted) and `kind` (`private`, `public` or `not_counted`).
 
 ## What it does not do
 
-It changes nothing under `ploni/` and decides nothing. Its output is a findings note in
-`docs/findings/`.
+It changes nothing under `ploni/` and decides nothing. Its output is
+`docs/findings/2026-11-18-e6-real-documents.md`.
+
+The pre-registration was amended once after it merged, before the third pass: the two
+labellers of one model agreed on every name, so a third labeller by another model was added
+and the key is made from A and C (`label.py compare` and `freeze` with `labels_a` and
+`labels_c`). One method was fitted on the open pile: `score_real.FITTED`.

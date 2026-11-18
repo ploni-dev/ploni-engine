@@ -34,6 +34,12 @@ score / row counts
   EC20 two documents in one pile with the same labels    a name missed in one is not counted
                                               as missed in the other
 
+FITTED (PREREGISTRATION.md, "What may be fitted on the open pile")
+  EC21 the one fitted method                  `joint + carry strong, titles`: E5's two steps in
+                                              the other order, on the plan's model with whole words
+  EC22 a fitted method                        scored with the grid's methods, named like them;
+                                              on the closed pile only when CHOSEN.md names it
+
 extra_places
   EC12 a marked word outside every name       listed; a title is listed as one
   EC13 a marked word inside a name, counted or not    not listed
@@ -354,3 +360,23 @@ def test_e6_a_method_whose_name_is_the_beginning_of_a_named_one(corpus: Path, tm
         score_real.score(corpus, tmp_path / "runs", real.CLOSED, ["d + carry"])
     results, *_ = score_real.score(corpus, tmp_path / "runs", real.CLOSED, ["d + carry strong"])
     assert list(results) == ["d + carry strong"]
+
+
+def test_ec21_the_one_fitted_method() -> None:
+    (method,) = score_real.FITTED
+    assert method == score_real.evaluate.Method("joint + carry strong, titles", ("joint",), None, True, ("carry_strong", "titles"))
+
+
+def test_ec22_a_fitted_method_is_scored_like_the_others(corpus: Path, tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    fitted = score_real.evaluate.Method("d + carry strong, titles", ("d",), None, True, ("carry_strong", "titles"))
+    monkeypatch.setattr(score_real, "FITTED", (fitted,))
+    results, methods, *_ = score_real.score(corpus, tmp_path / "runs", real.OPEN, [])
+    assert results["d + carry strong, titles"]["real_rows"]["all"] == [5, 6] and "d + titles, carry strong" in methods
+    only, *_ = score_real.score(corpus, tmp_path / "runs", real.OPEN, ["d + carry strong, titles"])
+    assert list(only) == ["d + carry strong, titles"]
+    real.CHOSEN.write_text("1. `d + carry`\n", encoding="utf-8")
+    with pytest.raises(ValueError, match="does not name: d \\+ carry strong, titles"):
+        score_real.score(corpus, tmp_path / "runs", real.CLOSED, ["d + carry strong, titles"])
+    real.CHOSEN.write_text("9. `d + carry strong, titles`\n", encoding="utf-8")
+    closed, *_ = score_real.score(corpus, tmp_path / "runs", real.CLOSED, ["d + carry strong, titles"])
+    assert closed["d + carry strong, titles"]["real_rows"]["all"] == [5, 6]

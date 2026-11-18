@@ -457,15 +457,18 @@ def evaluate(runs_dir: Path, datasets: list[str], name_list: NameList, only: lis
     return score_corpora(runs_dir, {dataset: data.load(dataset) for dataset in datasets}, name_list, only)
 
 
-def score_corpora(runs_dir: Path, corpora: dict[str, list[generate.Document]], name_list: NameList, only: list[str]) -> tuple[dict, dict, dict, list[str]]:
+def score_corpora(
+    runs_dir: Path, corpora: dict[str, list[generate.Document]], name_list: NameList, only: list[str], more: list[Method] | tuple[Method, ...] = ()
+) -> tuple[dict, dict, dict, list[str]]:
     """Score every method on corpora that are already loaded.
 
     Why: E6 scores real documents with a key made by readers, by the same code as E5's
     generated corpora, so that the two kinds of numbers come from one rule.
 
     Contract: `corpora` maps the name a corpus goes by to its documents, in the order
-    they are scored; the run files of a corpus are `<detector>.<name>.json`. Returns what
-    `evaluate` returns. Nothing is checked about which corpus may be scored with which:
+    they are scored; the run files of a corpus are `<detector>.<name>.json`. `more` are
+    methods beside those of the grid, scored and named like them; one whose detectors
+    were not all run is left out. Returns what `evaluate` returns. Nothing is checked about which corpus may be scored with which:
     that is the caller's (`check_request` here, the rule of the closed pile in E6).
     """
     datasets = list(corpora)
@@ -475,6 +478,7 @@ def score_corpora(runs_dir: Path, corpora: dict[str, list[generate.Document]], n
     first = runs[datasets[0]]
     with_chance = {name for name in detectors if any(row[3] < 1 for rows in first[name]["tokens"].values() for row in rows)}
     methods = {method.name: method for method in grid(detectors, with_chance, bool(name_list.names))}
+    methods.update({method.name: method for method in more if set(method.detectors) <= set(detectors)})
     if only:
         methods = {name: methods[name] for name in only}
     steps = step_table(name_list.names)
