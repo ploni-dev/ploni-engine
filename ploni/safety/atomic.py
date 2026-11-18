@@ -25,8 +25,9 @@ Known limits:
   holds all the new bytes.
 - On Windows the folder itself is not flushed after the rename: the system has no call for
   it. A power cut right after the rename can lose the rename, never half of the bytes.
-- The partial file's name is 33 characters longer than the target's. A name that fits the
-  file system but not with that tail raises an OSError, and the target is as it was.
+- The partial file's name is 32 characters longer than the target's. A name that fits the
+  file system but not with that tail raises an OSError (FileNotFoundError on Windows,
+  although the folder exists), and the target is as it was.
 - A target that is a symbolic link is replaced by a plain file with the new bytes; what the
   link pointed to is not changed.
 - On Windows a target that is read-only, a folder, or open in another program gives
@@ -36,8 +37,8 @@ Known limits:
   target always holds the whole of one of them.
 - The new file does not keep the old one's permissions: it gets the default of a new file
   in that folder (on POSIX, 0o666 less the umask).
-- A stop that lands between the end of the write and the rename's start, such as Ctrl+C,
-  can leave the partial file, as a crash does.
+- A stop that lands after the partial file is made and before the write begins, such as
+  Ctrl+C, can leave it, as a crash does. A stop later than that removes it.
 """
 
 import os
