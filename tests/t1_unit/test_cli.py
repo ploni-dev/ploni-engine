@@ -154,13 +154,17 @@ def test_ec13_a_hebrew_name_on_an_output_that_cannot_encode_it(tmp_path: Path, m
     assert raw.getvalue().decode("cp1252").splitlines() == ["\\u05e9\\u05de\\u05d5\\u05ea rev1 1 files 1 bytes", "offline OK"]
 
 
+# The full path, so that no other icacls on PATH is run.
+ICACLS = os.path.join(os.environ.get("SystemRoot", r"C:\Windows"), "System32", "icacls.exe")
+
+
 def deny_reading(folder: Path) -> None:
     """Take away the right to list a folder: an ACL entry on Windows, mode 0 on POSIX.
 
     Skips the test where that cannot be done (root reads every folder).
     """
     if os.name == "nt":
-        subprocess.run(["icacls", str(folder), "/deny", "*S-1-1-0:(RD)"], check=True, capture_output=True)
+        subprocess.run([ICACLS, str(folder), "/deny", "*S-1-1-0:(RD)"], check=True, capture_output=True)  # noqa: S603  fixed arguments, a test folder
     elif os.geteuid() == 0:
         pytest.skip("root reads every folder")
     else:
@@ -170,7 +174,7 @@ def deny_reading(folder: Path) -> None:
 def allow_reading(folder: Path) -> None:
     """Undo deny_reading, so that pytest can remove the folder."""
     if os.name == "nt":
-        subprocess.run(["icacls", str(folder), "/remove:d", "*S-1-1-0"], check=True, capture_output=True)
+        subprocess.run([ICACLS, str(folder), "/remove:d", "*S-1-1-0"], check=True, capture_output=True)  # noqa: S603  fixed arguments, a test folder
     else:
         folder.chmod(0o700)
 
