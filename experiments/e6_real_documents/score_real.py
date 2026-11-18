@@ -42,6 +42,11 @@ import layers
 ROWS = ("private", "public", "one_word", "prefixed", "alone", "lonely", "no_trigger")
 # Words marked for nothing are given per this many Hebrew words of text (PREREGISTRATION.md, "Predictions").
 PER_WORDS = 1000
+# PREREGISTRATION.md, "What may be fitted on the open pile": the methods fitted after the open
+# pile's errors were read. One: E5's two steps in the other order. In `titles, carry` a word that
+# only a title gave (the word after `השופט` that is no name) is spread through the document; with
+# `carry strong` first, only what the detector found is spread, and the titles add their word last.
+FITTED = (evaluate.Method("joint + carry strong, titles", ("joint",), None, True, ("carry_strong", "titles")),)
 # How much of the paragraph is written on each side of a word that was marked for nothing.
 CONTEXT_CHARACTERS = evaluate.ERROR_CONTEXT_CHARACTERS
 
@@ -128,15 +133,15 @@ def score(corpus_dir: Path, runs_dir: Path, pile: str, only: list[str], key_dir:
 
     Contract: returns `(results, methods, runs, documents)`. `results` maps a method's
     name to what `evaluate.measure` gave, with `real_rows` added, as `row_counts` counts
-    them. The methods are E5's grid without the `list` step; `only`, when not empty,
-    keeps the methods with those names. The key is the frozen one, or, with `key_dir`,
+    them. The methods are E5's grid without the `list` step, and those of FITTED whose
+    detector was run; `only`, when not empty, keeps the methods with those names. The key is the frozen one, or, with `key_dir`,
     the files of that folder without the check. Raises ValueError as `check_request` and
     `evaluate.score_corpora` do, and as `real.load` does.
     """
     check_request(pile, only, key_dir)
     documents = real.load(corpus_dir, pile, key_dir, frozen=key_dir is None)
     name = f"e6-{pile}"
-    results, methods, runs, _ = evaluate.score_corpora(runs_dir, {name: documents}, evaluate.NameList(frozenset(), ""), only)
+    results, methods, runs, _ = evaluate.score_corpora(runs_dir, {name: documents}, evaluate.NameList(frozenset(), ""), only, FITTED)
     for result in results[name].values():
         result["real_rows"] = row_counts(documents, result["missed"])
     return results[name], methods, runs[name], documents
