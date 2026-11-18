@@ -11,6 +11,10 @@ every change. No document had been
 read for names, no label and no key existed, and no detector had been run when it was
 changed.**
 
+**Amended on 2026-11-18, after the two labellers were put side by side and before the third
+pass, the freeze and any run: see the last section. It adds a third labeller, by another
+model, and says what had been seen when it was written.**
+
 ## Why this experiment exists
 
 E5 compared ways of finding names on generated text
@@ -460,3 +464,61 @@ was applied wider than it should be. Nothing had been read for names, labelled o
    name that both labellers had missed. The word-by-word rule now holds only for a label of
    the key that covers a label both labellers have; any other label of the key must touch a
    labeller's label or a listed place, and takes the whole name.
+
+## Amended on 2026-11-18, after the two labellers were compared, before the third pass
+
+What stands above is kept as it was merged (#99). This section is committed before the
+third pass, before the freeze and before any detector is run on any of the twenty.
+
+### What had been done and seen
+
+- The worksheets of the twenty were written. Labellers A and B, each four sessions with
+  five documents, marked every document from `LABELLING.md`. No session raised a flag of
+  the subject check, so no document is deleted.
+- The session that runs the experiment saw the counts each labelling session reported
+  (labels by kind, persons, doubts, per document) and what `label.py compare` printed. It
+  opened no worksheet, label file, doubts file or compare file, of either pile.
+- **The two agree on every counted name: 718 of 718, at the same place, over all twenty.**
+  A holds 1,076 labels and B 1,069. They differ in 14 labels, in four documents, none of
+  them a counted name that only one has. No place where they divide the names among
+  people in another way. The two lists hold 166 places to look at.
+- By A's and B's labels the open pile holds 241 counted names and the closed pile 477, of
+  which one document holds 146.
+
+### What that means
+
+Prediction 10 holds, and it says nothing. Two sessions of one model, with one guide and
+one worksheet, are one reader twice: they find the same names and miss the same names.
+The second labeller was in the plan to catch what the first misses, and caught nothing.
+So the key would rest on one reading and on the two lists, and a name that this model
+does not see, standing where no list reaches, would be in no key. For the closed pile
+nothing can mend that afterwards: it is scored once.
+
+### What changes
+
+1. **A third labeller, C, by another model.** Four sessions of Claude Opus, where A and B
+   were sessions of the model that runs the experiment, mark every document alone from the
+   same guide and the same worksheets, into `labels_c`. They see nothing of A, of B or of
+   any detector, and are not told which pile a document is in.
+2. **The key is made from A and C**, by the procedure above, unchanged: `compare` on A
+   and C, the third pass on its differences and its two lists, the check before the freeze
+   against A and C. The third pass also gets the 14 labels in which B differs from A and
+   decides them by the same rules. One limit follows from the check as it is built: a
+   label that only B has can go into the key only where it touches a label of A or of C
+   or a listed place.
+3. **Two numbers of agreement are reported.** A against B is prediction 10 as written:
+   718 of 718. A against C is given beside it and is the one that says something about
+   the key. No range was predicted for it. If A and C mark the same counted name at the
+   same place for fewer than 90 percent of the counted names that either marks, the note
+   says in its first lines that the key is weak, as prediction 10 says for A and B.
+4. Nothing else changes: the rules for what counts, the third pass, the freeze, what is
+   run, how it is scored, the predictions, what "holds" means, what is judged on the
+   closed pile.
+
+### What this cannot do
+
+C is another model of the same family, trained in part on the same kind of text. It is
+less like A than B is, and it is not a person. No person checks the key. That this
+amendment was written after the agreement of A and B was seen, and not before, is the
+reason it is here: the plan should have said that two sessions of one model are not two
+readers.
