@@ -594,7 +594,7 @@ the split is not chosen after the result.
 
 The text above says that "every hit" of the list of words was read in its sentence: 31
 hits. The script that wrote those sentences dropped a sentence whose only hit stood
-inside one of eleven patterns of everyday words, and the review of PR #100 found that
+inside one of fourteen patterns of everyday words, and the review of PR #100 found that
 four of the patterns could also hide a word that matters (`הקטינים`, `ילדות`, `מנער`,
 the pair `פלוני אלמוני`). A second script counted what the first had dropped, printing
 numbers only. In the dropped sentences the patterns match as follows: `נערך` 9 times and
