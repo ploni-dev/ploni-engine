@@ -34,6 +34,9 @@ places (the two lists of places to look at)
                                               listed too, so the whole name can go into the key
                                               (review 4, finding 25)
   EC34 a hyphen that stands by itself inside a name    no fault of the key (review 4, finding 26)
+  EC35 a whole name at a listed place or at a label only one labeller has, longer than what
+       the list or that label holds, and covering no label both have    no fault: the rules
+       ask for the whole name (review 5, finding 28)
 
 person_splits (review 1, finding 9)
   EC19 places that one labeller gives to one person and the other to two    listed, each once
@@ -410,3 +413,29 @@ def test_ec34_a_hyphen_that_stands_by_itself_inside_a_name() -> None:
     assert label.key_faults(paragraphs, agreed, agreed, key) == (0, 0)
     wrong = of("0\t1\t5\tדנה כהן - לוי באה\tp1\tprivate", "1\t0\t0\tלוי\tp1\tprivate")
     assert label.key_faults(paragraphs, agreed, agreed, wrong) == (1, 0)
+
+
+@pytest.mark.parametrize(
+    ("paragraph", "line"),
+    [
+        ('עו"ד דוד לוי טען', "0\t1\t2\tדוד לוי\tp1\tprivate"),
+        ("גב' דנה כהן לוי באה", "0\t1\t3\tדנה כהן לוי\tp1\tprivate"),
+        ("השופט י' מ' כהן קבע", "0\t1\t3\tי' מ' כהן\tp1\tpublic"),
+        ("מר יוסי בן דוד בא", "0\t1\t3\tיוסי בן דוד\tp1\tprivate"),
+    ],
+)
+def test_ec35_a_whole_name_at_a_listed_place(paragraph: str, line: str) -> None:
+    key = real.parse_labels("t01", HEADER + "\n" + line + "\n", [paragraph])
+    assert label.key_faults([paragraph], [], [], key) == (0, 0)
+
+
+def test_ec35_a_whole_name_at_a_label_only_one_labeller_has() -> None:
+    paragraphs = ["בא דוד לוי אתמול"]
+
+    def of(*lines: str) -> list:
+        return real.parse_labels("t01", "\n".join([HEADER, *lines]) + "\n", paragraphs)
+
+    one = of("0\t2\t2\tלוי\tp1\tprivate")
+    assert label.key_faults(paragraphs, one, [], of("0\t1\t2\tדוד לוי\tp1\tprivate")) == (0, 0)
+    assert label.key_faults(paragraphs, one, one, of("0\t1\t2\tדוד לוי\tp1\tprivate")) == (1, 0)
+    assert label.key_faults(paragraphs, one, [], of("0\t3\t3\tאתמול\tp1\tprivate")) == (1, 0)
