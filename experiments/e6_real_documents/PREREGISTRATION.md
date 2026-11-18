@@ -597,7 +597,8 @@ hits. The script that wrote those sentences dropped a sentence whose only hit st
 inside one of eleven patterns of everyday words, and the review of PR #100 found that
 four of the patterns could also hide a word that matters (`הקטינים`, `ילדות`, `מנער`,
 the pair `פלוני אלמוני`). A second script counted what the first had dropped, printing
-numbers only: 13 sentence hits by pattern, all of them `נערך` and `נערכ` ("was held"),
-`מינימ`, `זמינ`, `ימיני` and one surname; no dropped sentence matches one of the four.
+numbers only. In the dropped sentences the patterns match as follows: `נערך` 9 times and
+`נערכ` 3 (2 of them `שנערכ`), both "was held"; `מינימ`, `זמינ`, `ימיני` and one surname
+once each. No dropped sentence matches one of the four.
 So the 31 are every hit but for those, and none of the twelve labelling sessions, which
 read every document whole, raised a flag.
