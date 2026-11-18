@@ -271,3 +271,17 @@ Achia answered:
 > 1
 
 So `ולהכהן` is read as ו and ל on the surname `הכהן`, and f04 counts as right in Phase 3's tests, as f03 does. Both forms of this kind that the 100 held are now decided, each by an answer of his about that word. The rest of the part above stays as it is. The E3 record of 94 of 100 stays as pre-registered. The forms that still fail are b14, b16, b19 and d04, and f04 is no longer watched with them. The plan's list of prefix combinations still has `לה`; taking it out is a PR to `build-plan.md`, not written yet. What the product does with a surname that begins with ה stays with the experiment series, as decided above. Whether every `לה` is read this way, as line 4 of the proposed decision has it, is still not decided as a rule.
+
+### Decided on 2026-11-18
+
+Achia, 2026-11-18, in the Claude Code session, through the session's question dialog. One of the points this note lists above as not decided, how a test that is expected to fail is marked and whether such tests count toward Phase 3's gate, was put to him. Claude asked:
+
+> Next question (left over from the earlier experiments). Two-pile rule noted. Some Hebrew forms are known to fail today, for example certain prefixes glued to a name. May the test suite hold tests for things we already know fail, marked as "expected to fail"?
+
+He was offered "Yes, marked and counted apart (Recommended)" and "No, list them in a document", and chose:
+
+> Yes, marked and counted apart (Recommended)
+
+That option was described to him as: "Each known failure is a real test with a clear mark. It never counts as a pass and never counts toward a gate. The day one starts to pass, the suite turns red until the mark is removed, so a fix is never missed."
+
+What follows, as Claude reads it. A test for a thing that is known to fail may be in the suite, with a mark. It counts neither as a pass nor toward a gate, Phase 3's among them, and a marked test that passes turns the suite red until its mark is removed. For this note: the forms that still fail (b14, b16, b19 and d04), which the decision of 2026-11-13 keeps as tests that are watched, may carry the mark. Two rules stand beside it, and keeping them is Claude's choice, which only narrows: a mark needs an issue link (`PROMOTION.md`, the marker scan), and a test that turns up failing is never marked to get a check green (`PROCESS.md` section 8.3). The mark is for a failure that is known and written down before the code that it tests. Still not decided: the three forms the 100 did not hold, and whether E3 is run again.
