@@ -22,6 +22,9 @@ Error paths (a crash simulated in the process):
 Adversarial:
   A1  the target's name holds Hebrew letters and spaces
   A2  a file that already has the partial file's name: a write does not reuse or remove it
+  A3  the random name of the partial file is taken (two writers drew the same)    FileExistsError;
+       the file that has that name is neither written over nor removed (found by a hand mutant)
+  EC7 the bytes are flushed to disk before the rename (os.fsync on the partial file, then os.replace)
 
 sweep_partials. Equivalence classes:
   EC4  partial files left in the folder by a crash    removed; their number is returned
@@ -153,3 +156,21 @@ def test_ec4_ec5_sweep_partials(tmp_path: Path) -> None:
 def test_ec6_sweep_partials_of_nothing(tmp_path: Path) -> None:
     assert atomic.sweep_partials(tmp_path / "missing") == 0
     assert atomic.sweep_partials(tmp_path) == 0
+
+
+def test_a3_a_taken_partial_name_is_neither_written_nor_removed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(atomic.secrets, "token_hex", lambda _: "0" * 16)
+    taken = tmp_path / f"{atomic.PARTIAL_PREFIX}out.docx.{'0' * 16}"
+    taken.write_bytes(b"another writer's bytes")
+    with pytest.raises(FileExistsError):
+        atomic.write_atomic(tmp_path / "out.docx", TEXT)
+    assert taken.read_bytes() == b"another writer's bytes" and not (tmp_path / "out.docx").exists()
+
+
+def test_ec7_flushed_before_the_rename(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[str] = []
+    real_fsync, real_replace = atomic.os.fsync, atomic.os.replace
+    monkeypatch.setattr(atomic.os, "fsync", lambda descriptor: (calls.append("fsync"), real_fsync(descriptor))[1])
+    monkeypatch.setattr(atomic.os, "replace", lambda source, target: (calls.append("replace"), real_replace(source, target))[1])
+    atomic.write_atomic(tmp_path / "out.docx", TEXT)
+    assert calls[:2] == ["fsync", "replace"]
