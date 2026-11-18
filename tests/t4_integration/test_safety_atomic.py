@@ -39,7 +39,7 @@ atomic.write_atomic(Path(sys.argv[2]), "ישראל ישראלי".encode())
 
 def run(target: Path, mode: str) -> int:
     """Run the program on a target, killed at the rename or not, and return its exit code."""
-    done = subprocess.run([sys.executable, "-c", PROGRAM, str(ROOT), str(target), mode], capture_output=True, timeout=60, check=False)
+    done = subprocess.run([sys.executable, "-c", PROGRAM, str(ROOT), str(target), mode], capture_output=True, timeout=60, check=False)  # noqa: S603 fixed argv, no shell
     return done.returncode
 
 
