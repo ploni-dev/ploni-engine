@@ -149,4 +149,4 @@ def test_ec13_a_hebrew_name_on_an_output_that_cannot_encode_it(tmp_path: Path, m
     monkeypatch.setattr(cli, "network_modules_loaded", lambda: [])
     assert cli.main(["selftest"]) == 0
     out.flush()
-    assert raw.getvalue().decode("cp1252").splitlines() == ["\u05e9\u05de\u05d5\u05ea rev1 1 files 1 bytes", "offline OK"]
+    assert raw.getvalue().decode("cp1252").splitlines() == ["\\u05e9\\u05de\\u05d5\\u05ea rev1 1 files 1 bytes", "offline OK"]

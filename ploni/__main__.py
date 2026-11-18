@@ -1,11 +1,11 @@
-"""The command line of Ploni: `selftest`, and stubs for the commands later phases build.
+"""The command line of Ploni.
 
 Why: Phase 0 asks for a program that installs, imports and runs, with the command names of
 the plan in place, and a `selftest` that shows which models are on the machine and that
 nothing of Ploni loaded network code (build-plan.md Phase 0, Deliverable and Gate).
 
 Contract: `python -m ploni <command>`. `selftest` prints one line per model revision under
-the models folder, then "offline OK", and exits 0; or a line that names the networking
+the models folder, and one per name folder that holds files outside a revision folder, then "offline OK", and exits 0; or a line that names the networking
 modules that are loaded, and exits 1. Each other command writes one line on the error
 stream that says it is not built yet, and exits 2. No command, or an unknown one, is a usage
 error (exit 2).
@@ -15,6 +15,9 @@ Known limits:
   of imports at the top of this file, which a test holds to the modules on disk), none of the
   modules of the no-network list (NETWORK, the list of `pyproject.toml`) is loaded. It does
   not watch the network, and it does not see a module loaded later, by code a command runs.
+  `_socket` and `_ssl`, the C modules under every network call, are not on the list yet: a
+  module that imports them directly is not seen. They come with the PR of the longer
+  no-network list (build-plan.md Phase 0, "Four stricter rules").
 - The command is `python -m ploni`, not `ploni`: an installed `ploni` command needs an entry
   in `pyproject.toml`, which comes with issue #17.
 - The models folder is `models/` beside `ploni/`, the place of a development checkout. An
@@ -24,6 +27,7 @@ Known limits:
 """
 
 import argparse
+import io
 import sys
 from pathlib import Path
 from typing import TextIO
@@ -47,20 +51,28 @@ NOT_BUILT = 2
 
 
 def inventory(models: Path) -> list[str]:
-    """List the model revisions on disk, one line each: name, revision, files, bytes.
+    """List the models on disk, one line per revision folder.
 
     Why: the first thing `selftest` shows, so that the person running it sees which models
     the program would load.
 
-    Contract: one line per folder `models/<name>/<revision>/`, sorted, counting every file
-    below it. A name folder with no revision folder, and a file at the top, are left out.
-    A missing or empty models folder gives one line that says so.
+    Contract: one line per folder `models/<name>/<revision>/`, as "name revision N files B
+    bytes", counting every file below it; and one line per name folder that holds files
+    directly, as "name: N files outside a revision folder, B bytes". Sorted by name, a name's
+    revisions before its loose files. A file at the top of the models folder is left out. A
+    missing or empty models folder gives one line that says so.
+
+    Known limits: a folder it cannot read counts as empty, with no warning; a link to a
+    folder is followed and counted.
     """
     lines = []
-    if models.is_dir():
-        for revision in sorted(path for path in models.glob("*/*") if path.is_dir()):
+    for name in sorted(path for path in models.glob("*") if path.is_dir()):
+        for revision in sorted(path for path in name.iterdir() if path.is_dir()):
             files = [path for path in revision.rglob("*") if path.is_file()]
-            lines.append(f"{revision.parent.name} {revision.name} {len(files)} files {sum(path.stat().st_size for path in files)} bytes")
+            lines.append(f"{name.name} {revision.name} {len(files)} files {sum(path.stat().st_size for path in files)} bytes")
+        loose = [path for path in name.iterdir() if path.is_file()]
+        if loose:
+            lines.append(f"{name.name}: {len(loose)} files outside a revision folder, {sum(path.stat().st_size for path in loose)} bytes")
     return lines or [f"no models in {models}"]
 
 
@@ -72,17 +84,21 @@ def network_modules_loaded() -> list[str]:
 
     Contract: every module of `ploni/` is imported when this module is (the imports at its
     top). Returns, sorted, each loaded module that is one of NETWORK or below one of them.
+
+    Known limits: `_socket` and `_ssl` are not on the list yet (the module docstring).
     """
     return sorted(name for name in sys.modules if name in NETWORK or name.split(".")[0] in NETWORK)
 
 
 def selftest(models: Path, out: TextIO) -> int:
-    """Print the inventory and whether Ploni is offline; return the exit code.
+    """Write the selftest report; return its exit code.
 
     Why: the gate of Phase 0 ("`ploni selftest` prints the model inventory and "offline OK"").
 
     Contract: the lines of `inventory`, then "offline OK" and 0, or "not offline: <names> is
     loaded" and 1.
+
+    Known limits: what "offline" means is in the module docstring.
     """
     for line in inventory(models):
         out.write(line + "\n")
@@ -95,12 +111,17 @@ def selftest(models: Path, out: TextIO) -> int:
 
 
 def main(argv: list[str]) -> int:
-    """Run one command and return its exit code.
+    """Run one command; return its exit code.
 
     Why: the one entry point of the command line, so that a test can call it.
 
-    Contract: `argv` without the program name. Raises SystemExit(2) for no command or an
-    unknown one, as argparse does.
+    Contract: `argv` without the program name. Raises SystemExit(2) for no command, an
+    unknown one, or an argument a command does not take, and SystemExit(0) for `--help`, as
+    argparse does. The output stream writes a character it cannot encode as an escape, so
+    that a Hebrew folder name does not stop `selftest` on a console of another code page.
+
+    Known limits: a stub and a usage error both exit 2. An argument argparse does not know,
+    such as a file name, is repeated on the error stream.
     """
     parser = argparse.ArgumentParser(prog="ploni", description=__doc__.splitlines()[0] if __doc__ else None)
     commands = parser.add_subparsers(dest="command", required=True)
@@ -108,6 +129,8 @@ def main(argv: list[str]) -> int:
         commands.add_parser(name)
     command = parser.parse_args(argv).command
     if command == "selftest":
+        if isinstance(sys.stdout, io.TextIOWrapper):
+            sys.stdout.reconfigure(errors="backslashreplace")
         return selftest(MODELS, sys.stdout)
     sys.stderr.write(f"ploni {command}: not built yet\n")
     return NOT_BUILT
