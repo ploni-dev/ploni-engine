@@ -13,6 +13,10 @@ inventory. Equivalence classes:
   EC4  models/<name>/<revision>/ with files    one line per revision: name, revision, number
                                      of files, bytes; sorted
   EC5  a name folder with no revision folder, a file at the top    left out
+  EC12 files directly in a name folder, beside or instead of revision folders    one line for the
+       name: how many files outside a revision folder, and their bytes
+  EC13 a Hebrew folder name, written to an output that cannot encode Hebrew (cp1252)    the line
+       is written with the letters escaped; no error
 Boundaries:
   B1  no models folder               one line that says so
   B2  an empty models folder         one line that says so
@@ -20,7 +24,7 @@ Boundaries:
 network_modules_loaded. Equivalence classes:
   EC6  after every module of ploni/ is imported, in a fresh interpreter    no networking module
                                      is loaded (pytest's own process holds modules other tests load)
-  EC7  a networking module loaded (one of the list, and a submodule of one)    named
+  EC7  each module of the list loaded, and a submodule of each    named
   EC8  the list                      the same names as the no-network list of pyproject.toml
   EC11 the imports at the top of __main__    every module of ploni/ on disk but __main__ is among
                                      them, so that selftest sees what each one loads
@@ -86,12 +90,12 @@ def test_ec6_no_networking_module_after_ploni_is_imported() -> None:
     assert (done.returncode, done.stdout.strip()) == (0, "[]"), done.stderr
 
 
-def test_ec7_a_networking_module_is_named(monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setitem(sys.modules, "socket", sys.modules.get("socket", object()))
-    monkeypatch.setitem(sys.modules, "urllib.request", object())
+@pytest.mark.parametrize("name", cli.NETWORK)
+def test_ec7_each_networking_module_is_named(monkeypatch: pytest.MonkeyPatch, name: str) -> None:
+    monkeypatch.setitem(sys.modules, name, sys.modules.get(name, object()))
+    monkeypatch.setitem(sys.modules, f"{name}.sub", object())
     loaded = cli.network_modules_loaded()
-    assert "socket" in loaded and "urllib.request" in loaded
-
+    assert name in loaded and f"{name}.sub" in loaded
 
 def test_ec8_the_list_is_the_no_network_list() -> None:
     settings = tomllib.loads((ROOT / "pyproject.toml").read_text(encoding="utf-8"))
@@ -119,3 +123,30 @@ def test_ec11_every_module_of_ploni_is_imported() -> None:
     }
     imported = {name for name, module in vars(cli).items() if getattr(module, "__name__", "").startswith("ploni.")}
     assert on_disk <= {getattr(vars(cli)[name], "__name__", "") for name in imported}
+
+
+def test_ec12_files_directly_in_a_name_folder(tmp_path: Path) -> None:
+    (tmp_path / "e2_onnx").mkdir()
+    (tmp_path / "e2_onnx" / "ner_fp32.onnx").write_bytes(b"x" * 7)
+    (tmp_path / "e2_onnx" / "ner_int8.onnx").write_bytes(b"y" * 3)
+    (tmp_path / "m" / "rev").mkdir(parents=True)
+    (tmp_path / "m" / "rev" / "w").write_bytes(b"z")
+    (tmp_path / "m" / "stray.bin").write_bytes(b"s" * 4)
+    assert cli.inventory(tmp_path) == [
+        "e2_onnx: 2 files outside a revision folder, 10 bytes",
+        "m rev 1 files 1 bytes",
+        "m: 1 files outside a revision folder, 4 bytes",
+    ]
+
+
+def test_ec13_a_hebrew_name_on_an_output_that_cannot_encode_it(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "שמות" / "rev1").mkdir(parents=True)
+    (tmp_path / "שמות" / "rev1" / "w").write_bytes(b"1")
+    raw = io.BytesIO()
+    out = io.TextIOWrapper(raw, encoding="cp1252")
+    monkeypatch.setattr(cli.sys, "stdout", out)
+    monkeypatch.setattr(cli, "MODELS", tmp_path)
+    monkeypatch.setattr(cli, "network_modules_loaded", lambda: [])
+    assert cli.main(["selftest"]) == 0
+    out.flush()
+    assert raw.getvalue().decode("cp1252").splitlines() == ["\u05e9\u05de\u05d5\u05ea rev1 1 files 1 bytes", "offline OK"]
