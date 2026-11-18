@@ -15,6 +15,7 @@ inventory. Equivalence classes:
   EC5  a name folder with no revision folder, a file at the top    left out
   EC12 files directly in a name folder, beside or instead of revision folders    one line for the
        name: how many files outside a revision folder, and their bytes
+  EC14 a name folder it cannot read    left out, no error; the other folders are listed
   EC13 a Hebrew folder name, written to an output that cannot encode Hebrew (cp1252)    the line
        is written with the letters escaped; no error
 Boundaries:
@@ -35,6 +36,7 @@ selftest. Equivalence classes:
 """
 
 import io
+import os
 import subprocess
 import sys
 import tomllib
@@ -150,3 +152,22 @@ def test_ec13_a_hebrew_name_on_an_output_that_cannot_encode_it(tmp_path: Path, m
     assert cli.main(["selftest"]) == 0
     out.flush()
     assert raw.getvalue().decode("cp1252").splitlines() == ["\\u05e9\\u05de\\u05d5\\u05ea rev1 1 files 1 bytes", "offline OK"]
+
+
+def test_ec14_a_name_folder_it_cannot_read(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / "locked" / "rev").mkdir(parents=True)
+    (tmp_path / "m" / "rev").mkdir(parents=True)
+    (tmp_path / "m" / "rev" / "w").write_bytes(b"z")
+    locked = str(tmp_path / "locked")
+    real_scandir, real_listdir = os.scandir, os.listdir
+
+    def refuse(real):  # type: ignore[no-untyped-def]
+        def call(path="."):  # type: ignore[no-untyped-def]
+            if os.fspath(path).rstrip("/" + chr(92)) == locked:
+                raise PermissionError(13, "Access is denied")
+            return real(path)
+        return call
+
+    monkeypatch.setattr(os, "scandir", refuse(real_scandir))
+    monkeypatch.setattr(os, "listdir", refuse(real_listdir))
+    assert cli.inventory(tmp_path) == ["m rev 1 files 1 bytes"]
