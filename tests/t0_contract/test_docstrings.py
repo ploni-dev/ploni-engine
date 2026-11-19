@@ -17,6 +17,10 @@ Equivalence classes:
                                                                   not judged
   EC6  a public method of a public class, an async function, a class inside a public class
                                                                   judged as a function or class
+  EC8  a private class                judged: "every class" (PROCESS.md section 5.3); its
+                                      members are not
+  EC9  a class or function under a top-level `if`, `try` (body, handler, else, finally) or
+       `with`                         judged as if at the top
   EC7  the repository: every file under ploni/, sub-packages too    no line
 
 Boundaries:
@@ -39,6 +43,9 @@ Known limits:
   - A section name in a sentence ("see Why: below") counts as the section.
   - "Public" is by name: no leading underscore. A name exported by `__all__` that begins with
     one is not judged; there is none today.
+  - A property setter and each `@overload` stub count as functions of their own, so they need
+    a docstring, though Python shows only the getter's and the implementation's. Neither shape
+    is in ploni/ today.
   - What and Known limits (CLAUDE.md, "Docstrings") are not checked: the What is the first line,
     which every docstring has, and Known limits is not asked for by PROCESS.md section 5.3.
 """
@@ -154,6 +161,11 @@ def test_ec5_what_is_not_judged() -> None:
 
 
         class _Hidden:
+            """H.
+
+            Why: r.
+            """
+
             def shown(self):
                 pass
 
@@ -246,3 +258,42 @@ def test_a1_a_string_that_is_not_the_first_statement() -> None:
 def test_a2_a_docstring_in_hebrew() -> None:
     source = '"""מודול.\n\nWhy: סיבה.\n"""\n\n\ndef run():\n    """הרצה.\n\n    Why: סיבה.\n\n    Contract: אין.\n    """\n'
     assert problems(source, "m.py") == []
+
+
+def test_ec8_a_private_class_is_judged() -> None:
+    source = '"""M.\n\nWhy: r.\n"""\n\n\nclass _Cache:\n    def get(self):\n        pass\n'
+    assert problems(source, "m.py") == ["m.py:7 _Cache: no docstring"]
+
+
+def test_ec9_definitions_under_a_top_level_block() -> None:
+    source = textwrap.dedent('''\
+        """M.
+
+        Why: r.
+        """
+        import sys
+
+        if sys.platform == "win32":
+            def link():
+                pass
+        else:
+            class Link:
+                pass
+        try:
+            import fast
+        except ImportError:
+            def slow():
+                pass
+        else:
+            def quick():
+                pass
+        finally:
+            def done():
+                pass
+        with open("x") as handle:
+            def read():
+                pass
+        ''')
+    assert [line.split(": ")[0] for line in problems(source, "m.py")] == [
+        "m.py:8 link", "m.py:11 Link", "m.py:16 slow", "m.py:19 quick", "m.py:22 done", "m.py:25 read",
+    ]
