@@ -152,6 +152,9 @@ def git_blob_id(data: bytes) -> str:
 
     Why: a file fetched from a GitHub repository is checked against the id that the
     repository's tree records for it at the pinned commit.
+
+    Contract: the 40 lowercase hex characters of SHA-1 over "blob <length>\\0" and the bytes,
+    as `git hash-object` gives them.
     """
     return hashlib.sha1(b"blob %d\x00" % len(data) + data, usedforsecurity=False).hexdigest()
 
