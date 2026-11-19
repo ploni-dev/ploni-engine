@@ -10,7 +10,8 @@ Test matrix:
 Equivalence classes:
   EC1  a skip with an issue link ("#12", or a URL ending in /issues/12) on its own lines
                                                                  no line
-  EC2  a skip with no link                                       one line, file:line and the name
+  EC2  a skip with no link                                       one line, file:line and the name;
+       several: in line order, though the tree is walked level by level
   EC3  each form: pytest.skip(), pytest.xfail(), pytest.importorskip(), pytest.mark.skip,
        .skipif, .xfail (called, or bare as a decorator), unittest's skip, skipIf, skipUnless,
        expectedFailure, and a test case's skipTest()            each one line without a link
@@ -81,6 +82,8 @@ def test_ec1_with_a_link() -> None:
 
 def test_ec2_without_a_link() -> None:
     assert unlinked('import pytest\n\npytest.skip("no network")', "t.py") == ["t.py:3 skip"]
+    # The tree is walked level by level, so the call on line 3 is met before the one inside f.
+    assert unlinked('def f():\n    pytest.skip("a")\npytest.xfail("b")') == ["<source>:2 skip", "<source>:3 xfail"]
 
 
 def test_ec3_each_form() -> None:
