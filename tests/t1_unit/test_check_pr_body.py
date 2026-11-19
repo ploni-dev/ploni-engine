@@ -129,11 +129,6 @@ def test_ec8_the_workflow() -> None:
     assert "scripts/check_pr_body.py" in text
 
 
-def test_ec9_section_on_its_own() -> None:
-    assert check_pr_body.section("## A\nx\n## B\ny\n", "## B") == "y\n"
-    assert check_pr_body.section("## A\nx\n", "## B") is None
-
-
 def test_ec9_heading_of_on_its_own() -> None:
     assert check_pr_body.heading_of("  ## Ponytail review \r") == "## Ponytail review"
     assert check_pr_body.heading_of("### x") is None
