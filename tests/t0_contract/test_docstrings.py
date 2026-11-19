@@ -21,7 +21,7 @@ Equivalence classes:
                                       members are not
   EC9  a class or function under a top-level `if`, `try` (body, handler, else, finally) or
        `with`                         judged as if at the top
-  EC7  the repository: every file under ploni/, sub-packages too    no line
+  EC7  the repository: every file under ploni/ and scripts/, sub-packages too    no line
 
 Boundaries:
   B1  an empty file                   one line: a module with no docstring
@@ -38,8 +38,9 @@ Not applicable: the Hebrew axes of the test-matrix skill and the document axes, 
 Python source; A2 is the one case where Hebrew text could matter.
 
 Known limits:
-  - Only ploni/. Scripts, tests and experiments are not judged: the rule names product code
-    (CLAUDE.md, "Docstrings"), and the plan sets no such check for the rest.
+  - Only ploni/ and scripts/ (SCOPE). tests/ and experiments/ are not judged: Achia chose
+    "Product + scripts" on 2026-11-19, asked which folders the check should judge, with the
+    counts of that day (ploni/ 0 gaps, scripts/ 1, tests/ 559, experiments/ 746).
   - A section name in a sentence ("see Why: below") counts as the section.
   - "Public" is by name: no leading underscore. A name exported by `__all__` that begins with
     one is not judged; there is none today.
@@ -55,6 +56,8 @@ import textwrap
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
+# The folders judged: Achia's answer of 2026-11-19, "Product + scripts" (Known limits).
+SCOPE = ("ploni", "scripts")
 
 
 def has_section(docstring: str, name: str) -> bool:
@@ -239,8 +242,8 @@ def test_ec6_methods_async_and_inner_classes_are_judged() -> None:
 
 
 def test_ec7_the_repository() -> None:
-    files = sorted((ROOT / "ploni").rglob("*.py"))
-    assert len(files) > 1 and ROOT / "ploni" / "safety" / "atomic.py" in files
+    files = sorted(path for folder in SCOPE for path in (ROOT / folder).rglob("*.py"))
+    assert ROOT / "ploni" / "safety" / "atomic.py" in files and ROOT / "scripts" / "guard.py" in files
     found = [line for path in files for line in problems(path.read_text(encoding="utf-8"), path.relative_to(ROOT).as_posix())]
     assert found == []
 
