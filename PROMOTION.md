@@ -218,7 +218,9 @@ These are the six jobs of the reader at Level 2, and yours at Level 4. Level 2 s
 
 ## 6. The ratchet
 
-The general defense against quiet erosion. A set of counters that may only increase. CI stores the current values in `.ratchet.json` on `main` and compares on every PR.
+The general defense against quiet erosion. A set of counters that may only increase. CI counts each counter on the PR's base and on the PR itself, from git, and compares; no PR updates the counts by hand. `.ratchet.json` keeps one number, the ceiling for `noqa` and `type: ignore` lines of `PROCESS.md` section 4.5, which a PR that adds one raises in that file, so the rise shows. Decided by Achia on 2026-11-19: asked "How should the counts be kept?", he chose "Count main and the PR (Recommended)", described as "CI counts on main and on the PR and compares; no PR updates counts by hand. .ratchet.json keeps one number, the ceiling of noqa/type-ignore lines, which a PR raises in that file when it adds one, so the rise shows. PROMOTION.md section 6 is reworded to say so." The check is `scripts/check_ratchet.py` (#131).
+
+Which counters are counted is his answer of the same day, "Tests now, rest when real (Recommended)": test functions and assertions per test file now; fixture cases, baseline values, registered detectors and system journeys each in a PR of its own once the first of each exists (issues #123 to #126). For baseline values, which way each metric may move is his to decide then: four of the twelve are error counts, where lower is better.
 
 | Counter | Rule |
 |---|---|
