@@ -8,7 +8,9 @@ name: ratchet
 
 on:
   pull_request:
-    # edited: an override line added to the body, or a new base, is judged again.
+    # edited: an override line added to the body, or a new base, is judged again. The earlier
+    # red run stays on the commit and the merge gate reads every run, so after such an edit
+    # push a commit: the head then carries only the new run.
     types: [opened, edited, synchronize, reopened]
 
 permissions:
