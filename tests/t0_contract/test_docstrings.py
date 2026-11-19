@@ -76,14 +76,23 @@ def missing(node: ast.AST, contract: bool) -> list[str]:
 
 
 def judged(body: list[ast.stmt], prefix: str = "") -> list[tuple[str, ast.AST, bool]]:
-    """List the public classes and functions of a body, with whether each needs a Contract."""
+    """List the classes and public functions of a body, with whether each needs a Contract.
+
+    A block (`if`, `try`, `with`) is looked into as if its statements stood in the body; the
+    members of a private class are not judged.
+    """
     found: list[tuple[str, ast.AST, bool]] = []
     for node in body:
-        if isinstance(node, ast.ClassDef | ast.FunctionDef | ast.AsyncFunctionDef) and not node.name.startswith("_"):
-            is_class = isinstance(node, ast.ClassDef)
-            found.append((prefix + node.name, node, not is_class))
-            if is_class:
+        if isinstance(node, ast.ClassDef):
+            found.append((prefix + node.name, node, False))
+            if not node.name.startswith("_"):
                 found.extend(judged(node.body, f"{prefix}{node.name}."))
+        elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and not node.name.startswith("_"):
+            found.append((prefix + node.name, node, True))
+        elif isinstance(node, ast.If | ast.Try | ast.With):
+            handlers = [handler.body for handler in getattr(node, "handlers", [])]
+            blocks = [node.body, *handlers, getattr(node, "orelse", []), getattr(node, "finalbody", [])]
+            found.extend(judged([statement for block in blocks for statement in block], prefix))
     return found
 
 
