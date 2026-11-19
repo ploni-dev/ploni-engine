@@ -240,6 +240,10 @@ def make():
     class TestInAFunction:
         def test_hidden(self):
             pass
+
+def Testlike():
+    def test_inside_a_function_named_like_a_class():
+        pass
 '''
 
 

@@ -71,9 +71,9 @@ class Counts(NamedTuple):
 
     Why: `PROMOTION.md` section 6 names these two per test file.
 
-    Contract: test_functions counts functions whose name starts with "test", wherever they
-    stand (pytest collects fewer: not nested ones, nor methods outside Test* classes);
-    assertions counts `assert` statements anywhere in the file.
+    Contract: test_functions counts the test functions pytest collects (`collected()`):
+    module-level `test*` functions and `test*` methods of `Test*` classes; assertions counts
+    `assert` statements anywhere in the file.
     """
 
     test_functions: int
@@ -103,9 +103,28 @@ def count(source: str) -> Counts:
 
     Contract: raises SyntaxError when the source does not parse.
     """
-    nodes = list(ast.walk(ast.parse(source)))
-    functions = sum(isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name.startswith("test") for node in nodes)
-    return Counts(functions, sum(isinstance(node, ast.Assert) for node in nodes))
+    tree = ast.parse(source)
+    return Counts(collected(tree.body), sum(isinstance(node, ast.Assert) for node in ast.walk(tree)))
+
+
+def collected(body: list[ast.stmt]) -> int:
+    """Return the number of test functions pytest collects from a module's or a Test class's body.
+
+    Why: Achia's answer of 2026-11-20, "Count what pytest runs (Recommended)": a test swapped
+    for a function pytest never runs must show as a drop.
+
+    Contract: counts `test*` functions (sync or async) standing directly in `body`, and,
+    recursively, those of each `Test*` class standing directly in it. A function nested in
+    a function, a method of a class whose name does not start with Test, or a class inside a
+    function is not counted.
+    """
+    found = 0
+    for node in body:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name.startswith("test"):
+            found += 1
+        elif isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
+            found += collected(node.body)
+    return found
 
 
 def overrides(body: str) -> tuple[list[tuple[str, int]], list[str]]:
