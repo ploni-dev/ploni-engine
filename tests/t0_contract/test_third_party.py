@@ -25,11 +25,15 @@ Boundaries:
   B1  the hash in the file only in a shorter form (its first 7 characters)    one line
   B2  a hash in capitals on disk          not pinned: git and the hub write hashes in lowercase
   B3  a name folder with both revision folders and loose files    each judged
+  B4  names that differ in case ("Zeta", "alpha")    in Python's order, capitals first, not
+      the order NTFS lists them in
 
 Adversarial:
   A1  a revision folder named like a word the file holds ("main", "Models")    not pinned,
       whatever the file says
   A2  a name folder in Hebrew, its files not named    one line, the Hebrew name
+  A3  a hash or a path that the file holds only inside a longer one (the first 40 characters
+      of a SHA-256; `models/e2` inside `models/e2_onnx/`)    one line each
 
 Not applicable: the document axes, and the Hebrew axes of the test-matrix skill other than A2:
 the input is folder names and the text of one file.
@@ -37,8 +41,10 @@ the input is folder names and the text of one file.
 Known limits:
   - On GitHub there is no models/ folder (it is in .gitignore), so there EC9 checks nothing:
     the check bites on the machine that holds the models, in the fast suite run there.
-  - A revision passes when its hash appears anywhere in the file, not only in the table of
-    models: a hash named in a paragraph counts as named.
+  - A revision passes when its hash appears anywhere in the file as a whole hash, not only in
+    the table of models: a hash named in a paragraph counts as named.
+  - The name folder is not compared with the model's name: a recorded hash passes under any
+    folder, and a model saved inside a recorded revision folder passes with it.
   - Deeper folders are not looked into: a revision folder is judged by its name only.
 """
 
@@ -154,3 +160,22 @@ def test_a1_a_revision_named_like_a_word_of_the_file(tmp_path: Path) -> None:
 
 def test_a2_a_hebrew_folder_not_named(tmp_path: Path) -> None:
     assert unlisted(make(tmp_path, "שמות/list.txt"), "") == ["שמות: not in THIRD_PARTY.md"]
+
+
+def test_b4_names_that_differ_in_case_are_sorted_as_python_sorts(tmp_path: Path) -> None:
+    models = make(tmp_path, "alpha/x.bin", "Zeta/x.bin", "joint/alpha/", "joint/Zeta/")
+    assert unlisted(models, "") == [
+        "Zeta: not in THIRD_PARTY.md",
+        "alpha: not in THIRD_PARTY.md",
+        "joint/Zeta: not pinned",
+        "joint/alpha: not pinned",
+    ]
+
+
+def test_a3_a_hash_or_a_path_only_inside_longer_text(tmp_path: Path) -> None:
+    sha = "e686ac235181498b9bef5c3f660db18e42c0120dc21e0a5cead5950c4151d760"
+    models = make(tmp_path, f"x/{sha[:40]}/m", "e2")
+    assert unlisted(models, f"SHA-256 `{sha}`; written to `models/e2_onnx/`") == [
+        "e2: not in THIRD_PARTY.md",
+        f"x/{sha[:40]}: not in THIRD_PARTY.md",
+    ]
