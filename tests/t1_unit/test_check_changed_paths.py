@@ -170,3 +170,4 @@ def test_a1_an_upper_case_end_is_code(path: str) -> None:
 
 def test_a2_a_hebrew_path() -> None:
     assert check.problems(["ploni/שם.py", FAST]) == [f"CI workflow changed in a code PR: {FAST}"]
+# scratch: a .py change for the red case of #119
