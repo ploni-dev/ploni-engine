@@ -28,7 +28,7 @@ Equivalence class (the workflow that runs the check, issue #121):
        actions pinned by a 40-character hash, read-only permissions, no `${{` anywhere, so
        no text of a PR reaches the shell, and none of the keys that switch a step, a job or
        the workflow off (`if:`, `continue-on-error:`, `shell:`, `paths`, `branches` and
-       their `-ignore` forms). Why: a later workflow-only PR holds no .py file, so the check
+       their `-ignore` forms), also in quotes or with spaces before the colon. Why: a later workflow-only PR holds no .py file, so the check
        itself lets an edit through that switches it off (the review of #119, finding 1);
        this test, run by the fast suite, refuses these ways. Not refused: a `uses:` line
        swapped for another action pinned by a hash, named in the workflow's own header.
@@ -78,8 +78,11 @@ WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "chan
 # An action pinned by a full commit hash, not a tag (CLAUDE.md, Hard constraints: pin every version).
 PINNED = re.compile(r"@[0-9a-f]{40}(\s|$)")
 # Keys that skip the step or the job, turn a failure green, swap the shell, or keep the
-# workflow from running at all; the workflow needs none of them.
-SWITCHES_OFF = ("if:", "continue-on-error:", "shell:", "paths:", "paths-ignore:", "branches:", "branches-ignore:")
+# workflow from running at all; the workflow needs none of them. YAML also takes a key in
+# quotes and with spaces before its colon, so those spellings are matched too.
+SWITCHES_OFF = re.compile(
+    r"""(- )?(["']?)(if|continue-on-error|shell|paths|paths-ignore|branches|branches-ignore)\2\s*:"""
+)
 BASELINES = "eval/baselines.json"
 FAST = ".github/workflows/fast.yml"
 BODY = ".github/workflows/pr-body.yml"
@@ -203,5 +206,4 @@ def test_ec11_the_workflow() -> None:
     assert len(uses) == 2 and all(PINNED.search(line) for line in uses)
     assert "permissions:" in lines and "contents: read" in lines
     assert not any("${{" in line for line in lines)
-    keys = [line.removeprefix("- ") for line in lines]
-    assert not [key for key in keys if key.startswith(SWITCHES_OFF)]
+    assert not [line for line in lines if SWITCHES_OFF.match(line)]
