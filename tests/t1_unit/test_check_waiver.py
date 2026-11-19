@@ -40,6 +40,11 @@ Boundaries:
   B6  `*` does not cross a "/": "ploni/*.py" does not cover "ploni/a/b.py"
   B7  "Waiver:" in another case, and no space after the colon    still a citation
   B8  the same ID cited twice                        its lines once
+  B9  a key written twice in one entry               the first counts
+  B10 a `key: value` line after a blank line         not part of the entry before it
+  B11 a numbered, dated row in another table of STATUS    does not close a phase
+  B12 `WAIVER-003.`, `WAIVER-003x`, `xWAIVER-003`     not a waiver ID
+  B13 a scope of commas and backquotes only          no scope
 
 Error paths (main):
   E1  wrong argument count                           exit 2, a usage line
@@ -47,7 +52,7 @@ Error paths (main):
       (the module suite)
 
 Adversarial:
-  A1  an ID under both Active and Expired            expired: the stricter reading
+  A1  an ID under both Active and Expired, in either order    expired: the stricter reading
   A2  a waiver entry inside a code fence under Active    read like any other
   A3  a scope entry "**" or "*"                       "**" covers everything, as Achia wrote
       it; "*" covers a root file only
@@ -301,6 +306,36 @@ def test_a2_an_entry_inside_a_fence() -> None:
 @pytest.mark.parametrize(("scope", "path", "covered"), [("**", "a/b/c.py", True), ("*", "a.py", True), ("*", "a/b.py", False)])
 def test_a3_wide_scopes(scope: str, path: str, covered: bool) -> None:
     assert check.covers(scope, path) is covered
+
+
+def test_a1_expired_listed_before_active() -> None:
+    text = "## Expired\n\nWAIVER-020\nscope: ploni/\nexpires: 2099-01-01\n\n## Active\n\nWAIVER-020\nscope: ploni/\nexpires: 2099-01-01\n"
+    assert check.waivers(text)["WAIVER-020"]["section"] == "Expired"
+
+
+def test_b9_a_key_twice_keeps_the_first() -> None:
+    text = "## Active\n\nWAIVER-021\nscope: ploni/\nexpires: 2000-01-01\nexpires: 2099-01-01\n"
+    assert check.waivers(text)["WAIVER-021"]["expires"] == "2000-01-01"
+
+
+def test_b10_an_entry_ends_at_a_blank_line() -> None:
+    text = "## Active\n\nWAIVER-022\nrule: r\n\nscope: everything/\nexpires: 2099-01-01\n"
+    assert check.waivers(text)["WAIVER-022"] == {"section": "Active", "rule": "r"}
+
+
+def test_b11_only_the_phases_table_closes_a_phase() -> None:
+    other = "## Done\n\n| What | Where | PRs | Date |\n|---|---|---|---|\n| 2 things | x | y | 2026-11-19 |\n\n"
+    assert check.closed_phases(other + STATUS) == {0}
+
+
+@pytest.mark.parametrize("token", ["WAIVER-003.", "WAIVER-003x", "xWAIVER-003"])
+def test_b12_an_id_with_more_around_it(token: str) -> None:
+    assert problems(f"waiver: {token}", ["ploni/resolve/a.py"]) == [f"waiver: {token} is not a waiver ID"]
+
+
+def test_b13_a_scope_of_commas_and_backquotes_only() -> None:
+    text = "## Active\n\nWAIVER-023\nscope: , `` ,\nexpires: 2099-01-01\n"
+    assert check.problems("waiver: WAIVER-023", ["ploni/a.py"], text, STATUS, TODAY) == ["WAIVER-023 has no scope"]
 
 
 def test_a5_a_hebrew_path() -> None:

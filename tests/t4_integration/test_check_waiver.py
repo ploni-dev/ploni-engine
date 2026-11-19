@@ -14,6 +14,7 @@ Matrix:
   M5  a changed path outside the scope               exit 1, the path named
   M6  a waiver past its date                         exit 1
   M7  a citation and a revision git does not know    exit not 0, git's "fatal" line
+  M8  a citation, and the base has no docs/WAIVERS.md    exit not 0, git's "fatal" line
 
 Not in the fast suite: PROCESS.md section 5.1 puts t4 in the full suite. Until the full
 workflow exists it is run by hand: python -m pytest tests/t4_integration
@@ -142,6 +143,16 @@ def test_m6_a_waiver_past_its_date(repo: Path) -> None:
     done = run(repo, "waiver: WAIVER-011\n", "HEAD^1", "HEAD")
     assert done.returncode == 1
     assert done.stderr.splitlines() == ["WAIVER-011 has expired: 2000-01-01"]
+
+
+def test_m8_no_waivers_file_on_the_base(repo: Path) -> None:
+    git(repo, "rm", "-q", "docs/WAIVERS.md")
+    commit(repo)
+    write(repo, "ploni/new.py")
+    commit(repo)
+    done = run(repo, "waiver: WAIVER-010\n", "HEAD^1", "HEAD")
+    assert done.returncode != 0
+    assert "fatal" in done.stderr
 
 
 def test_m7_an_unknown_revision(repo: Path) -> None:
