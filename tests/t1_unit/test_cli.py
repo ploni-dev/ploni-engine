@@ -166,7 +166,7 @@ def deny_reading(folder: Path) -> None:
     if os.name == "nt":
         subprocess.run([ICACLS, str(folder), "/deny", "*S-1-1-0:(RD)"], check=True, capture_output=True)  # noqa: S603  fixed arguments, a test folder
     elif os.geteuid() == 0:
-        pytest.skip("root reads every folder")
+        pytest.skip("root reads every folder, #115")
     else:
         folder.chmod(0)
 
