@@ -18,9 +18,9 @@ exit code is 0. A body that cites nothing exits 0 without calling git. Wrong arg
 usage line, exit 2. A git failure: git's error, a traceback, a non-zero exit.
 
 Known limits:
-- A citation is found anywhere in the body, quotes and code spans included, the stricter
-  side. A PR body that quotes the token without citing (a question of Achia's, a review
-  brief) writes its colon as `&#58;`: GitHub shows it the same, and the check does not see it.
+- A citation counts only at the start of a line, as Achia answered on 2026-11-19 ("Only
+  own-line citations count (Recommended)"): a quote in a quoted block or mid-sentence is not
+  read, and neither is a citation written mid-sentence; the reviewer reads the body.
 - Achia's own PR that adds a waiver to docs/WAIVERS.md cannot cite that waiver: the base does
   not have it yet.
 - A green run is not run again when a cited waiver expires while the PR is open; the merge
@@ -45,10 +45,11 @@ from scripts.check_changed_paths import changed
 WAIVERS_FILE = "docs/WAIVERS.md"
 STATUS_FILE = "docs/STATUS.md"
 USAGE = "usage: python -m scripts.check_waiver <base> <head>, with the PR body in PR_BODY"
-# A citation stops at a space, at a backquote (PROMOTION.md 8.4 writes it in backquotes) and at
-# a direction mark, which a Hebrew body may hold next to the ID and which cannot be seen.
+# A citation starts a line (Achia, 2026-11-19: "Only own-line citations count"); backquotes
+# (PROMOTION.md 8.4 writes it in them) and direction marks, which a Hebrew body may hold and
+# which cannot be seen, are skipped around the token and are never part of the ID.
 MARKS = "‎‏؜"
-CITATION = re.compile(rf"waiver:[\s{MARKS}]*([^\s`{MARKS}]+)", re.IGNORECASE)
+CITATION = re.compile(rf"^[ \t`{MARKS}]*waiver:[ \t`{MARKS}]*([^\s`{MARKS}]+)", re.IGNORECASE | re.MULTILINE)
 # The date of Israel's summer offset, UTC+3: a date waiver never lives past Israel's midnight;
 # in winter (UTC+2) it ends an hour early, the stricter side. No tz database is needed.
 ISRAEL_SUMMER = timezone(timedelta(hours=3))
@@ -66,12 +67,13 @@ Waiver = dict[str, str]
 
 
 def cited(body: str) -> list[str]:
-    """Return what each `waiver:` in the body names, each once, sorted.
+    """Return what each citation at the start of a line names, each once, sorted.
 
     Why: one citation rule for the check and for the early exit when nothing is cited.
 
-    Contract: the token is matched in any case, with or without spaces after the colon; what
-    follows it up to the next space is returned whole, an ID or not.
+    Contract: the token is matched in any case, after nothing but spaces, tabs, backquotes and
+    direction marks on its line; what follows, up to the next space, backquote or mark, is
+    returned whole, an ID or not.
     """
     return sorted(set(CITATION.findall(body)))
 
