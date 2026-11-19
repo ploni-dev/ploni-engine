@@ -155,7 +155,7 @@ def unlinked(source: str, name: str = "<source>") -> list[str]:
             # getattr hands the skip on, like an attribute that is not called, unless it is
             # called on the spot.
             if called_name(node) in MARKING or id(node) in called:
-                judged += [(node, skip) for skip in named]
+                judged += [(called.get(id(node), node), skip) for skip in named]
             else:
                 found += [(node.lineno, skip) for skip in named]
         elif isinstance(node, ast.ImportFrom) and node.module in SKIP_MODULES:
