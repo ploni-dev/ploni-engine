@@ -17,11 +17,12 @@ Equivalence classes:
                                                                   not judged
   EC6  a public method of a public class, an async function, a class inside a public class
                                                                   judged as a function or class
-  EC7  the repository: every file under ploni/                    no line, and more than one file read
+  EC7  the repository: every file under ploni/, sub-packages too    no line
 
 Boundaries:
   B1  an empty file                   one line: a module with no docstring
-  B2  the name in another case ("the why: is", "CONTRACT:")    not a section
+  B2  the name in another case ("the why: is", "CONTRACT:"), or with no colon after it    not a
+      section
   B3  the section after another on one line ("Why: see the class. Contract: ...", as in
       `ploni/safety/logging.py`), and an indented section line    counted
 
@@ -218,7 +219,7 @@ def test_ec6_methods_async_and_inner_classes_are_judged() -> None:
 
 def test_ec7_the_repository() -> None:
     files = sorted((ROOT / "ploni").rglob("*.py"))
-    assert len(files) > 1
+    assert len(files) > 1 and ROOT / "ploni" / "safety" / "atomic.py" in files
     found = [line for path in files for line in problems(path.read_text(encoding="utf-8"), path.relative_to(ROOT).as_posix())]
     assert found == []
 
@@ -230,6 +231,7 @@ def test_b1_an_empty_file() -> None:
 def test_b2_a_section_name_in_another_case() -> None:
     assert problems('"""M.\n\nthe why: is here.\n"""\n', "m.py") == ["m.py:1 module: no Why:"]
     assert not has_section("WHY: r. CONTRACT: none.", "Contract")
+    assert not has_section("Why it exists: a reason.", "Why")
 
 
 def test_b3_a_section_after_another_and_an_indented_one() -> None:
