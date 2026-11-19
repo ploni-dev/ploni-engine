@@ -47,8 +47,8 @@ Boundaries:
       text after the ID                              still a citation
   B16 the ID alone in backquotes after the colon, with or without a space or a mark
                                                      read as the ID (an invented one is red)
-  B17 the citation as a list item ("- ", "* ", "+ ", "1. ", "12) ") or in bold or italics
-                                                     read: the start of a line, the stricter side
+  B17 the citation as a list item ("- ", "* ", "+ ", "1. ", "12) "), also nested (indented),
+      or in bold or italics                          read: the start of a line, the stricter side
   B8  the same ID cited twice                        its lines once
   B9  a key written twice in one entry               the first counts
   B10 a `key: value` line after a blank line         not part of the entry before it
@@ -428,7 +428,7 @@ def test_b16_the_id_alone_in_backquotes(body: str) -> None:
 
 @pytest.mark.parametrize(
     "body",
-    ["- waiver: WAIVER-999", "* waiver: WAIVER-999", "+ `waiver: WAIVER-999`", "1. waiver: WAIVER-999", "12) waiver: WAIVER-999", "**waiver:** WAIVER-999", "- **waiver: WAIVER-999**", "_waiver: WAIVER-999_", "‏- waiver: WAIVER-999"],
+    ["- waiver: WAIVER-999", "* waiver: WAIVER-999", "+ `waiver: WAIVER-999`", "1. waiver: WAIVER-999", "12) waiver: WAIVER-999", "**waiver:** WAIVER-999", "- **waiver: WAIVER-999**", "_waiver: WAIVER-999_", "‏- waiver: WAIVER-999", "  - waiver: WAIVER-999", "\t1. waiver: WAIVER-999"],
 )
 def test_b17_a_list_item_or_emphasis(body: str) -> None:
     assert problems(body, ["ploni/a.py"]) == ["WAIVER-999 is not in docs/WAIVERS.md"]

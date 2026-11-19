@@ -20,8 +20,9 @@ usage line, exit 2. A git failure: git's error, a traceback, a non-zero exit.
 Known limits:
 - A citation counts only at the start of a line, as Achia answered on 2026-11-19 ("Only
   own-line citations count (Recommended)"), also as a list item or in emphasis: a quote in a
-  quoted block or mid-sentence is not read, and neither is a citation written mid-sentence or
-  with its ID on the next line; the reviewer reads the body.
+  quoted block or mid-sentence is not read, and neither is a citation written mid-sentence,
+  with its ID on the next line, in a heading, in a table cell, or after a task box; the
+  reviewer reads the body.
 - Achia's own PR that adds a waiver to docs/WAIVERS.md cannot cite that waiver: the base does
   not have it yet.
 - A green run is not run again when a cited waiver expires while the PR is open; the merge
