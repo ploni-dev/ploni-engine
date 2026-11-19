@@ -38,7 +38,8 @@ Error paths:
 Adversarial:
   A1  a GLiNER v0 or v1 checkpoint (CC-BY-NC, CLAUDE.md) in MODELS    none there
   A2  a pin by branch name ("main") in MODELS                           none there (EC6)
-  A3  a model whose filter lets a pickle or the model's own Python through    none there
+  A3  a model whose filter lets a pickle or the model's own Python through, or whose allow list
+      has a wildcard    none there
 
 Not applicable: the Hebrew axes and the document axes: the input is the pins and one table of
 a Markdown file.
@@ -189,7 +190,8 @@ def test_ec6_the_hashes_are_those_the_record_holds() -> None:
 def test_a3_no_model_fetches_a_pickle_or_python() -> None:
     for model in dm.MODELS:
         if model.allow is not None:
-            assert not [pattern for pattern in model.allow if pattern.endswith((".py", ".bin", ".pkl", ".pt"))], model.folder
+            pickles = (".py", ".bin", ".pkl", ".pickle", ".pt", ".pth", ".ckpt")
+            assert not [pattern for pattern in model.allow if pattern.endswith(pickles) or any(c in pattern for c in "*?[")], model.folder
         else:
             assert {"*.py", "pytorch_model.bin"} <= set(model.ignore), model.folder
 
