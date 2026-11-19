@@ -15,7 +15,8 @@ Equivalence classes:
                                        after unchanged
   EC5  the repository                  the table of docs/THIRD_PARTY.md is table(MODELS)
   EC6  the pins of MODELS              a full lowercase commit for each revision, a SHA-256 for
-                                       each weights file, folders unique, a license for each
+                                       each weights file, folders unique, a license for each;
+                                       each weights hash one that docs/THIRD_PARTY.md records
   EC7  download(), weights as pinned   fetch called once with the repository, the revision, the
                                        folder models/<folder>/<revision>, no token, the file
                                        filter; returns the folder
@@ -26,15 +27,18 @@ Equivalence classes:
 Boundaries:
   B1  a model with `allow` (only those files) and one with `ignore` (all but those)
   B2  replace_table() on a file whose table is the last thing in it
+  B3  a model with an empty `allow`    fetches no file, not every file
 
 Error paths:
   E1  download() whose weights do not have the pinned hash    ValueError, naming the folder
-  E2  replace_table() with no `## Models` heading, or the heading and no table    ValueError
+  E2  replace_table() with no `## Models` heading, or the heading and no table before the next
+      `## ` heading (whose table must not be taken)    ValueError
   E3  row() with a `|` in a value                              ValueError: it would split the cell
 
 Adversarial:
   A1  a GLiNER v0 or v1 checkpoint (CC-BY-NC, CLAUDE.md) in MODELS    none there
   A2  a pin by branch name ("main") in MODELS                           none there (EC6)
+  A3  a model whose filter lets a pickle or the model's own Python through    none there
 
 Not applicable: the Hebrew axes and the document axes: the input is the pins and one table of
 a Markdown file.
@@ -136,6 +140,8 @@ def test_e2_no_models_table() -> None:
         dm.replace_table("# T\n\nNo table.\n", "| B |\n")
     with pytest.raises(ValueError):
         dm.replace_table("## Models\n\nNo table yet.\n", "| B |\n")
+    with pytest.raises(ValueError):
+        dm.replace_table("## Models\n\nNo table.\n\n## Other\n\n| X |\n|---|\n", "| B |\n")
 
 
 def test_e3_a_bar_in_a_value() -> None:
@@ -159,6 +165,38 @@ def test_ec8_main(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     assert no_argument.value.code == 2 and unknown.value.code == 2
 
 
+def gliner_not_allowed(repo: str) -> bool:
+    """Say whether a repository is a GLiNER checkpoint that CLAUDE.md does not allow.
+
+    CLAUDE.md: "GLiNER v0 and v1 checkpoints are CC-BY-NC and unusable here. Only v2.1 and PII
+    variants."
+    """
+    name = repo.lower()
+    return name.startswith("urchade/gliner") and "v2.1" not in name and "pii" not in name
+
+
 def test_a1_no_gliner_v0_or_v1() -> None:
-    banned = ("urchade/gliner_base", "urchade/gliner_multi", "urchade/gliner_small", "urchade/gliner_medium", "urchade/gliner_large")
-    assert not [model.repo for model in dm.MODELS if model.repo.startswith(banned)]
+    names = ("urchade/gliner_multi", "urchade/gliner_base", "urchade/gliner_multi-v2.1", "urchade/gliner_multi_pii-v1")
+    assert [gliner_not_allowed(repo) for repo in names] == [True, True, False, False]
+    assert not [model.repo for model in dm.MODELS if gliner_not_allowed(model.repo)]
+
+
+def test_ec6_the_hashes_are_those_the_record_holds() -> None:
+    text = THIRD_PARTY.read_text(encoding="utf-8")
+    assert [model.folder for model in dm.MODELS if model.sha256 not in text] == []
+
+
+def test_a3_no_model_fetches_a_pickle_or_python() -> None:
+    for model in dm.MODELS:
+        if model.allow is not None:
+            assert not [pattern for pattern in model.allow if pattern.endswith((".py", ".bin", ".pkl", ".pt"))], model.folder
+        else:
+            assert {"*.py", "pytorch_model.bin"} <= set(model.ignore), model.folder
+
+
+def test_b3_an_empty_allow_fetches_nothing(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[dict[str, object]] = []
+    monkeypatch.setattr(dm, "MODELS_ROOT", tmp_path)
+    with pytest.raises(ValueError):
+        dm.download(JOINT._replace(allow=()), fake_fetch(calls, b"x"))
+    assert calls[0]["allow_patterns"] == []
