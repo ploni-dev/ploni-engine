@@ -45,6 +45,12 @@ Boundaries:
   B11 a numbered, dated row in another table of STATUS    does not close a phase
   B12 `WAIVER-003.`, `WAIVER-003x`, `xWAIVER-003`     not a waiver ID
   B13 a scope of commas and backquotes only          no scope
+  B14 a waiver with no expiry line                   no readable expiry (section 8.5: every
+                                                     waiver has one)
+  B15 today is the date at UTC+3, Israel's summer offset: a date waiver never lives past
+      Israel's midnight; in winter it ends an hour early, the stricter side
+  EC2, EC3 also written in backquotes, as PROMOTION.md 8.4 and docs/WAIVERS.md write a
+      citation: the backquote is not part of the ID
 
 Error paths (main):
   E1  wrong argument count                           exit 2, a usage line
@@ -59,17 +65,19 @@ Adversarial:
   A4  a waiver the PR adds to docs/WAIVERS.md itself  not seen: the file is read from the
       base (the module suite)
   A5  a Hebrew path in the PR                        judged like any other path
+  A6  Hebrew text around a citation, and a direction mark (U+200F, U+200E, U+061C) next to
+      the ID                                         the mark is not part of the ID
 
-Not applicable: the document axes; the Hebrew axes of the test-matrix skill other than A5, as
-the inputs are a PR body judged for one token, a list of paths and two Markdown files of the
-repository.
+Not applicable: the document axes; the Hebrew axes of the test-matrix skill other than A5
+and A6, as the inputs are a PR body judged for one token, a list of paths and two Markdown
+files of the repository.
 
 Known limits:
   - A citation is found anywhere in the body, quotes and code spans included: a PR body that
     talks about the check must not write the token itself.
 """
 
-from datetime import date
+from datetime import UTC, date, datetime
 from pathlib import Path
 
 import pytest
@@ -215,12 +223,16 @@ def test_ec11_waivers() -> None:
     assert found["WAIVER-003"]["scope"] == "tests/t2_property/test_projection.py, ploni/resolve/"
     assert found["WAIVER-003"]["expires"] == "end of Phase 3"
     assert found["WAIVER-002"]["section"] == "Expired"
-    assert check.waivers((ROOT / "docs" / "WAIVERS.md").read_text(encoding="utf-8")) == {}
+    real = check.waivers((ROOT / "docs" / "WAIVERS.md").read_text(encoding="utf-8"))
+    assert all(entry.get("scope") != "which files or paths" for entry in real.values())
 
 
 def test_ec12_closed_phases() -> None:
     assert check.closed_phases(STATUS) == {0}
-    assert 0 not in check.closed_phases((ROOT / "docs" / "STATUS.md").read_text(encoding="utf-8"))
+    # What stays true of the real file: its Phases table has the Date column where the check reads it.
+    status = (ROOT / "docs" / "STATUS.md").read_text(encoding="utf-8")
+    header = next(line for line in status.splitlines() if line.startswith("| Phase |"))
+    assert [cell.strip() for cell in header.strip().strip("|").split("|")][check.DATE_CELL] == "Date"
 
 
 @pytest.mark.parametrize(
@@ -336,6 +348,40 @@ def test_b12_an_id_with_more_around_it(token: str) -> None:
 def test_b13_a_scope_of_commas_and_backquotes_only() -> None:
     text = "## Active\n\nWAIVER-023\nscope: , `` ,\nexpires: 2099-01-01\n"
     assert check.problems("waiver: WAIVER-023", ["ploni/a.py"], text, STATUS, TODAY) == ["WAIVER-023 has no scope"]
+
+
+@pytest.mark.parametrize("body", ["`waiver: WAIVER-003`", "relies on `waiver: WAIVER-003`."])
+def test_ec2_a_citation_in_backquotes(body: str) -> None:
+    assert problems(body, ["ploni/resolve/a.py"]) == []
+
+
+def test_ec3_an_invented_id_in_backquotes() -> None:
+    assert problems("`waiver: WAIVER-999`", ["ploni/a.py"]) == ["WAIVER-999 is not in docs/WAIVERS.md"]
+
+
+def test_b14_no_expiry_line() -> None:
+    text = "## Active\n\nWAIVER-024\nscope: ploni/\n"
+    assert check.problems("waiver: WAIVER-024", ["ploni/a.py"], text, STATUS, TODAY) == [
+        "WAIVER-024 has no readable expiry: "
+    ]
+
+
+@pytest.mark.parametrize(
+    ("now", "day"),
+    [
+        (datetime(2026, 11, 19, 20, 59, tzinfo=UTC), date(2026, 11, 19)),
+        (datetime(2026, 11, 19, 21, 0, tzinfo=UTC), date(2026, 11, 20)),
+        (datetime(2026, 7, 1, 23, 30, tzinfo=UTC), date(2026, 7, 2)),
+    ],
+)
+def test_b15_today_is_the_date_at_utc_plus_3(now: datetime, day: date) -> None:
+    assert check.today(now) == day
+
+
+@pytest.mark.parametrize("mark", ["‏", "‎", "؜"])
+def test_a6_a_direction_mark_next_to_the_id(mark: str) -> None:
+    assert problems(f"בקשה waiver: WAIVER-003{mark} לפי ההחלטה", ["ploni/resolve/a.py"]) == []
+    assert problems(f"waiver: {mark}WAIVER-999{mark}", ["ploni/a.py"]) == ["WAIVER-999 is not in docs/WAIVERS.md"]
 
 
 def test_a5_a_hebrew_path() -> None:

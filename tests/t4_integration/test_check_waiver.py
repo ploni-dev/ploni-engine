@@ -15,6 +15,8 @@ Matrix:
   M6  a waiver past its date                         exit 1
   M7  a citation and a revision git does not know    exit not 0, git's "fatal" line
   M8  a citation, and the base has no docs/WAIVERS.md    exit not 0, git's "fatal" line
+  M9  the base dates Phase 0's close, the PR blanks it, and cites a waiver that expires at
+      Phase 0                                        exit 1: the status file of the base counts
 
 Not in the fast suite: PROCESS.md section 5.1 puts t4 in the full suite. Until the full
 workflow exists it is run by hand: python -m pytest tests/t4_integration
@@ -153,6 +155,19 @@ def test_m8_no_waivers_file_on_the_base(repo: Path) -> None:
     done = run(repo, "waiver: WAIVER-010\n", "HEAD^1", "HEAD")
     assert done.returncode != 0
     assert "fatal" in done.stderr
+
+
+def test_m9_the_status_file_is_read_from_the_base(repo: Path) -> None:
+    closed = STATUS.replace("| 0 Foundation | g | | | |", "| 0 Foundation | g | | 2026-11-19 | |")
+    write(repo, "docs/STATUS.md", closed)
+    write(repo, "docs/WAIVERS.md", WAIVERS.replace("## Expired", "WAIVER-013\nscope: ploni/\nexpires: Phase 0\n\n## Expired"))
+    commit(repo)
+    write(repo, "docs/STATUS.md", STATUS)
+    write(repo, "ploni/new.py")
+    commit(repo)
+    done = run(repo, "waiver: WAIVER-013\n", "HEAD^1", "HEAD")
+    assert done.returncode == 1
+    assert done.stderr.splitlines() == ["WAIVER-013 has expired: Phase 0"]
 
 
 def test_m7_an_unknown_revision(repo: Path) -> None:
