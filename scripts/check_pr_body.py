@@ -33,12 +33,12 @@ def section(body: str, heading: str) -> str | None:
 
     Why: the two sections are judged one at a time, each on its own text.
 
-    Contract: the heading is a line equal to `heading` after its line end and trailing spaces
-    are removed; the text runs to the next line that begins with "## " or to the end.
+    Contract: the heading is a line equal to `heading` once spaces and a carriage return at
+    either end are removed; the text runs to the next line that begins with "## " or to the end.
     """
-    lines = body.replace("\r\n", "\n").split("\n")
+    lines = body.split("\n")
     for start, line in enumerate(lines):
-        if line.rstrip() == heading:
+        if line.strip() == heading:
             rest = lines[start + 1 :]
             end = next((i for i, later in enumerate(rest) if later.startswith("## ")), len(rest))
             return "\n".join(rest[:end])
