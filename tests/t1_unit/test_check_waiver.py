@@ -7,7 +7,11 @@ Bad PR 8 of the closing test of Phase 0 (section 10) cites `waiver: WAIVER-999`.
 How it runs and how expiry is read is Achia's answer of 2026-11-19, "New workflow file
 (Recommended)", whose text said: "A waiver whose expiry is a date has expired after that date;
 one whose expiry is a phase has expired once that phase's close is dated in docs/STATUS.md. A
-PR that cites no waiver passes."
+PR that cites no waiver passes." What a citation is, is his answer of the same day, "Only
+own-line citations count (Recommended)", described as: "A citation counts when it stands at
+the start of a line (backquotes allowed), as a PR that relies on a waiver writes it. Quotes,
+which sit in quoted blocks or mid-sentence, are not read. Risk: a PR that writes its citation
+mid-sentence is not checked; the reviewer still reads the body."
 
 Test matrix:
 
@@ -20,14 +24,14 @@ Equivalence classes (problems):
   EC6  an active waiver whose phase is closed in the STATUS table    a line: expired
   EC7  an active waiver whose phase is not closed    no line
   EC8  a changed path outside the scope              one line per such path
-  EC9  two citations, one good, one bad              one line, for the bad one
+  EC9  two citations, each on its own line, one good, one bad    one line, for the bad one
   EC10 a citation that is not a waiver ID (`waiver: none`)    a line: not a waiver ID
 
 Equivalence classes (the parts):
   EC11 waivers(): entries under Active and Expired, with their fields; the format example
-       above the first section is not a waiver; the repository's own docs/WAIVERS.md has none
+       above the first section is not a waiver, also in the repository's own docs/WAIVERS.md
   EC12 closed_phases(): a dated row is closed, an undated one is open; the repository's own
-       STATUS table has phase 0 open
+       Phases table has its Date column where the check reads it
   EC14 main(), with git and the clock stubbed: it judges by today(), not the machine's date
   EC13 covers(): an exact path; a folder ending in "/"; `*` within one folder; `**` across
        folders; several entries separated by commas, with spaces and backquotes
@@ -39,7 +43,10 @@ Boundaries:
   B4  a waiver with no scope line, or an empty one   a line: no scope
   B5  no changed path                                no scope line, only the other checks
   B6  `*` does not cross a "/": "ploni/*.py" does not cover "ploni/a/b.py"
-  B7  "Waiver:" in another case, and no space after the colon    still a citation
+  B7  "Waiver:" in another case, no space after the colon, spaces before it on the line,
+      text after the ID                              still a citation
+  B16 the ID alone in backquotes after the colon, with or without a space or a mark
+                                                     read as the ID (an invented one is red)
   B8  the same ID cited twice                        its lines once
   B9  a key written twice in one entry               the first counts
   B10 a `key: value` line after a blank line         not part of the entry before it
@@ -66,16 +73,17 @@ Adversarial:
   A4  a waiver the PR adds to docs/WAIVERS.md itself  not seen: the file is read from the
       base (the module suite)
   A5  a Hebrew path in the PR                        judged like any other path
-  A6  Hebrew text around a citation, and a direction mark (U+200F, U+200E, U+061C) next to
-      the ID                                         the mark is not part of the ID
+  A6  Hebrew text after a citation, and a direction mark (U+200F, U+200E, U+061C) at the
+      line's start or next to the ID                the mark is not part of the ID
+  A7  the token in a quoted block ("> "), mid-sentence, or after other text on the line
+                                                     not a citation: no line
 
 Not applicable: the document axes; the Hebrew axes of the test-matrix skill other than A5
 and A6, as the inputs are a PR body judged for one token, a list of paths and two Markdown
 files of the repository.
 
 Known limits:
-  - A citation is found anywhere in the body, quotes and code spans included: a PR body that
-    talks about the check must not write the token itself.
+  - A citation written mid-sentence is not read (A7), by Achia's answer: the reviewer reads it.
 """
 
 from datetime import UTC, date, datetime
@@ -208,7 +216,7 @@ def test_ec8_a_path_outside_the_scope() -> None:
 
 
 def test_ec9_one_good_one_bad() -> None:
-    found = problems("waiver: WAIVER-003\nand waiver: WAIVER-999\n", ["ploni/resolve/a.py"])
+    found = problems("waiver: WAIVER-003\nwaiver: WAIVER-999\n", ["ploni/resolve/a.py"])
     assert found == ["WAIVER-999 is not in docs/WAIVERS.md"]
 
 
@@ -289,7 +297,7 @@ def test_b6_a_star_does_not_cross_a_folder() -> None:
     assert problems("waiver: WAIVER-004", ["ploni/a/b.py"]) == ["WAIVER-004 does not cover ploni/a/b.py"]
 
 
-@pytest.mark.parametrize("body", ["Waiver: WAIVER-999", "WAIVER:WAIVER-999", "text waiver:  WAIVER-999 more"])
+@pytest.mark.parametrize("body", ["Waiver: WAIVER-999", "WAIVER:WAIVER-999", "intro\n   waiver:  WAIVER-999 more text"])
 def test_b7_case_and_spacing(body: str) -> None:
     assert problems(body, ["ploni/a.py"]) == ["WAIVER-999 is not in docs/WAIVERS.md"]
 
@@ -351,7 +359,7 @@ def test_b13_a_scope_of_commas_and_backquotes_only() -> None:
     assert check.problems("waiver: WAIVER-023", ["ploni/a.py"], text, STATUS, TODAY) == ["WAIVER-023 has no scope"]
 
 
-@pytest.mark.parametrize("body", ["`waiver: WAIVER-003`", "relies on `waiver: WAIVER-003`."])
+@pytest.mark.parametrize("body", ["`waiver: WAIVER-003`", "`waiver: WAIVER-003` (granted 2026-11-14)"])
 def test_ec2_a_citation_in_backquotes(body: str) -> None:
     assert problems(body, ["ploni/resolve/a.py"]) == []
 
@@ -391,8 +399,27 @@ def test_ec14_main_judges_by_today_at_utc_plus_3(monkeypatch: pytest.MonkeyPatch
 
 @pytest.mark.parametrize("mark", ["‏", "‎", "؜"])
 def test_a6_a_direction_mark_next_to_the_id(mark: str) -> None:
-    assert problems(f"בקשה waiver: WAIVER-003{mark} לפי ההחלטה", ["ploni/resolve/a.py"]) == []
+    assert problems(f"{mark}waiver: WAIVER-999{mark} לפי ההחלטה", ["ploni/a.py"]) == ["WAIVER-999 is not in docs/WAIVERS.md"]
     assert problems(f"waiver: {mark}WAIVER-999{mark}", ["ploni/a.py"]) == ["WAIVER-999 is not in docs/WAIVERS.md"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    [
+        "> waiver: WAIVER-999",
+        "> > waiver: WAIVER-999",
+        "PROMOTION.md says a PR carries `waiver: WAIVER-999` in its body.",
+        "see waiver: WAIVER-999",
+        "בקשה waiver: WAIVER-999",
+    ],
+)
+def test_a7_a_quote_or_a_mention_is_not_a_citation(body: str) -> None:
+    assert problems(body, ["ploni/a.py"]) == []
+
+
+@pytest.mark.parametrize("body", ["waiver: `WAIVER-999`", "waiver:`WAIVER-999`", "waiver: ‏`WAIVER-999`", "`waiver:` `WAIVER-999`"])
+def test_b16_the_id_alone_in_backquotes(body: str) -> None:
+    assert problems(body, ["ploni/a.py"]) == ["WAIVER-999 is not in docs/WAIVERS.md"]
 
 
 def test_a5_a_hebrew_path() -> None:
