@@ -8,7 +8,8 @@ Test matrix:
 
 Equivalence classes:
   EC1  the file                     a JSON object with "about" (text) and "metrics" (an object)
-  EC2  the names under "metrics"    exactly the rows of the T6 table of build-plan.md section 7
+  EC2  the names under "metrics"    exactly the metrics of the T6 table of build-plan.md
+                                    section 7, but for its last row (runtime, peak memory)
   EC3  each value                   null (not set yet), a number, or an object of numbers (per
                                     type)
 
@@ -23,8 +24,9 @@ from pathlib import Path
 
 BASELINES = Path(__file__).resolve().parents[2] / "eval" / "baselines.json"
 
-# build-plan.md section 7, T6: one name per row of the table, the first row split into its
-# three metrics and the last into its three.
+# build-plan.md section 7, T6: one name per metric of the table, the first row split into its
+# three. Its last row (runtime, peak memory) is left out: its limits are section 8.2, and
+# Achia's answer of 2026-11-19 was about the accuracy scores.
 METRICS = {
     "per_type_precision",
     "per_type_recall",
@@ -38,9 +40,6 @@ METRICS = {
     "verification_catch_rate",
     "utility_preservation",
     "numeric_conservatism_violations",
-    "runtime_per_page_seconds",
-    "runtime_60_pages_seconds",
-    "peak_rss_mb",
 }
 
 

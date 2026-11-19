@@ -1,5 +1,5 @@
 {
-  "about": "The metric gates of build-plan.md section 7, T6, one name per row of its table. Phase 0 skeleton (issue #29): no number is set. Achia, 2026-11-19: the file holds the names only, and each number is set later only with his yes. The time rows are measured and not enforced for now (build-plan.md section 8.2).",
+  "about": "The metric gates of build-plan.md section 7, T6, one name per metric of its table, but for its last row (runtime and peak memory), whose limits are build-plan.md section 8.2. Phase 0 skeleton (issue #29): no number is set. Achia, 2026-11-19: the file holds the names of the accuracy scores only, and each number is set later only with his yes.",
   "metrics": {
     "per_type_precision": null,
     "per_type_recall": null,
@@ -12,9 +12,6 @@
     "under_merge_count": null,
     "verification_catch_rate": null,
     "utility_preservation": null,
-    "numeric_conservatism_violations": null,
-    "runtime_per_page_seconds": null,
-    "runtime_60_pages_seconds": null,
-    "peak_rss_mb": null
+    "numeric_conservatism_violations": null
   }
 }
