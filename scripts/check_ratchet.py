@@ -1,4 +1,4 @@
-"""Check that a PR lowers no test counter without an override, and adds no unbudgeted suppression.
+"""Check that a PR keeps the ratchet of PROMOTION.md section 6.
 
 Why: `PROMOTION.md` section 6, the ratchet: test functions and assertions per test file "may
 not decrease"; "A decrease fails the build with the exact counter and the delta"; an override
@@ -11,10 +11,13 @@ system journeys are counted in PRs of their own, once the first of each exists.
 
 Contract: `python -m scripts.check_ratchet <base> <head>`, run from the root of the checkout,
 with the PR body in PR_BODY. It runs as a module so that it uses `changed()` of
-scripts/check_changed_paths.py. Each changed test file (tests/**/test_*.py) is counted at both
-revisions, from git; a file gone at the head counts zero. The suppressions are counted at the
-head with `git grep` and compared with the ceiling of the head's `.ratchet.json`, so a PR that
-adds one raises the ceiling in the same diff. An override is a line that starts with
+scripts/check_changed_paths.py. `base` must be an ancestor of `head`, as the first parent of
+GitHub's merge of a PR is: the paths are those `head` changed since it left `base`, and the
+counts are taken at `base` itself. Each changed test file (tests/**/test_*.py or *_test.py) is
+counted at both revisions, from git; a file gone at the head counts zero. The suppressions are
+counted at both revisions with `git grep`: at the head they may not pass the ceiling of the
+head's `.ratchet.json`, and a rise from base to head must be matched by at least as large a
+rise of the ceiling, so it shows in the diff. An override is a line that starts with
 `ratchet-override: <path> -<N> <reason>` (backquotes around it allowed); each covers one
 decrease of exactly N in that file. Each problem is written on the error stream, one line
 each, and the exit code is 1; otherwise nothing is written and the exit code is 0. Wrong
@@ -26,8 +29,13 @@ Known limits:
   and a shorter parameter list are not seen; assertions catch part of the second.
 - A test file renamed counts as one file gone and one new: the old one's counters fall to
   zero and need override lines.
-- A suppression is a `#`, spaces, then `noqa` or `type: ignore`, anywhere on a line of a
-  tracked .py file, also inside a string.
+- A suppression is a `#`, spaces, an optional `ruff:`, `flake8:` or `mypy:`, then `noqa`,
+  `type: ignore` or `ignore-errors`, in any case, anywhere on a line of a tracked .py file, also
+  inside a string.
+- Run by hand on two branch tips that have both moved, the counts are wrong: pass a base that
+  is an ancestor of the head.
+- On Windows, with the error stream piped, a Hebrew path cannot be written in the local code
+  page and the run fails, red; set PYTHONIOENCODING=utf-8. GitHub's runners write UTF-8.
 - Fixture cases, baseline values, detectors and system journeys are not counted yet.
 """
 
@@ -48,8 +56,10 @@ CEILING_KEY = "suppressions_ceiling"
 USAGE = "usage: python -m scripts.check_ratchet <base> <head>, with the PR body in PR_BODY"
 OVERRIDE_START = "ratchet-override:"
 OVERRIDE = re.compile(r"ratchet-override:\s+(\S+)\s+-(\d+)\s+\S.*")
-# For git grep -E, whose regular expressions have no \s on every platform.
-SUPPRESSION = "#[[:space:]]*(noqa|type:[[:space:]]*ignore)"
+# For git grep -E -i, whose regular expressions have no \s on every platform. Each form is one
+# that ruff or mypy honours after the hash sign: noqa, ruff/flake8 with noqa, type with ignore,
+# mypy with ignore-errors, in any case. (Written here without the hash, so this line is none.)
+SUPPRESSION = "#[[:space:]]*((ruff|flake8|mypy):[[:space:]]*)?(noqa|type:[[:space:]]*ignore|ignore-errors)"
 # Well inside a CI job's minutes; each git call here reads the repository once.
 GIT_TIMEOUT_SECONDS = 60
 
@@ -59,8 +69,9 @@ class Counts(NamedTuple):
 
     Why: `PROMOTION.md` section 6 names these two per test file.
 
-    Contract: test_functions counts functions whose name starts with "test", as pytest
-    collects them; assertions counts `assert` statements anywhere in the file.
+    Contract: test_functions counts functions whose name starts with "test", wherever they
+    stand (pytest collects fewer: not nested ones, nor methods outside Test* classes);
+    assertions counts `assert` statements anywhere in the file.
     """
 
     test_functions: int
@@ -71,14 +82,16 @@ COUNTERS = (("test functions", 0), ("assertions", 1))
 
 
 def is_test_file(path: str) -> bool:
-    """Say whether a changed path is a test file the ratchet counts: tests/**/test_*.py.
+    """Say whether a changed path is a test file the ratchet counts: tests/**/test_*.py or *_test.py.
 
     Why: only test files hold the counters of section 6; helpers and conftest.py do not.
+    The two name forms are the ones pytest collects by default (pyproject.toml sets no other).
 
     Contract: `path` as git writes it, with forward slashes.
     """
     parts = PurePosixPath(path)
-    return parts.parts[:1] == ("tests",) and parts.name.startswith("test_") and parts.suffix == ".py"
+    named = parts.name.startswith("test_") or parts.stem.endswith("_test")
+    return parts.parts[:1] == ("tests",) and named and parts.suffix == ".py"
 
 
 def count(source: str) -> Counts:
@@ -94,13 +107,14 @@ def count(source: str) -> Counts:
 
 
 def overrides(body: str) -> tuple[list[tuple[str, int]], list[str]]:
-    """Return the override lines of a PR body as (path, N), and the lines that could not be read.
+    """Parse the override lines of a PR body.
 
     Why: an override must be exact; a line that starts like one and is not read fails, so a
     typo never passes as an override nor goes unseen.
 
-    Contract: a line counts when, after spaces and backquotes, it starts with the token; a
-    quoted line ("> ...") does not. The reason may be any text, Hebrew too.
+    Contract: returns the lines read, as (path, N), and the lines that start like one and
+    cannot be read. A line counts when, after spaces and backquotes, it starts with the token;
+    a quoted line ("> ...") does not. The reason may be any text, Hebrew too.
     """
     read: list[tuple[str, int]] = []
     unread: list[str] = []
@@ -146,25 +160,33 @@ def ceiling(text: str) -> int | None:
     return value if type(value) is int else None
 
 
-def ceiling_problems(suppressions: int, ratchet_text: str) -> list[str]:
+def ceiling_problems(before: int, after: int, base_text: str, head_text: str) -> list[str]:
     """Return the problem of the suppressions against the ceiling, if any.
 
-    Why: a suppression is allowed only when the PR raises the ceiling where the diff shows it.
+    Why: a suppression is allowed only when the PR raises the ceiling where the diff shows it
+    (Achia's answer: "which a PR raises in that file when it adds one, so the rise shows").
 
-    Contract: one line when there is no whole-number ceiling or the count is over it.
+    Contract: `before` and `after` are the counts at base and head, the texts the two
+    .ratchet.json files. One line when the head has no whole-number ceiling, when `after` is
+    over it, or when the count rose by more than the ceiling did. A base with no ceiling (the
+    PR that sets it) counts as a ceiling of 0, which no rise under the head's ceiling passes.
     """
-    limit = ceiling(ratchet_text)
+    limit = ceiling(head_text)
     if limit is None:
         return [f"{RATCHET_FILE} has no whole-number {CEILING_KEY}"]
-    if suppressions > limit:
-        return [f"suppressions {suppressions}, ceiling {limit} in {RATCHET_FILE}: raise {CEILING_KEY} in the PR that adds one"]
+    if after > limit:
+        return [f"suppressions {after}, ceiling {limit} in {RATCHET_FILE}: raise {CEILING_KEY} in the PR that adds one"]
+    old = ceiling(base_text) or 0
+    if after - before > limit - old:
+        return [
+            f"suppressions rose by {after - before} ({before} -> {after}), {CEILING_KEY} by {limit - old} "
+            f"({old} -> {limit}): raise it in {RATCHET_FILE} by the rise"
+        ]
     return []
 
 
-def problems(
-    body: str, paths: list[str], before: dict[str, Counts], after: dict[str, Counts], suppressions: int, ratchet_text: str
-) -> list[str]:
-    """Return one line per problem: unread overrides, a refusal, uncovered decreases, the ceiling.
+def problems(body: str, paths: list[str], before: dict[str, Counts], after: dict[str, Counts]) -> list[str]:
+    """Return one line per problem of the counters: unread overrides, a refusal, uncovered decreases.
 
     Why: the judgement of the check, apart from where the body, the counts and the files come from.
 
@@ -184,7 +206,7 @@ def problems(
         else:
             uncovered.append(f"{path}: {name} {old} -> {new} (-{old - new})")
     found += [f"ratchet-override names no decrease: {path} -{delta}" for path, delta in read]
-    return found + uncovered + ceiling_problems(suppressions, ratchet_text)
+    return found + uncovered
 
 
 def shown(revision: str, path: str) -> str:
@@ -210,7 +232,8 @@ def shown(revision: str, path: str) -> str:
         check=True,
         timeout=GIT_TIMEOUT_SECONDS,
     )
-    return done.stdout.decode("utf-8")
+    # utf-8-sig: a file saved with a byte order mark is still valid Python to pytest.
+    return done.stdout.decode("utf-8-sig")
 
 
 def suppressions(revision: str) -> int:
@@ -222,7 +245,7 @@ def suppressions(revision: str) -> int:
     when git fails.
     """
     done = subprocess.run(  # noqa: S603 fixed argv, no shell
-        ["git", "grep", "-c", "-E", SUPPRESSION, revision, "--", "*.py"],  # noqa: S607 git from PATH, as in CI
+        ["git", "grep", "-c", "-i", "-E", SUPPRESSION, revision, "--", "*.py"],  # noqa: S607 git from PATH, as in CI
         stdout=subprocess.PIPE,
         check=False,
         timeout=GIT_TIMEOUT_SECONDS,
@@ -250,7 +273,8 @@ def main(argv: list[str], environ: Mapping[str, str]) -> int:
     tests = [path for path in paths if is_test_file(path)]
     before = {path: count(shown(base, path)) for path in tests}
     after = {path: count(shown(head, path)) for path in tests}
-    found = problems(environ.get("PR_BODY", ""), paths, before, after, suppressions(head), shown(head, RATCHET_FILE))
+    found = problems(environ.get("PR_BODY", ""), paths, before, after)
+    found += ceiling_problems(suppressions(base), suppressions(head), shown(base, RATCHET_FILE), shown(head, RATCHET_FILE))
     for line in found:
         print(line, file=sys.stderr)
     return 1 if found else 0

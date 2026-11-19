@@ -152,7 +152,7 @@ def test_ec14_a_rise_shows_in_the_ceiling(before: int, after: int, base: int | N
 def test_ec15_decreases_and_ceiling_on_their_own() -> None:
     other = "tests/t1_unit/test_b.py"
     before = {other: Counts(1, 1), FILE: Counts(3, 2)}
-    assert check.decreases(before, {FILE: Counts(2, 2)}) == [(other, "test functions", 1, 0), (other, "assertions", 1, 0), (FILE, "test functions", 3, 2)]
+    assert check.decreases(before, {FILE: Counts(2, 2)}) == [(FILE, "test functions", 3, 2), (other, "test functions", 1, 0), (other, "assertions", 1, 0)]
     assert check.ceiling(RATCHET) == 10
     assert check.ceiling('{"suppressions_ceiling": 0}') == 0
 

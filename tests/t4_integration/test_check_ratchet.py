@@ -80,6 +80,9 @@ def run(folder: Path, body: str | None, *revisions: str) -> subprocess.Completed
     """Run the script in folder as the workflow runs it, with the body in PR_BODY."""
     environment = {key: value for key, value in os.environ.items() if key != "PR_BODY"}
     environment["PYTHONPATH"] = str(REPOSITORY)
+    # GitHub's runners write UTF-8; a pipe on Windows would use the local code page, which
+    # cannot write a Hebrew path (the script's Known limits).
+    environment["PYTHONIOENCODING"] = "utf-8"
     if body is not None:
         environment["PR_BODY"] = body
     return subprocess.run(  # noqa: S603 fixed argv, no shell
@@ -203,7 +206,7 @@ def test_m13_a_hebrew_test_file_name(repo: Path) -> None:
 def test_m14_shown_and_suppressions_on_their_own(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.chdir(repo)
     assert check.shown("HEAD", "missing.py") == ""
-    assert check.shown("HEAD", TESTS) == TWO
+    assert check.shown("HEAD", TESTS).replace("\r\n", "\n") == TWO
     assert check.suppressions("HEAD") == 1
     with pytest.raises(subprocess.CalledProcessError):
         check.suppressions("no-such-revision")
