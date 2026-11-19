@@ -9,15 +9,17 @@ section 10) must go red here. Issue #78. Code is any .py file anywhere: Achia's 
 anywhere in the repo."
 
 Contract: `python scripts/check_changed_paths.py <base> <head>`, run inside the checkout. The
-paths changed between the two revisions are read from git. Each baselines or workflow path
+paths that `head` changed since it left `base` are read from git (`base...head`, so what
+`base` gained after the branch was cut does not count). Each baselines or workflow path
 changed together with code is written on the error stream, one line each, and the exit code
 is 1; otherwise nothing is written and the exit code is 0. Wrong arguments: a usage line,
 exit 2. A revision git does not know: git's error, a traceback, a non-zero exit.
 
 Known limits:
 - `.github/actions/` (composite actions a workflow may call) is not watched; none exists.
-- A gate value outside `eval/baselines.json`, such as the `config.py` of a later phase, is
-  not watched yet.
+- A gate value outside `eval/baselines.json` is not watched: today the complexity and size
+  limits in `pyproject.toml` (`max-complexity`, `max-statements`), later the `config.py` of
+  Phase 3. Those stand on the Level 3 path list of `PROMOTION.md` only.
 - The check sees paths, not content: it cannot tell a code change from a comment change.
 """
 
@@ -61,18 +63,20 @@ def problems(paths: list[str]) -> list[str]:
 
 
 def changed(base: str, head: str, cwd: Path) -> list[str]:
-    """Return the paths changed between two revisions, as git sorts them.
+    """Return the paths `head` changed since it left `base`, as git sorts them.
 
-    Why: a renamed file counts under its old name too, so that a .py file renamed away is
-    still a code change; and a path with a line break or a Hebrew name must arrive whole.
+    Why: a PR is judged on what it changes, not on what its base gained since; a renamed
+    file counts under its old name too, so that a .py file renamed away is still a code
+    change; and a path with a line break or a Hebrew name must arrive whole.
 
-    Contract: runs `git diff --name-only --no-renames -z base head` in `cwd`. Raises
-    CalledProcessError when git fails, as on an unknown revision.
+    Contract: runs `git diff --name-only --no-renames -z base...head` in `cwd`; git's error
+    stream is passed through. Raises CalledProcessError when git fails, as on an unknown
+    revision or a merge base that was not fetched.
     """
     done = subprocess.run(  # noqa: S603 fixed argv, no shell
-        ["git", "diff", "--name-only", "--no-renames", "-z", base, head],  # noqa: S607 git from PATH, as in CI
+        ["git", "diff", "--name-only", "--no-renames", "-z", f"{base}...{head}"],  # noqa: S607 git from PATH, as in CI
         cwd=cwd,
-        capture_output=True,
+        stdout=subprocess.PIPE,
         check=True,
         timeout=60,
     )

@@ -52,7 +52,8 @@ as the input is a list of paths judged by their ends and folders only.
 
 Known limits:
   - `.github/actions/` (composite actions a workflow may call) is not watched; none exists.
-  - A gate value outside `eval/baselines.json` (a `config.py` of Phase 3) is not watched yet.
+  - A gate value outside `eval/baselines.json` is not watched: today the limits in
+    `pyproject.toml` (`max-complexity`, `max-statements`), later a `config.py` of Phase 3.
 """
 
 import pytest
