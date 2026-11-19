@@ -29,7 +29,7 @@ Boundaries:
 
 Error paths:
   E1  download() whose weights do not have the pinned hash    ValueError, naming the folder
-  E2  replace_table() with no `## Models` table                ValueError
+  E2  replace_table() with no `## Models` heading, or the heading and no table    ValueError
   E3  row() with a `|` in a value                              ValueError: it would split the cell
 
 Adversarial:
@@ -134,6 +134,8 @@ def test_e1_weights_with_another_hash(tmp_path: Path, monkeypatch: pytest.Monkey
 def test_e2_no_models_table() -> None:
     with pytest.raises(ValueError):
         dm.replace_table("# T\n\nNo table.\n", "| B |\n")
+    with pytest.raises(ValueError):
+        dm.replace_table("## Models\n\nNo table yet.\n", "| B |\n")
 
 
 def test_e3_a_bar_in_a_value() -> None:
