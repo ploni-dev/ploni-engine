@@ -55,8 +55,10 @@ SKIPS = frozenset(
 )
 # The modules from which such a name may be imported on its own.
 SKIP_MODULES = frozenset({"pytest", "unittest", "unittest.case", "_pytest.outcomes", "_pytest.mark"})
-# The calls that take a skip by its name as text: pytest's add_marker and applymarker, getattr.
-BY_NAME = frozenset({"add_marker", "applymarker", "getattr"})
+# The calls that take a mark: pytest's add_marker and applymarker, as an object or by its name.
+MARKING = frozenset({"add_marker", "applymarker"})
+# The calls that take a skip by its name as text: the marking calls, and getattr.
+BY_NAME = MARKING | {"getattr"}
 ISSUE_LINK = re.compile(r"\bissue #\d+\b|/issues/\d+\b", re.IGNORECASE)
 # Where Python ends a line (the language reference, "Physical lines"); str.splitlines() also
 # ends one at a form feed, a vertical tab and Unicode separators, which would shift the count.
@@ -69,10 +71,38 @@ def called_name(call: ast.Call) -> str:
     Why: a skip named by text is known by the call that takes it (add_marker, getattr).
 
     Contract: reads the function's own name only, not what it is bound to.
+
+    Known limits: any function or method of that name, on any object, is taken for the real
+    one (a test's own `add_marker`, too); that errs on the strict side.
     """
     if isinstance(call.func, ast.Attribute):
         return call.func.attr
     return call.func.id if isinstance(call.func, ast.Name) else ""
+
+
+def marks(tree: ast.AST) -> set[int]:
+    """Return the ids of the nodes that stand where pytest or unittest takes a mark as it is.
+
+    Why: a skip that is not called is a mark only in these places; anywhere else it is given a
+    name of its own, or passed on, and every later use of it could skip with no link.
+
+    Contract: the places are a decorator; the value of a `marks=` keyword, or an element of a
+    list or tuple given there; and an argument, by position or by keyword, of a call in
+    MARKING. Ids are those of the nodes of `tree`, as `id()` gives them.
+    """
+    placed: set[int] = set()
+    for node in ast.walk(tree):
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef | ast.ClassDef):
+            placed |= {id(decorator) for decorator in node.decorator_list}
+        elif isinstance(node, ast.Call):
+            given = [keyword.value for keyword in node.keywords if keyword.arg == "marks"]
+            if called_name(node) in MARKING:
+                given += [*node.args, *(keyword.value for keyword in node.keywords)]
+            for value in given:
+                placed.add(id(value))
+                if isinstance(value, ast.List | ast.Tuple):
+                    placed |= {id(element) for element in value.elts}
+    return placed
 
 
 def unlinked(source: str, name: str = "<source>") -> list[str]:
@@ -83,10 +113,11 @@ def unlinked(source: str, name: str = "<source>") -> list[str]:
 
     Contract: a skip is an attribute that ends in one of SKIPS (`pytest.skip`,
     `pytest.mark.xfail`, `unittest.SkipTest`, `self.skipTest`), judged on the lines of the call
-    it is the function of, or on its own line where it is not called; a string equal to one of
-    SKIPS given to a call in BY_NAME, judged on that call's lines; and, link or not, such an
-    attribute given a name of its own by an assignment, or such a name imported from one of
-    SKIP_MODULES, since either hides every later call. A link is "issue #" and digits, in any
+    it is the function of, or on its own lines where it is not called and stands as a mark
+    (`marks`); a string equal to one of SKIPS given to a call in BY_NAME, by position or by
+    keyword, judged on that call's lines; and, link or not, such an attribute anywhere else
+    (given a name, put in a tuple or a dict, passed on), or such a name imported from one of
+    SKIP_MODULES, since each hides every later use. A link is "issue #" and digits, in any
     case, or "/issues/" and digits. Lines are counted from 1, as Python counts them. Raises
     SyntaxError when `source` is not Python.
 
@@ -94,28 +125,37 @@ def unlinked(source: str, name: str = "<source>") -> list[str]:
     the source given is read: the run of EC5 reads `tests/`, so a `conftest.py` at the root of
     the repository would not be read (none exists). A skip reached any other way is not seen:
     a name held in a variable, `exec`, a module imported by `importlib`, a hook that skips by
-    its return value.
+    its return value. A function of the test's own that calls a skip, the link on that call,
+    and is then called with no link, is not told apart from a helper that skips where the
+    machine cannot make the case (`make_link` of test_safety_atomic.py).
     """
     lines = LINE_END.split(source)
     tree = ast.parse(source)
     called = {id(node.func): node for node in ast.walk(tree) if isinstance(node, ast.Call)}
-    aliased = {id(node.value) for node in ast.walk(tree) if isinstance(node, ast.Assign | ast.AnnAssign | ast.NamedExpr)}
+    placed = marks(tree)
     judged: list[tuple[ast.expr, str]] = []
     found = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Attribute) and node.attr in SKIPS:
-            if id(node) in aliased:
-                found.append((node.lineno, node.attr))
-            else:
+            if id(node) in called or id(node) in placed:
                 judged.append((called.get(id(node), node), node.attr))
+            else:
+                found.append((node.lineno, node.attr))
         elif isinstance(node, ast.Call) and called_name(node) in BY_NAME:
-            judged += [(node, arg.value) for arg in node.args if isinstance(arg, ast.Constant) and arg.value in SKIPS]
+            given = [*node.args, *(keyword.value for keyword in node.keywords)]
+            judged += [(node, arg.value) for arg in given if isinstance(arg, ast.Constant) and arg.value in SKIPS]
         elif isinstance(node, ast.ImportFrom) and node.module in SKIP_MODULES:
             found += [(node.lineno, alias.name) for alias in node.names if alias.name in SKIPS]
     for span, skip in judged:
         if not ISSUE_LINK.search("\n".join(lines[span.lineno - 1 : span.end_lineno])):
             found.append((span.lineno, skip))
     return [f"{name}:{line} {skip}" for line, skip in sorted(found)]
+
+
+def test_marks() -> None:
+    tree = ast.parse("@d\ndef f(): pass\np(1, marks=[m], other=o)\ni.add_marker(a, append=b)\nx = y")
+    names = {node.id for node in ast.walk(tree) if isinstance(node, ast.Name) and id(node) in marks(tree)}
+    assert names == {"d", "m", "a", "b"}
 
 
 def test_called_name() -> None:
