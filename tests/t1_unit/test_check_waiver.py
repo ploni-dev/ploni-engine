@@ -47,6 +47,8 @@ Boundaries:
       text after the ID                              still a citation
   B16 the ID alone in backquotes after the colon, with or without a space or a mark
                                                      read as the ID (an invented one is red)
+  B17 the citation as a list item ("- ", "* ", "+ ", "1. ", "12) ") or in bold or italics
+                                                     read: the start of a line, the stricter side
   B8  the same ID cited twice                        its lines once
   B9  a key written twice in one entry               the first counts
   B10 a `key: value` line after a blank line         not part of the entry before it
@@ -75,8 +77,8 @@ Adversarial:
   A5  a Hebrew path in the PR                        judged like any other path
   A6  Hebrew text after a citation, and a direction mark (U+200F, U+200E, U+061C) at the
       line's start or next to the ID                the mark is not part of the ID
-  A7  the token in a quoted block ("> "), mid-sentence, or after other text on the line
-                                                     not a citation: no line
+  A7  the token in a quoted block ("> ", also "> - "), mid-sentence, after other text on the
+      line, or with the ID on the next line          not a citation: no line
 
 Not applicable: the document axes; the Hebrew axes of the test-matrix skill other than A5
 and A6, as the inputs are a PR body judged for one token, a list of paths and two Markdown
@@ -411,6 +413,8 @@ def test_a6_a_direction_mark_next_to_the_id(mark: str) -> None:
         "PROMOTION.md says a PR carries `waiver: WAIVER-999` in its body.",
         "see waiver: WAIVER-999",
         "בקשה waiver: WAIVER-999",
+        "waiver:\nWAIVER-999",
+        "> - waiver: WAIVER-999",
     ],
 )
 def test_a7_a_quote_or_a_mention_is_not_a_citation(body: str) -> None:
@@ -419,6 +423,14 @@ def test_a7_a_quote_or_a_mention_is_not_a_citation(body: str) -> None:
 
 @pytest.mark.parametrize("body", ["waiver: `WAIVER-999`", "waiver:`WAIVER-999`", "waiver: ‏`WAIVER-999`", "`waiver:` `WAIVER-999`"])
 def test_b16_the_id_alone_in_backquotes(body: str) -> None:
+    assert problems(body, ["ploni/a.py"]) == ["WAIVER-999 is not in docs/WAIVERS.md"]
+
+
+@pytest.mark.parametrize(
+    "body",
+    ["- waiver: WAIVER-999", "* waiver: WAIVER-999", "+ `waiver: WAIVER-999`", "1. waiver: WAIVER-999", "12) waiver: WAIVER-999", "**waiver:** WAIVER-999", "- **waiver: WAIVER-999**", "_waiver: WAIVER-999_"],
+)
+def test_b17_a_list_item_or_emphasis(body: str) -> None:
     assert problems(body, ["ploni/a.py"]) == ["WAIVER-999 is not in docs/WAIVERS.md"]
 
 
