@@ -25,10 +25,13 @@ Equivalence classes (is_code):
 Equivalence class (the workflow that runs the check, issue #121):
   EC11 `.github/workflows/changed-paths.yml` holds the four pull_request types, fetch-depth 2,
        exactly one run line, `python scripts/check_changed_paths.py HEAD^1 HEAD`, its two
-       actions pinned by a 40-character hash, read-only permissions, and no `${{` anywhere,
-       so no text of a PR reaches the shell. Why: a later workflow-only PR holds no .py file,
-       so the check itself lets an edit through that switches it off (the review of #119,
-       finding 1); this test, run by the fast suite, does not.
+       actions pinned by a 40-character hash, read-only permissions, no `${{` anywhere, so
+       no text of a PR reaches the shell, and none of the keys that switch a step, a job or
+       the workflow off (`if:`, `continue-on-error:`, `shell:`, `paths`, `branches` and
+       their `-ignore` forms). Why: a later workflow-only PR holds no .py file, so the check
+       itself lets an edit through that switches it off (the review of #119, finding 1);
+       this test, run by the fast suite, refuses these ways. Not refused: a `uses:` line
+       swapped for another action pinned by a hash, named in the workflow's own header.
 
 Boundaries:
   B1  no changed path                               no line
@@ -74,6 +77,9 @@ from scripts import check_changed_paths as check
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "changed-paths.yml"
 # An action pinned by a full commit hash, not a tag (CLAUDE.md, Hard constraints: pin every version).
 PINNED = re.compile(r"@[0-9a-f]{40}(\s|$)")
+# Keys that skip the step or the job, turn a failure green, swap the shell, or keep the
+# workflow from running at all; the workflow needs none of them.
+SWITCHES_OFF = ("if:", "continue-on-error:", "shell:", "paths:", "paths-ignore:", "branches:", "branches-ignore:")
 BASELINES = "eval/baselines.json"
 FAST = ".github/workflows/fast.yml"
 BODY = ".github/workflows/pr-body.yml"
@@ -197,3 +203,5 @@ def test_ec11_the_workflow() -> None:
     assert len(uses) == 2 and all(PINNED.search(line) for line in uses)
     assert "permissions:" in lines and "contents: read" in lines
     assert not any("${{" in line for line in lines)
+    keys = [line.removeprefix("- ") for line in lines]
+    assert not [key for key in keys if key.startswith(SWITCHES_OFF)]
