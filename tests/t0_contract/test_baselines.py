@@ -15,11 +15,14 @@ Equivalence classes:
 
 Boundaries:
   B1  a value of true or false      not a number, though Python counts bool as int
+  B2  NaN, Infinity, an empty object    not a baseline: json.loads accepts the first two, and a
+                                    gate holding one could never fail
 
 Not applicable: the Hebrew and document axes: the input is one JSON file the repository holds.
 """
 
 import json
+import math
 from pathlib import Path
 
 BASELINES = Path(__file__).resolve().parents[2] / "eval" / "baselines.json"
@@ -44,12 +47,26 @@ METRICS = {
 
 
 def is_number(value: object) -> bool:
-    """Say whether `value` is an int or a float, and not a bool."""
+    """Say whether `value` is a finite int or float.
+
+    Why: a baseline is compared with a measured number. A bool is not one, though Python counts
+    it as an int; NaN and Infinity, which json.loads accepts, make every comparison with them
+    false or true, so a gate holding one could never fail.
+
+    Contract: True for an int or float that is finite and not a bool; False for anything else.
+    """
     return isinstance(value, int | float) and not isinstance(value, bool)
 
 
 def is_baseline(value: object) -> bool:
-    """Say whether `value` may stand under "metrics": null, a number, or an object of numbers."""
+    """Say whether `value` may stand under "metrics".
+
+    Why: the harness of Phase 5 reads these values; a shape it does not expect would only show
+    there.
+
+    Contract: True for null (not set yet), a number as is_number says, or a non-empty object
+    whose values are all numbers (one per type, for the per-type metrics).
+    """
     if isinstance(value, dict):
         return all(is_number(item) for item in value.values())
     return value is None or is_number(value)
@@ -74,3 +91,8 @@ def test_ec3_the_values() -> None:
 
 def test_b1_a_bool_is_not_a_number() -> None:
     assert [is_baseline(value) for value in (True, False, {"IL_ID": True})] == [False, False, False]
+
+
+def test_b2_not_finite_or_empty() -> None:
+    values = json.loads('[NaN, Infinity, -Infinity, {}, {"IL_ID": NaN}]')
+    assert [is_baseline(value) for value in values] == [False, False, False, False, False]
