@@ -1,5 +1,5 @@
 {
-  "_comment": "PROMOTION.md section 6 and PROCESS.md section 4.5. The counters are counted by scripts/check_ratchet.py on the PR's base and on the PR, from git, so none is kept here (Achia, 2026-11-19: 'Count main and the PR'). The one number kept is the ceiling for noqa and type: ignore lines: a PR that adds one raises it here by at least as much, so the rise shows. Set to the count on main at ab6c01d, measured with that script.",
+  "_comment": "PROMOTION.md section 6 and PROCESS.md section 4.5. The counters are counted by scripts/check_ratchet.py on the PR's base and on the PR, from git, so none is kept here (Achia, 2026-11-19: 'Count main and the PR (Recommended)'). The one number kept is the ceiling for noqa and type: ignore lines: a PR that adds one raises it here by at least as much, so the rise shows. Set to the count on main at ab6c01d, measured with that script.",
   "_updated": "2026-11-20",
   "suppressions_ceiling": 85
 }
