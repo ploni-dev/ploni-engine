@@ -35,7 +35,9 @@ Equivalence classes (the parts):
   EC14 main(), with git and the clock stubbed: it judges by today(), not the machine's date
   EC16 `.github/workflows/waiver.yml` (issue #130): the four pull_request types, fetch-depth 2,
        exactly one run line, `python -m scripts.check_waiver HEAD^1 HEAD`, the body in
-       PR_BODY through the environment and `${{` nowhere else, both actions pinned by a
+       PR_BODY through the environment of that run step itself (the file ends with the
+       step and its env, so the body cannot be moved to another step, whose env the run
+       step does not see) and `${{` nowhere else, both actions pinned by a
        40-character hash, read-only permissions, and none of the keys that switch a step, a
        job or the workflow off, in any YAML spelling (the pattern of the changed-paths
        workflow's test, EC11 there). Why: a later workflow-only PR holds no .py file, so the
@@ -445,7 +447,15 @@ def test_b17_a_list_item_or_emphasis(body: str) -> None:
 
 
 def test_ec16_the_workflow() -> None:
-    lines = [line.strip() for line in (ROOT / ".github" / "workflows" / "waiver.yml").read_text(encoding="utf-8").splitlines()]
+    text = (ROOT / ".github" / "workflows" / "waiver.yml").read_text(encoding="utf-8")
+    lines = [line.strip() for line in text.splitlines()]
+    # A step's env reaches that step only: the body must sit under the run step itself.
+    code = [line for line in text.splitlines() if not line.strip().startswith("#")]
+    assert code[-3:] == [
+        "      - run: python -m scripts.check_waiver HEAD^1 HEAD",
+        "        env:",
+        "          PR_BODY: ${{ github.event.pull_request.body }}",
+    ]
     assert "pull_request:" in lines and "types: [opened, edited, synchronize, reopened]" in lines
     assert "fetch-depth: 2" in lines
     runs = [line for line in lines if line.startswith(("- run:", "run:"))]
