@@ -33,6 +33,15 @@ Equivalence classes (the parts):
   EC12 closed_phases(): a dated row is closed, an undated one is open; the repository's own
        Phases table has its Date column where the check reads it
   EC14 main(), with git and the clock stubbed: it judges by today(), not the machine's date
+  EC16 `.github/workflows/waiver.yml` (issue #130): the four pull_request types, fetch-depth 2,
+       exactly one run line, `python -m scripts.check_waiver HEAD^1 HEAD`, the body in
+       PR_BODY through the environment and `${{` nowhere else, both actions pinned by a
+       40-character hash, read-only permissions, and none of the keys that switch a step, a
+       job or the workflow off, in any YAML spelling (the pattern of the changed-paths
+       workflow's test, EC11 there). Why: a later workflow-only PR holds no .py file, so the
+       changed-paths check lets an edit through that switches this check off (the review
+       of #128, finding 1); the fast suite runs this test on every PR. Not refused: a
+       `uses:` line swapped for another action pinned by a hash.
   EC13 covers(): an exact path; a folder ending in "/"; `*` within one folder; `**` across
        folders; several entries separated by commas, with spaces and backquotes
 
@@ -94,6 +103,7 @@ from pathlib import Path
 import pytest
 
 from scripts import check_waiver as check
+from tests.t1_unit.test_check_changed_paths import PINNED, SWITCHES_OFF
 
 ROOT = Path(__file__).resolve().parents[2]
 TODAY = date(2026, 11, 19)
@@ -432,6 +442,20 @@ def test_b16_the_id_alone_in_backquotes(body: str) -> None:
 )
 def test_b17_a_list_item_or_emphasis(body: str) -> None:
     assert problems(body, ["ploni/a.py"]) == ["WAIVER-999 is not in docs/WAIVERS.md"]
+
+
+def test_ec16_the_workflow() -> None:
+    lines = [line.strip() for line in (ROOT / ".github" / "workflows" / "waiver.yml").read_text(encoding="utf-8").splitlines()]
+    assert "pull_request:" in lines and "types: [opened, edited, synchronize, reopened]" in lines
+    assert "fetch-depth: 2" in lines
+    runs = [line for line in lines if line.startswith(("- run:", "run:"))]
+    assert runs == ["- run: python -m scripts.check_waiver HEAD^1 HEAD"]
+    assert "PR_BODY: ${{ github.event.pull_request.body }}" in lines
+    assert [line for line in lines if "${{" in line] == ["PR_BODY: ${{ github.event.pull_request.body }}"]
+    uses = [line for line in lines if line.startswith(("- uses:", "uses:"))]
+    assert len(uses) == 2 and all(PINNED.search(line) for line in uses)
+    assert "permissions:" in lines and "contents: read" in lines
+    assert not [line for line in lines if SWITCHES_OFF.match(line)]
 
 
 def test_a5_a_hebrew_path() -> None:
