@@ -138,6 +138,7 @@ def test_ec9_labelled_on_its_own() -> None:
     assert check_pr_body.labelled("Goal: g\nGate:\n", "Goal")
     assert not check_pr_body.labelled("Goal: g\nGate:\n", "Gate")
     assert not check_pr_body.labelled("<!-- Gate: g -->\n", "Gate")
+    assert not check_pr_body.labelled("<!--\nGate: g\n-->\n", "Gate")
     assert not check_pr_body.labelled("The Gate: g\n", "Gate")
 
 
