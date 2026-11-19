@@ -30,7 +30,7 @@ def run(case: tuple[int, int, int, int, int, bool]) -> tuple[list[str], list[tup
     tf_before, as_before, tf_after, as_after, which, ploni = case
     body = "".join(f"ratchet-override: {FILE} -{delta} reason\n" for delta in OVERRIDES[which])
     paths = [FILE, "ploni/a.py"] if ploni else [FILE]
-    found = check.problems(body, paths, {FILE: Counts(tf_before, as_before)}, {FILE: Counts(tf_after, as_after)}, 0, '{"suppressions_ceiling": 0}')
+    found = check.problems(body, paths, {FILE: Counts(tf_before, as_before)}, {FILE: Counts(tf_after, as_after)})
     drops = [(name, before - after) for name, before, after in (("test functions", tf_before, tf_after), ("assertions", as_before, as_after)) if after < before]
     return found, drops
 

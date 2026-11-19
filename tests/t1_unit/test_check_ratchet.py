@@ -1,4 +1,4 @@
-"""Tests of scripts/check_ratchet.py: a PR lowers no test count without an override, and adds no unbudgeted suppression.
+"""Tests of scripts/check_ratchet.py, the ratchet of PROMOTION.md section 6.
 
 Why: `PROMOTION.md` section 6, the ratchet: "Test functions per test file" and "Assertions per
 test file" may not decrease; "A decrease fails the build with the exact counter and the
@@ -23,9 +23,13 @@ Equivalence classes (problems):
   EC6  assertions fewer, test functions the same     one line for assertions
   EC7  a test file deleted                           a line per counter, down to 0
   EC8  a new test file                               no line
-  EC9  suppressions over the ceiling                 one line; equal or under: none
-  EC10 no ceiling in .ratchet.json, or a ceiling that is not a whole number, or no valid JSON,
-       or JSON that is not an object                 one line
+Equivalence classes (ceiling_problems):
+  EC9  suppressions over the head's ceiling          one line; equal or under: none
+  EC10 no ceiling in the head's .ratchet.json, or a ceiling that is not a whole number, or no
+       valid JSON, or JSON that is not an object     one line
+  EC14 suppressions rose from base to head by more than the ceiling did    one line, even
+       under the ceiling ("so the rise shows", Achia's answer); the ceiling raised by at
+       least the rise: none; no ceiling at the base (the PR that sets it): only EC9
 
 Error paths (main):
   E1  wrong argument count                           exit 2, a usage line
@@ -34,7 +38,9 @@ Equivalence classes (the parts):
   EC11 count(): test functions at module level, in a class, async; the names pytest collects
        ("test", "test_x", "testing"); a helper is not counted; asserts anywhere in the file
   EC12 overrides(): a line read whole; in backquotes; spaces; Hebrew in the reason
-  EC13 is_test_file(): tests/**/test_*.py only
+  EC13 is_test_file(): tests/**/test_*.py and tests/**/*_test.py, the files pytest collects
+       by default
+  EC15 decreases() and ceiling() on their own
 
 Boundaries:
   B1  an override with the wrong delta (-2 for -1)    the decrease, and "names no decrease"
@@ -51,8 +57,9 @@ Adversarial:
   A3  a test function renamed: one gone, one new, the count the same    no line (the known
       limit: functions are counted, not named)
 
-Not applicable: the document axes; the Hebrew axes other than A2's reason (EC12), as the
-inputs are Python source, paths, a PR body read for one token, and a JSON file.
+Hebrew: a reason in Hebrew (EC12); a Hebrew test-file name (the module suite, M13).
+Not applicable: the document axes and the other Hebrew axes, as the inputs are Python
+source, paths, a PR body read for one token, and a JSON file.
 
 Known limits:
   - Functions are counted, not named, and parametrized cases are not counted: a renamed test
@@ -68,10 +75,10 @@ FILE = "tests/t1_unit/test_a.py"
 RATCHET = '{"suppressions_ceiling": 10}'
 
 
-def problems(body: str, before: dict[str, Counts], after: dict[str, Counts], paths: list[str] | None = None, suppressions: int = 10, ratchet: str = RATCHET) -> list[str]:
+def problems(body: str, before: dict[str, Counts], after: dict[str, Counts], paths: list[str] | None = None) -> list[str]:
     """Run problems() with the changed paths defaulting to the counted files."""
     changed = sorted(set(before) | set(after)) if paths is None else paths
-    return check.problems(body, changed, before, after, suppressions, ratchet)
+    return check.problems(body, changed, before, after)
 
 
 def test_ec1_no_test_file() -> None:
@@ -117,12 +124,37 @@ def test_ec8_a_new_test_file() -> None:
 
 @pytest.mark.parametrize(("suppressions", "lines"), [(11, ["suppressions 11, ceiling 10 in .ratchet.json: raise suppressions_ceiling in the PR that adds one"]), (10, []), (3, [])])
 def test_ec9_the_ceiling(suppressions: int, lines: list[str]) -> None:
-    assert problems("", {}, {}, paths=[], suppressions=suppressions) == lines
+    assert check.ceiling_problems(suppressions, suppressions, RATCHET, RATCHET) == lines
 
 
 @pytest.mark.parametrize("ratchet", ["{}", '{"suppressions_ceiling": "10"}', '{"suppressions_ceiling": 1.5}', "not json", '{"suppressions_ceiling": true}', "[10]"])
 def test_ec10_no_readable_ceiling(ratchet: str) -> None:
-    assert problems("", {}, {}, paths=[], ratchet=ratchet) == [".ratchet.json has no whole-number suppressions_ceiling"]
+    assert check.ceiling_problems(1, 1, RATCHET, ratchet) == [".ratchet.json has no whole-number suppressions_ceiling"]
+
+
+@pytest.mark.parametrize(
+    ("before", "after", "base", "head", "lines"),
+    [
+        (1, 2, 3, 3, ["suppressions rose by 1 (1 -> 2), suppressions_ceiling by 0 (3 -> 3): raise it in .ratchet.json by the rise"]),
+        (1, 3, 3, 4, ["suppressions rose by 2 (1 -> 3), suppressions_ceiling by 1 (3 -> 4): raise it in .ratchet.json by the rise"]),
+        (1, 2, 3, 4, []),
+        (1, 2, 1, 5, []),
+        (2, 1, 3, 3, []),
+        (2, 2, 3, 3, []),
+        (1, 2, None, 3, []),
+    ],
+)
+def test_ec14_a_rise_shows_in_the_ceiling(before: int, after: int, base: int | None, head: int, lines: list[str]) -> None:
+    base_text = "{}" if base is None else f'{{"suppressions_ceiling": {base}}}'
+    assert check.ceiling_problems(before, after, base_text, f'{{"suppressions_ceiling": {head}}}') == lines
+
+
+def test_ec15_decreases_and_ceiling_on_their_own() -> None:
+    other = "tests/t1_unit/test_b.py"
+    before = {other: Counts(1, 1), FILE: Counts(3, 2)}
+    assert check.decreases(before, {FILE: Counts(2, 2)}) == [(other, "test functions", 1, 0), (other, "assertions", 1, 0), (FILE, "test functions", 3, 2)]
+    assert check.ceiling(RATCHET) == 10
+    assert check.ceiling('{"suppressions_ceiling": 0}') == 0
 
 
 SOURCE = '''
@@ -169,7 +201,7 @@ def test_ec12_overrides(line: str, read: tuple[str, int]) -> None:
 
 @pytest.mark.parametrize(
     ("path", "is_test"),
-    [(FILE, True), ("tests/t4_integration/test_b.py", True), ("tests/test_c.py", True), ("tests/conftest.py", False), ("tests/project_imports.py", False), ("ploni/test_d.py", False), ("tests/t1_unit/test_e.txt", False)],
+    [(FILE, True), ("tests/t4_integration/test_b.py", True), ("tests/test_c.py", True), ("tests/conftest.py", False), ("tests/project_imports.py", False), ("ploni/test_d.py", False), ("tests/t1_unit/test_e.txt", False), ("tests/t1_unit/b_test.py", True), ("tests/t1_unit/b_test.txt", False), ("ploni/b_test.py", False)],
 )
 def test_ec13_is_test_file(path: str, is_test: bool) -> None:
     assert check.is_test_file(path) is is_test

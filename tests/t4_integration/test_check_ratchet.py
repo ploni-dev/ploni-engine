@@ -14,8 +14,15 @@ Matrix:
   M6  a test file deleted                            exit 1, both counters to 0
   M7  a revision git does not know                   exit not 0, git's "fatal" line
   M8  no PR_BODY, and a test added                   exit 0
-  M9  a type-ignore or noqa written with no space, or with several, the ceiling not raised
-                                                     exit 1: each spelling counts
+  M9  a suppression in any spelling ruff or mypy honours (no space, several, upper or mixed
+      case, `ruff: noqa`, `flake8: noqa`, `mypy: ignore-errors`), the ceiling not raised
+                                                     exit 1: each counts
+  M11 room left under the ceiling, and a PR adds a suppression without raising it    exit 1:
+      the rise shows only in a raised ceiling
+  M12 a test file saved with a UTF-8 byte order mark loses a test    exit 1, counted
+  M13 a Hebrew test-file name loses a test           exit 1, the name whole
+  M14 shown() of a missing file is "", of a file its text; suppressions() counts, and raises
+      CalledProcessError on a revision git does not know
   M10 a helper under tests/ loses a test-named function, and a Markdown file changes
                                                      exit 0: neither is a counted test file
 
@@ -29,6 +36,8 @@ import sys
 from pathlib import Path
 
 import pytest
+
+from scripts import check_ratchet as check
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 GIT = ["git", "-c", "user.name=test", "-c", "user.email=test@example.invalid", "-c", "core.autocrlf=false"]
@@ -127,7 +136,21 @@ def test_m5_a_noqa_with_the_ceiling_raised(repo: Path) -> None:
     assert (done.returncode, done.stderr) == (0, "")
 
 
-@pytest.mark.parametrize("line", ["x = 1  #type:ignore\n", "x = 1  #  type:  ignore[misc]\n", "import os  #noqa\n"])
+@pytest.mark.parametrize(
+    "line",
+    [
+        "x = 1  #type:ignore\n",
+        "x = 1  #  type:  ignore[misc]\n",
+        "import os  #noqa\n",
+        "import os  # NOQA\n",
+        "import os  # NoQA: F401\n",
+        "# ruff: noqa\n",
+        "# ruff: noqa: F401\n",
+        "# flake8: noqa\n",
+        "# mypy: ignore-errors\n",
+        "x = 1  # Type: Ignore\n",
+    ],
+)
 def test_m9_a_suppression_written_tight_or_wide(repo: Path, line: str) -> None:
     write(repo, "ploni/c.py", line)
     commit(repo)
@@ -144,6 +167,46 @@ def test_m10_files_that_are_not_counted(repo: Path) -> None:
     commit(repo)
     done = run(repo, "", "HEAD^1", "HEAD")
     assert (done.returncode, done.stderr) == (0, "")
+
+
+def test_m11_a_rise_under_room_left_in_the_ceiling(repo: Path) -> None:
+    write(repo, ".ratchet.json", '{"suppressions_ceiling": 3}\n')
+    commit(repo)
+    write(repo, "ploni/b.py", "import sys  # noqa: F401 kept\n")
+    commit(repo)
+    done = run(repo, "", "HEAD^1", "HEAD")
+    assert done.returncode == 1
+    assert done.stderr.splitlines() == [
+        "suppressions rose by 1 (1 -> 2), suppressions_ceiling by 0 (3 -> 3): raise it in .ratchet.json by the rise"
+    ]
+
+
+def test_m12_a_test_file_with_a_byte_order_mark(repo: Path) -> None:
+    (repo / TESTS).write_bytes(b"\xef\xbb\xbf" + ONE.encode("utf-8"))
+    commit(repo)
+    done = run(repo, "", "HEAD^1", "HEAD")
+    assert done.returncode == 1
+    assert done.stderr.splitlines() == [f"{TESTS}: test functions 2 -> 1 (-1)", f"{TESTS}: assertions 2 -> 1 (-1)"]
+
+
+def test_m13_a_hebrew_test_file_name(repo: Path) -> None:
+    name = "tests/t1_unit/test_שמות.py"
+    write(repo, name, TWO)
+    commit(repo)
+    write(repo, name, ONE)
+    commit(repo)
+    done = run(repo, "", "HEAD^1", "HEAD")
+    assert done.returncode == 1
+    assert done.stderr.splitlines() == [f"{name}: test functions 2 -> 1 (-1)", f"{name}: assertions 2 -> 1 (-1)"]
+
+
+def test_m14_shown_and_suppressions_on_their_own(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.chdir(repo)
+    assert check.shown("HEAD", "missing.py") == ""
+    assert check.shown("HEAD", TESTS) == TWO
+    assert check.suppressions("HEAD") == 1
+    with pytest.raises(subprocess.CalledProcessError):
+        check.suppressions("no-such-revision")
 
 
 def test_m6_a_test_file_deleted(repo: Path) -> None:
