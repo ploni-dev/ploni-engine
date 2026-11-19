@@ -141,7 +141,13 @@
 - Read the relevant build-plan.md phase section first. Restate goal, deliverable, gate.
 - Never weaken a test, threshold or baseline to pass a gate. If a gate cannot be met,
   stop and write docs/findings/<date>-<slug>.md, then report.
-- Code changes and baseline or gate changes never share a PR.
+- Code changes and baseline or gate changes never share a PR. One exception: a PR that adds a
+  `# noqa: <code>` line, which names the rule it skips on that one line, raises
+  `suppressions_ceiling` in `.ratchet.json` in the same PR, and that raise needs no decision of
+  Achia's; the reviewer checks that each new one carries its reason on the line (Achia,
+  2026-11-20, "Same PR, no ask each time"). A raise for a bare `# noqa`, a file-wide
+  `ruff: noqa` or `flake8: noqa`, or a `type: ignore` line still needs his decision: he was
+  asked about a noqa that skips one rule on one line only.
 - Speed is measured, for every stage, and recorded at every phase. For now it is not a
   gate: a slow time blocks no merge and stops no work (Achia, 2026-11-13 and
   2026-11-15). This covers the run time of the pipeline only: not memory, not the
