@@ -13,6 +13,7 @@ Equivalence classes:
   EC3  no fixture at all, only the manifest                          no line
   EC4  the repository's tests/fixtures/ against its MANIFEST.md      no line
   EC5  a fixture whose row has an empty provenance                   one line
+  EC6  provenances(): the table rows only, path -> provenance, "" for a row with one cell
 
 Boundaries:
   B1  a fixture in a subfolder        named by its path from tests/fixtures/, with "/"
@@ -115,3 +116,8 @@ def test_a1_not_in_a_row_of_its_own(tmp_path: Path) -> None:
 def test_a2_a_hebrew_name(tmp_path: Path) -> None:
     (tmp_path / "כתב_תביעה.docx").write_bytes(b"x")
     assert unlisted(tmp_path, "| `a.docx` | written | #1 |") == ["כתב_תביעה.docx"]
+
+
+def test_provenances() -> None:
+    manifest = "| Path | Provenance |\n|---|---|\n| `a` | x | #1 |\n| `b` |\n`c` | y\n- `d` in a rule"
+    assert provenances(manifest) == {"a": "x", "b": ""}
