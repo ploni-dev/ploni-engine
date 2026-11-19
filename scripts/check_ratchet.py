@@ -34,8 +34,10 @@ Known limits:
   inside a string.
 - Run by hand on two branch tips that have both moved, the counts are wrong: pass a base that
   is an ancestor of the head.
-- On Windows, with the error stream piped, a Hebrew path cannot be written in the local code
-  page and the run fails, red; set PYTHONIOENCODING=utf-8. GitHub's runners write UTF-8.
+- On Windows the error stream is written in the local code page (cp1255 on the laptop), or
+  with backslash-u escapes where it has no Hebrew; the exit code is the same. A reader that
+  expects UTF-8 sets PYTHONIOENCODING=utf-8, as the module suite does. GitHub's runners
+  write UTF-8.
 - Fixture cases, baseline values, detectors and system journeys are not counted yet.
 """
 
@@ -168,8 +170,9 @@ def ceiling_problems(before: int, after: int, base_text: str, head_text: str) ->
 
     Contract: `before` and `after` are the counts at base and head, the texts the two
     .ratchet.json files. One line when the head has no whole-number ceiling, when `after` is
-    over it, or when the count rose by more than the ceiling did. A base with no ceiling (the
-    PR that sets it) counts as a ceiling of 0, which no rise under the head's ceiling passes.
+    over it, or when the count rose by more than the ceiling did. A ceiling lowered while the
+    count stays or falls passes. A base with no ceiling (the PR that sets it) counts as a
+    ceiling of 0, which no rise under the head's ceiling passes.
     """
     limit = ceiling(head_text)
     if limit is None:
@@ -177,7 +180,7 @@ def ceiling_problems(before: int, after: int, base_text: str, head_text: str) ->
     if after > limit:
         return [f"suppressions {after}, ceiling {limit} in {RATCHET_FILE}: raise {CEILING_KEY} in the PR that adds one"]
     old = ceiling(base_text) or 0
-    if after - before > limit - old:
+    if after > before and after - before > limit - old:
         return [
             f"suppressions rose by {after - before} ({before} -> {after}), {CEILING_KEY} by {limit - old} "
             f"({old} -> {limit}): raise it in {RATCHET_FILE} by the rise"
