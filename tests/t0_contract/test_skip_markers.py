@@ -234,6 +234,7 @@ def test_ec6_named_by_a_string() -> None:
 
 def test_b1_a_call_over_several_lines() -> None:
     assert unlinked('pytest.skip(\n    "no network",\n    # issue #12\n)') == []
+    assert unlinked('getattr(pytest, "skip")(\n    "no network, issue #12",\n)') == []
 
 
 def test_b2_the_link_on_the_next_line() -> None:
