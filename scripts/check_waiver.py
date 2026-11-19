@@ -19,8 +19,9 @@ usage line, exit 2. A git failure: git's error, a traceback, a non-zero exit.
 
 Known limits:
 - A citation counts only at the start of a line, as Achia answered on 2026-11-19 ("Only
-  own-line citations count (Recommended)"): a quote in a quoted block or mid-sentence is not
-  read, and neither is a citation written mid-sentence; the reviewer reads the body.
+  own-line citations count (Recommended)"), also as a list item or in emphasis: a quote in a
+  quoted block or mid-sentence is not read, and neither is a citation written mid-sentence or
+  with its ID on the next line; the reviewer reads the body.
 - Achia's own PR that adds a waiver to docs/WAIVERS.md cannot cite that waiver: the base does
   not have it yet.
 - A green run is not run again when a cited waiver expires while the PR is open; the merge
@@ -45,11 +46,16 @@ from scripts.check_changed_paths import changed
 WAIVERS_FILE = "docs/WAIVERS.md"
 STATUS_FILE = "docs/STATUS.md"
 USAGE = "usage: python -m scripts.check_waiver <base> <head>, with the PR body in PR_BODY"
-# A citation starts a line (Achia, 2026-11-19: "Only own-line citations count"); backquotes
-# (PROMOTION.md 8.4 writes it in them) and direction marks, which a Hebrew body may hold and
-# which cannot be seen, are skipped around the token and are never part of the ID.
+# A citation starts a line (Achia, 2026-11-19: "Only own-line citations count"), also as a list
+# item, the stricter side. Backquotes (PROMOTION.md 8.4 writes it in them), emphasis marks and
+# direction marks, which a Hebrew body may hold and which cannot be seen, are skipped around
+# the token and are never part of the ID.
 MARKS = "‎‏؜"
-CITATION = re.compile(rf"^[ \t`{MARKS}]*waiver:[ \t`{MARKS}]*([^\s`{MARKS}]+)", re.IGNORECASE | re.MULTILINE)
+SKIPPED = rf"[ \t`*_{MARKS}]*"
+LIST_ITEM = r"(?:(?:[-*+]|\d+[.)])[ \t]+)?"
+CITATION = re.compile(
+    rf"^[ \t{MARKS}]*{LIST_ITEM}{SKIPPED}waiver:{SKIPPED}([^\s`*_{MARKS}]+)", re.IGNORECASE | re.MULTILINE
+)
 # The date of Israel's summer offset, UTC+3: a date waiver never lives past Israel's midnight;
 # in winter (UTC+2) it ends an hour early, the stricter side. No tz database is needed.
 ISRAEL_SUMMER = timezone(timedelta(hours=3))
