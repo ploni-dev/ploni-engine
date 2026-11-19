@@ -20,7 +20,8 @@ Boundaries:
 
 Adversarial:
   A1  a path the manifest holds only as the start of a longer one (`a.docx.bak`), only outside
-      the table, or with no backquotes    one line
+      the table (also on a line with a "|" that does not start a row), or with no backquotes
+      one line
   A2  a fixture with a Hebrew name, not named    one line, the Hebrew name
 
 Not applicable: the document axes, and the Hebrew axes of the test-matrix skill other than A2:
@@ -62,7 +63,7 @@ def unlisted(folder: Path, manifest: str) -> list[str]:
     """
     rows = provenances(manifest)
     paths = (path.relative_to(folder).as_posix() for path in folder.rglob("*") if path.is_file())
-    return sorted(path for path in paths if path != MANIFEST_NAME and f"`{path}`" not in manifest)
+    return sorted(path for path in paths if path != MANIFEST_NAME and not rows.get(path))
 
 
 def test_ec1_named(tmp_path: Path) -> None:
@@ -108,6 +109,7 @@ def test_a1_not_in_a_row_of_its_own(tmp_path: Path) -> None:
     assert unlisted(tmp_path, "| `a.docx.bak` | written | #1 |") == ["a.docx"]
     assert unlisted(tmp_path, "The rules name `a.docx` in a sentence.") == ["a.docx"]
     assert unlisted(tmp_path, "| a.docx | written | #1 |") == ["a.docx"]
+    assert unlisted(tmp_path, "`a.docx` | a note, not a row") == ["a.docx"]
 
 
 def test_a2_a_hebrew_name(tmp_path: Path) -> None:

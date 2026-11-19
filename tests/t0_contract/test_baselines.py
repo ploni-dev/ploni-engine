@@ -55,7 +55,7 @@ def is_number(value: object) -> bool:
 
     Contract: True for an int or float that is finite and not a bool; False for anything else.
     """
-    return isinstance(value, int | float) and not isinstance(value, bool)
+    return isinstance(value, int | float) and not isinstance(value, bool) and math.isfinite(value)
 
 
 def is_baseline(value: object) -> bool:
@@ -68,7 +68,7 @@ def is_baseline(value: object) -> bool:
     whose values are all numbers (one per type, for the per-type metrics).
     """
     if isinstance(value, dict):
-        return all(is_number(item) for item in value.values())
+        return bool(value) and all(is_number(item) for item in value.values())
     return value is None or is_number(value)
 
 

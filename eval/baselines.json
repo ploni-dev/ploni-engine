@@ -1,5 +1,5 @@
 {
-  "about": "The metric gates of build-plan.md section 7, T6, one name per metric of its table, but for its last row (runtime and peak memory), whose limits are build-plan.md section 8.2. Phase 0 skeleton (issue #29): no number is set. Achia, 2026-11-19: the file holds the names of the accuracy scores only, and each number is set later only with his yes.",
+  "about": "The metric gates of build-plan.md section 7, T6, one name per metric of its table. Phase 0 skeleton (issue #29): no number is set. Achia, 2026-11-19, chose to create it with the score names and no numbers, each number set later only with his yes. Leaving out the table's last row (runtime and peak memory, whose limits are build-plan.md section 8.2) is Claude's choice, not his; section 7, principle 3, would have the file hold every metric gate.",
   "metrics": {
     "per_type_precision": null,
     "per_type_recall": null,
