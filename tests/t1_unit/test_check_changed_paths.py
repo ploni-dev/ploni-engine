@@ -26,7 +26,8 @@ Boundaries:
   B1  no changed path                               no line
   B2  `eval/baselines.json.bak`, `x/eval/baselines.json`, `eval/baselines.jsonl`,
       `eval/Baselines.json`                         not the baselines
-  B3  `.github/workflows.yml`, `.github/actions/a/action.yml`, `github/workflows/x.yml`
+  B3  `.github/workflows.yml`, `.github/actions/a/action.yml`, `github/workflows/x.yml`,
+      `docs/.github/workflows/x.yml` (GitHub reads workflows at the root only)
                                                     not a CI workflow
   B4  `.github/workflows/sub/x.yml`, a workflow with a `.yaml` end, and a file there that
       is not YAML                                   a CI workflow: everything in that folder
@@ -128,7 +129,9 @@ def test_b2_near_the_baselines_is_not_the_baselines(path: str) -> None:
     assert check.problems(["ploni/x.py", path]) == []
 
 
-@pytest.mark.parametrize("path", [".github/workflows.yml", ".github/actions/a/action.yml", "github/workflows/x.yml"])
+@pytest.mark.parametrize(
+    "path", [".github/workflows.yml", ".github/actions/a/action.yml", "github/workflows/x.yml", "docs/.github/workflows/x.yml"]
+)
 def test_b3_near_the_workflows_is_not_a_workflow(path: str) -> None:
     assert check.problems(["ploni/x.py", path]) == []
 

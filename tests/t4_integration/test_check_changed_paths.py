@@ -117,8 +117,10 @@ def test_m6_a_space_and_a_line_break(repo: Path) -> None:
     ).stdout.decode("ascii").strip()
     write(repo, ".github/workflows/new.yml")
     git(repo, "add", "-A")
-    for name in names:
-        git(repo, "update-index", "--add", "--cacheinfo", f"100644,{blob},{name}")
+    entries = "".join(f"100644 {blob}\t{name}\0" for name in names).encode("utf-8")
+    # Git for Windows drops a path that NTFS could not hold unless protectNTFS is off.
+    index = [*GIT, "-c", "core.protectNTFS=false", "update-index", "-z", "--index-info"]
+    subprocess.run(index, cwd=repo, input=entries, capture_output=True, check=True, timeout=60)  # noqa: S603 fixed argv, no shell
     git(repo, "commit", "-q", "-m", "head")
     done = run(repo, "HEAD^1", "HEAD")
     assert done.returncode == 1
