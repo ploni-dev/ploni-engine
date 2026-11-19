@@ -89,6 +89,10 @@ def marks(tree: ast.AST) -> set[int]:
     Contract: the places are a decorator; the value of a `marks=` keyword, or an element of a
     list or tuple given there; and an argument, by position or by keyword, of a call in
     MARKING. Ids are those of the nodes of `tree`, as `id()` gives them.
+
+    Known limits: the calls are known by name (`called_name`), so a function of the test's own
+    named add_marker or applymarker, or one that takes `marks=`, is taken for pytest's, and a
+    skip given to it with a link passes.
     """
     placed: set[int] = set()
     for node in ast.walk(tree):
@@ -115,9 +119,13 @@ def unlinked(source: str, name: str = "<source>") -> list[str]:
     `pytest.mark.xfail`, `unittest.SkipTest`, `self.skipTest`), judged on the lines of the call
     it is the function of, or on its own lines where it is not called and stands as a mark
     (`marks`); a string equal to one of SKIPS given to a call in BY_NAME, by position or by
-    keyword, judged on that call's lines; and, link or not, such an attribute anywhere else
-    (given a name, put in a tuple or a dict, passed on), or such a name imported from one of
-    SKIP_MODULES, since each hides every later use. A link is "issue #" and digits, in any
+    keyword, judged on that call's lines, but given to a getattr that is not called on the
+    spot, flagged as below; and, link or not, such an attribute anywhere else (given a name,
+    put in a tuple or a dict, passed on), or such a name imported from one of SKIP_MODULES,
+    since each hides every later use. This holds also where the skip skips nothing: a test of
+    a helper that skips, `pytest.raises(pytest.skip.Exception)` or `except unittest.SkipTest:`,
+    is flagged and no link clears it; that is the strict side, chosen so that no use of a skip
+    is let through on its look. A link is "issue #" and digits, in any
     case, or "/issues/" and digits. Lines are counted from 1, as Python counts them. Raises
     SyntaxError when `source` is not Python.
 
@@ -143,7 +151,13 @@ def unlinked(source: str, name: str = "<source>") -> list[str]:
                 found.append((node.lineno, node.attr))
         elif isinstance(node, ast.Call) and called_name(node) in BY_NAME:
             given = [*node.args, *(keyword.value for keyword in node.keywords)]
-            judged += [(node, arg.value) for arg in given if isinstance(arg, ast.Constant) and arg.value in SKIPS]
+            named = [arg.value for arg in given if isinstance(arg, ast.Constant) and arg.value in SKIPS]
+            # getattr hands the skip on, like an attribute that is not called, unless it is
+            # called on the spot.
+            if called_name(node) in MARKING or id(node) in called:
+                judged += [(node, skip) for skip in named]
+            else:
+                found += [(node.lineno, skip) for skip in named]
         elif isinstance(node, ast.ImportFrom) and node.module in SKIP_MODULES:
             found += [(node.lineno, alias.name) for alias in node.names if alias.name in SKIPS]
     for span, skip in judged:
@@ -212,6 +226,7 @@ def test_ec6_named_by_a_string() -> None:
     assert unlinked('request.node.applymarker("xfail")') == ["<source>:1 xfail"]
     assert unlinked('getattr(pytest, "skip")("x")') == ["<source>:1 skip"]
     assert unlinked('item.add_marker("skip")  # issue #12') == []
+    assert unlinked('getattr(pytest, "skip")("no network, issue #12")') == []
     assert unlinked('item.add_marker("slow")') == []
     assert unlinked('item.add_marker(marker="skip")') == ["<source>:1 skip"]
     assert unlinked('request.applymarker(marker="xfail")') == ["<source>:1 xfail"]
