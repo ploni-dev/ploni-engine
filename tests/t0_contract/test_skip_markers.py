@@ -8,26 +8,34 @@ the issue says why, and until when.
 Test matrix:
 
 Equivalence classes:
-  EC1  a skip with an issue link ("#12", or a URL ending in /issues/12) on its own lines
+  EC1  a skip with an issue link ("issue #12", or a URL ending in /issues/12) on its own lines
                                                                  no line
   EC2  a skip with no link                                       one line, file:line and the name;
        several: in line order, though the tree is walked level by level
   EC3  each form: pytest.skip(), pytest.xfail(), pytest.importorskip(), pytest.mark.skip,
        .skipif, .xfail (called, or bare as a decorator), unittest's skip, skipIf, skipUnless,
-       expectedFailure, and a test case's skipTest()            each one line without a link
+       expectedFailure, a test case's skipTest(), and raising unittest.SkipTest or pytest's
+       Skipped                                                   each one line without a link
   EC4  a file with no skip                                       no line
   EC5  the repository's tests/                                   no line
+  EC6  a skip named by a string: add_marker("skip"), applymarker("xfail"),
+       getattr(pytest, "skip")                                   one line without a link
 
 Boundaries:
   B1  a call over several lines, the link on its last line       no line
   B2  the link on the line after the call                        one line: the link belongs to the
                                                                  call's own lines
   B3  a bare decorator `@pytest.mark.xfail`, no arguments        one line
+  B4  a form feed, a vertical tab or a Unicode line separator before the skip, the line above it
+      holding a link                                             one line: Python does not end a
+                                                                 line at them, so neither does the scan
 
 Adversarial:
-  A1  the name imported on its own (`from pytest import skip`, `from unittest import skip`)
-      one line: an alias would hide every later call
-  A2  "#" with no number, or a number with no "#" ("issue 12")    one line
+  A1  the name taken on its own: imported (`from pytest import skip`, `from unittest.case import
+      skip`, `from unittest import SkipTest`), or given a name of its own (`skip = pytest.skip`)
+      one line, link or not: an alias would hide every later call
+  A2  "#" with no number, a number with no "#" ("issue 12"), or "#" and a number that is not
+      called an issue ("case #2")                                one line
   A3  a skip inside a string or a comment                        no line: it is not code
 
 Not applicable: the Hebrew and document axes: the input is Python source.
@@ -75,9 +83,10 @@ def unlinked(source: str, name: str = "<source>") -> list[str]:
 
 
 def test_ec1_with_a_link() -> None:
-    assert unlinked('pytest.skip("no network here, #12")') == []
+    assert unlinked('pytest.skip("no network here, issue #12")') == []
     assert unlinked('pytest.skip("see https://github.com/o/r/issues/12")') == []
-    assert unlinked('pytest.skip("no network")  # #12') == []
+    assert unlinked('pytest.skip("no network")  # issue #12') == []
+    assert unlinked('pytest.skip("no network, Issue #12")') == []
 
 
 def test_ec2_without_a_link() -> None:
@@ -100,8 +109,11 @@ def test_ec3_each_form() -> None:
         '@unittest.skipUnless(True, "x")\ndef test(): pass': "skipUnless",
         "@unittest.expectedFailure\ndef test(): pass": "expectedFailure",
         'self.skipTest("x")': "skipTest",
+        'raise unittest.SkipTest("x")': "SkipTest",
+        'raise _pytest.outcomes.Skipped("x")': "Skipped",
     }
     assert {source: unlinked(source) for source in forms} == {source: [f"<source>:1 {skip}"] for source, skip in forms.items()}
+    assert unlinked('raise unittest.SkipTest("x, issue #12")') == []
 
 
 def test_ec4_no_skip() -> None:
@@ -114,27 +126,47 @@ def test_ec5_the_repository() -> None:
     assert found == []
 
 
+def test_ec6_named_by_a_string() -> None:
+    assert unlinked('item.add_marker("skip")') == ["<source>:1 skip"]
+    assert unlinked('request.node.applymarker("xfail")') == ["<source>:1 xfail"]
+    assert unlinked('getattr(pytest, "skip")("x")') == ["<source>:1 skip"]
+    assert unlinked('item.add_marker("skip")  # issue #12') == []
+    assert unlinked('item.add_marker("slow")') == []
+
+
 def test_b1_a_call_over_several_lines() -> None:
-    assert unlinked('pytest.skip(\n    "no network",\n    # #12\n)') == []
+    assert unlinked('pytest.skip(\n    "no network",\n    # issue #12\n)') == []
 
 
 def test_b2_the_link_on_the_next_line() -> None:
-    assert unlinked('pytest.skip("no network")\n# #12') == ["<source>:1 skip"]
+    assert unlinked('pytest.skip("no network")\n# issue #12') == ["<source>:1 skip"]
 
 
 def test_b3_a_bare_decorator() -> None:
     assert unlinked("@pytest.mark.xfail\ndef test(): pass") == ["<source>:1 xfail"]
 
 
-def test_a1_imported_on_its_own() -> None:
+def test_b4_a_character_python_does_not_end_a_line_at() -> None:
+    for character in ("\x0c", "\x0b", " "):
+        # str.splitlines() would end a line at the character, so that line 2 holds the link.
+        source = f'X = 1  # {character} issue #12\npytest.skip("no link")'
+        assert unlinked(source) == ["<source>:2 skip"], repr(character)
+
+
+def test_a1_taken_on_its_own() -> None:
     assert unlinked("from pytest import skip, raises") == ["<source>:1 skip"]
     assert unlinked("from unittest import skipIf as maybe") == ["<source>:1 skipIf"]
+    assert unlinked("from unittest.case import skip") == ["<source>:1 skip"]
+    assert unlinked("from unittest import SkipTest") == ["<source>:1 SkipTest"]
+    assert unlinked("from _pytest.outcomes import Skipped") == ["<source>:1 Skipped"]
+    assert unlinked('skip = pytest.skip  # issue #115\nskip("x")') == ["<source>:1 skip"]
     assert unlinked("from pytest import raises") == []
 
 
 def test_a2_not_a_link() -> None:
     assert unlinked('pytest.skip("see issue 12")') == ["<source>:1 skip"]
     assert unlinked('pytest.skip("see #")') == ["<source>:1 skip"]
+    assert unlinked('pytest.skip("case #2 is broken")') == ["<source>:1 skip"]
 
 
 def test_a3_in_a_string_or_a_comment() -> None:
