@@ -12,9 +12,13 @@ Matrix:
   M4  a .py file renamed to .txt, with a workflow    exit 1: the old name counts
   M5  a deleted .py file, with the baselines         exit 1
   M6  paths with a space and a line break, and a workflow    exit 1, the workflow named
-  M7  a revision git does not know                   exit not 0 (changed() raises
+  M7  a revision git does not know                   exit not 0, git's own "fatal" line on
+                                                     the error stream (changed() raises
                                                      CalledProcessError)
   M8  changed() returns the paths of the diff, sorted as git gives them
+  M9  a workflow-only branch, and main gains a .py file after it was cut    exit 0: only
+                                                     what the branch changed counts
+  M10 a code branch, and main changes the baselines after it was cut    exit 0
 
 Not in the fast suite: PROCESS.md section 5.1 puts t4 in the full suite. Until the full
 workflow exists it is run by hand: python -m pytest tests/t4_integration
@@ -129,9 +133,35 @@ def test_m6_a_space_and_a_line_break(repo: Path) -> None:
 
 
 def test_m7_an_unknown_revision(repo: Path) -> None:
-    assert run(repo, "no-such-revision", "HEAD").returncode != 0
+    done = run(repo, "no-such-revision", "HEAD")
+    assert done.returncode != 0
+    assert "fatal" in done.stderr
     with pytest.raises(subprocess.CalledProcessError):
         check.changed("no-such-revision", "HEAD", repo)
+
+
+def test_m9_main_moved_on_after_the_branch(repo: Path) -> None:
+    git(repo, "branch", "-M", "main")
+    git(repo, "checkout", "-q", "-b", "feat")
+    write(repo, ".github/workflows/new.yml")
+    commit(repo)
+    git(repo, "checkout", "-q", "main")
+    write(repo, "ploni/b.py")
+    commit(repo)
+    done = run(repo, "main", "feat")
+    assert (done.returncode, done.stderr) == (0, "")
+    assert check.changed("main", "feat", repo) == [".github/workflows/new.yml"]
+
+
+def test_m10_main_changed_the_baselines_after_a_code_branch(repo: Path) -> None:
+    git(repo, "branch", "-M", "main")
+    git(repo, "checkout", "-q", "-b", "feat")
+    write(repo, "ploni/new.py")
+    commit(repo)
+    git(repo, "checkout", "-q", "main")
+    (repo / "eval" / "baselines.json").write_text("{}\n", encoding="utf-8")
+    commit(repo)
+    assert run(repo, "main", "feat").returncode == 0
 
 
 def test_m8_changed_gives_the_diff(repo: Path) -> None:
