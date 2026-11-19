@@ -2,11 +2,14 @@
 # eval/baselines.json nor a CI workflow (PROMOTION.md section 5.1). A workflow of its own,
 # on pull requests only, as Achia chose on 2026-11-19 ("New workflow file (Recommended)").
 # It came in a PR of its own, with no .py file, because the check forbids the two together.
+# A PR that edits this file is judged by its own edited copy; against that, only the review
+# and CLAUDE.md stand.
 name: changed-paths
 
 on:
   pull_request:
-    # edited: a PR whose base branch is changed is judged again against the new base.
+    # edited: a PR whose base branch is changed is judged again against the new base. GitHub
+    # also sends it when the title or the body is edited; the run is then the same.
     types: [opened, edited, synchronize, reopened]
 
 permissions:
