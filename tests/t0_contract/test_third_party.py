@@ -12,7 +12,8 @@ Equivalence classes:
   EC2  a revision that is not in the file                           one line, name/revision
   EC3  a revision folder that is not a full commit hash ("main", a short hash, a hash with a tail)
                                                                     one line: not pinned
-  EC4  files directly in a name folder, the folder named in the file as `models/<name>/`
+  EC4  files directly in a name folder, the folder named in the file as `models/<name>/`, also
+       as the start of a longer path (`models/<name>/file.onnx`)
                                                                     no line
   EC5  such files, the folder not named                             one line, the name
   EC6  a file at the top of models/, named or not                   as EC4 and EC5, by its path
@@ -32,8 +33,8 @@ Adversarial:
   A1  a revision folder named like a word the file holds ("main", "Models")    not pinned,
       whatever the file says
   A2  a name folder in Hebrew, its files not named    one line, the Hebrew name
-  A3  a hash or a path that the file holds only inside a longer one (the first 40 characters
-      of a SHA-256; `models/e2` inside `models/e2_onnx/`)    one line each
+  A3  a hash or a path that the file holds only inside a longer one (the first or the last 40
+      characters of a SHA-256; `models/e2` inside `models/e2_onnx/`)    one line each
 
 Not applicable: the document axes, and the Hebrew axes of the test-matrix skill other than A2:
 the input is folder names and the text of one file.
@@ -150,6 +151,7 @@ def test_ec3_a_revision_that_is_not_a_commit_hash(tmp_path: Path) -> None:
 
 def test_ec4_loose_files_in_a_named_folder(tmp_path: Path) -> None:
     assert unlisted(make(tmp_path, "e2_onnx/ner.onnx"), "written to `models/e2_onnx/`") == []
+    assert unlisted(tmp_path, "the file `models/e2_onnx/ner.onnx`") == []
 
 
 def test_ec5_loose_files_in_a_folder_not_named(tmp_path: Path) -> None:
@@ -210,8 +212,9 @@ def test_b4_names_that_differ_in_case_are_sorted_as_python_sorts(tmp_path: Path)
 
 def test_a3_a_hash_or_a_path_only_inside_longer_text(tmp_path: Path) -> None:
     sha = "e686ac235181498b9bef5c3f660db18e42c0120dc21e0a5cead5950c4151d760"
-    models = make(tmp_path, f"x/{sha[:40]}/m", "e2")
+    models = make(tmp_path, f"x/{sha[:40]}/m", f"y/{sha[-40:]}/m", "e2")
     assert unlisted(models, f"SHA-256 `{sha}`; written to `models/e2_onnx/`") == [
         "e2: not in THIRD_PARTY.md",
         f"x/{sha[:40]}: not in THIRD_PARTY.md",
+        f"y/{sha[-40:]}: not in THIRD_PARTY.md",
     ]
