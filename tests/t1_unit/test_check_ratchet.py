@@ -42,6 +42,16 @@ Equivalence classes (the parts):
   EC13 is_test_file(): tests/**/test_*.py and tests/**/*_test.py, the files pytest collects
        by default
   EC15 decreases() and ceiling() on their own
+  EC16 `.github/workflows/ratchet.yml` (issue #136): the four pull_request types, fetch-depth 2
+       (every PR calls git here, so depth 1 would make every run red), exactly one run line,
+       `python -m scripts.check_ratchet HEAD^1 HEAD`, the file ending (comment lines aside)
+       with that step and its env holding PR_BODY, `${{` nowhere else, both actions pinned by
+       a 40-character hash, read-only permissions, and none of the keys that switch a step,
+       a job or the workflow off, in any YAML spelling (the patterns of EC11 of the
+       changed-paths test). Why: a later workflow-only PR holds no .py file, so the
+       changed-paths check lets an edit through that switches the ratchet off (the review of
+       #134, finding 2; Achia's option of 2026-11-20: "A test then pins it, as for the other
+       two."). Not refused: a `uses:` line swapped for another action pinned by a hash.
 
 Boundaries:
   B1  an override with the wrong delta (-2 for -1)    the decrease, and "names no decrease"
@@ -69,9 +79,13 @@ Known limits:
 
 import pytest
 
+from pathlib import Path
+
 from scripts import check_ratchet as check
 from scripts.check_ratchet import Counts
+from tests.t1_unit.test_check_changed_paths import PINNED, SWITCHES_OFF
 
+ROOT = Path(__file__).resolve().parents[2]
 FILE = "tests/t1_unit/test_a.py"
 RATCHET = '{"suppressions_ceiling": 10}'
 
@@ -260,6 +274,26 @@ def test_a2_what_is_under_ploni(other: str, refused: bool) -> None:
     body = f"ratchet-override: {FILE} -1 merged\n"
     found = problems(body, {FILE: Counts(2, 3)}, {FILE: Counts(1, 3)}, paths=[FILE, other])
     assert (found != []) is refused
+
+
+def test_ec16_the_workflow() -> None:
+    text = (ROOT / ".github" / "workflows" / "ratchet.yml").read_text(encoding="utf-8")
+    lines = [line.strip() for line in text.splitlines()]
+    # A step's env reaches that step only: the body must sit under the run step itself.
+    code = [line for line in text.splitlines() if not line.strip().startswith("#")]
+    assert code[-3:] == [
+        "      - run: python -m scripts.check_ratchet HEAD^1 HEAD",
+        "        env:",
+        "          PR_BODY: ${{ github.event.pull_request.body }}",
+    ]
+    assert "pull_request:" in lines and "types: [opened, edited, synchronize, reopened]" in lines
+    assert "fetch-depth: 2" in lines
+    assert [line for line in lines if line.startswith(("- run:", "run:"))] == ["- run: python -m scripts.check_ratchet HEAD^1 HEAD"]
+    assert [line for line in lines if "${{" in line] == ["PR_BODY: ${{ github.event.pull_request.body }}"]
+    uses = [line for line in lines if line.startswith(("- uses:", "uses:"))]
+    assert len(uses) == 2 and all(PINNED.search(line) for line in uses)
+    assert "permissions:" in lines and "contents: read" in lines
+    assert not [line for line in lines if SWITCHES_OFF.match(line)]
 
 
 def test_a3_a_renamed_test_is_not_seen() -> None:
