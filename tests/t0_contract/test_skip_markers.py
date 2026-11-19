@@ -173,6 +173,8 @@ def test_ec6_named_by_a_string() -> None:
     assert unlinked('getattr(pytest, "skip")("x")') == ["<source>:1 skip"]
     assert unlinked('item.add_marker("skip")  # issue #12') == []
     assert unlinked('item.add_marker("slow")') == []
+    assert unlinked('item.add_marker(marker="skip")') == ["<source>:1 skip"]
+    assert unlinked('request.applymarker(marker="xfail")') == ["<source>:1 xfail"]
 
 
 def test_b1_a_call_over_several_lines() -> None:
@@ -185,10 +187,15 @@ def test_b2_the_link_on_the_next_line() -> None:
 
 def test_b3_a_bare_decorator() -> None:
     assert unlinked("@pytest.mark.xfail\ndef test(): pass") == ["<source>:1 xfail"]
+    assert unlinked("@pytest.mark.xfail  # issue #12\ndef test(): pass") == []
+    assert unlinked("pytest.param(1, marks=pytest.mark.xfail)  # issue #12") == []
+    assert unlinked("pytest.param(1, marks=[pytest.mark.xfail])  # issue #12") == []
+    assert unlinked("pytest.param(1, marks=[pytest.mark.xfail])") == ["<source>:1 xfail"]
+    assert unlinked("item.add_marker(pytest.mark.skip)  # issue #12") == []
 
 
 def test_b4_a_character_python_does_not_end_a_line_at() -> None:
-    for character in ("\x0c", "\x0b", " "):
+    for character in ("\x0c", "\x0b", "\u2028"):
         # str.splitlines() would end a line at the character, so that line 2 holds the link.
         source = f'X = 1  # {character} issue #12\npytest.skip("no link")'
         assert unlinked(source) == ["<source>:2 skip"], repr(character)
@@ -201,6 +208,14 @@ def test_a1_taken_on_its_own() -> None:
     assert unlinked("from unittest import SkipTest") == ["<source>:1 SkipTest"]
     assert unlinked("from _pytest.outcomes import Skipped") == ["<source>:1 Skipped"]
     assert unlinked('skip = pytest.skip  # issue #115\nskip("x")') == ["<source>:1 skip"]
+    for source in (
+        'skip, other = pytest.skip, 1  # issue #115\nskip("x")',
+        'skip = pytest.skip if True else None  # issue #115\nskip("x")',
+        'skip = functools.partial(pytest.skip)  # issue #115\nskip("x")',
+        'S = {"s": pytest.skip}  # issue #115\nS["s"]("x")',
+        'def t(skip=pytest.skip):  # issue #115\n    skip("x")',
+    ):
+        assert unlinked(source) == ["<source>:1 skip"], source
     assert unlinked("from pytest import raises") == []
 
 
