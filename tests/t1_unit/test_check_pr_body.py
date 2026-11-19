@@ -25,6 +25,9 @@ Boundaries:
                                       found
   B4  a deeper heading (`### Ponytail review`) or a longer one (`## Ponytail review notes`)
                                       not the section
+  B5  a section ends at the next `## ` heading, not at a `### ` one
+  B6  a heading with spaces before it (Markdown allows up to three)    found
+  B7  blank lines are not text, whatever the template holds
 
 Adversarial:
   A1  the heading inside a sentence ("see ## Ponytail review")    not the section
@@ -140,3 +143,17 @@ def test_a2_a_section_in_hebrew() -> None:
 def test_a3_a_body_that_tries_the_shell() -> None:
     body = GOOD + '\n"; rm -rf ~; echo "\n$(whoami) `id`\n'
     assert check_pr_body.main({"PR_BODY": body}) == 0
+
+
+def test_b5_a_section_ends_at_the_next_heading_of_its_level() -> None:
+    body = "## Orientation\n\n## Phase, issue, branch\nPhase 0\n## Ponytail review\n### Pass 1\nShip.\n"
+    assert check_pr_body.problems(body) == ["empty: ## Orientation"]
+
+
+def test_b6_a_heading_with_spaces_before_it() -> None:
+    assert check_pr_body.problems(GOOD.replace("## Ponytail review", "  ## Ponytail review")) == []
+
+
+def test_b7_a_blank_line_is_not_text_with_any_template() -> None:
+    template = "## Orientation\nGoal:\n## Ponytail review\nCommit reviewed:\n"
+    assert check_pr_body.problems("## Orientation\n\n   \n## Ponytail review\n\n", template) == ["empty: ## Orientation", "empty: ## Ponytail review"]
