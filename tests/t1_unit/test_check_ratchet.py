@@ -38,6 +38,11 @@ Error paths (main):
 Equivalence classes (the parts):
   EC11 count(): test functions at module level, in a class, async; the names pytest collects
        ("test", "test_x", "testing"); a helper is not counted; asserts anywhere in the file
+  EC17 count() counts what pytest collects (Achia, 2026-11-20, "Count what pytest runs
+       (Recommended)"): module-level test* functions and test* methods of Test* classes,
+       nested Test* classes too; not a function nested in a test or a method, not a method of
+       a class whose name does not start with Test, not a class inside a function. A test
+       swapped for a nested function is a drop.
   EC12 overrides(): a line read whole; in backquotes; spaces; Hebrew in the reason
   EC13 is_test_file(): tests/**/test_*.py and tests/**/*_test.py, the files pytest collects
        by default
@@ -203,6 +208,50 @@ class TestThing:
 
 def test_ec11_count() -> None:
     assert check.count(SOURCE) == Counts(test_functions=5, assertions=6)
+
+
+NOT_COLLECTED = '''
+def test_outer():
+    def test_nested():
+        assert 1
+    assert 2
+
+class Helper:
+    def test_in_a_helper_class(self):
+        assert 3
+
+class TestOuter:
+    def test_method(self):
+        assert 4
+
+    def helper(self):
+        def test_nested_in_a_method():
+            pass
+
+    class TestInner:
+        def test_deep(self):
+            assert 5
+
+    class Plain:
+        def test_in_a_plain_inner_class(self):
+            pass
+
+def make():
+    class TestInAFunction:
+        def test_hidden(self):
+            pass
+'''
+
+
+def test_ec17_only_what_pytest_collects() -> None:
+    # test_outer, TestOuter.test_method, TestOuter.TestInner.test_deep; asserts count anywhere.
+    assert check.count(NOT_COLLECTED) == Counts(test_functions=3, assertions=5)
+
+
+def test_ec17_a_test_swapped_for_a_nested_one_is_a_drop() -> None:
+    before = "def test_a():\n    assert 1\n\n\ndef test_b():\n    assert 2\n"
+    after = "def test_a():\n    def test_b():\n        assert 2\n    assert 1\n"
+    assert problems("", {FILE: check.count(before)}, {FILE: check.count(after)}) == [f"{FILE}: test functions 2 -> 1 (-1)"]
 
 
 @pytest.mark.parametrize(
