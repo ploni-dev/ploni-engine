@@ -261,12 +261,12 @@ def test_e8_a_name_too_long_for_its_partial_file(tmp_path: Path) -> None:
     except OSError:
         length = 259 - len(str(tmp_path)) - 1
         if length < 20:
-            pytest.skip("the temp folder's path leaves no room for the test, #115")
+            pytest.skip("the temp folder's path leaves no room for the test, issue #115")
         name = "n" * (length - 5) + ".docx"
         try:
             (tmp_path / name).write_bytes(b"old")
         except OSError:
-            pytest.skip("this file system refuses a name of this length, #115")
+            pytest.skip("this file system refuses a name of this length, issue #115")
     with pytest.raises(OSError):
         atomic.write_atomic(tmp_path / name, TEXT)
     assert (tmp_path / name).read_bytes() == b"old" and leftovers(tmp_path, name) == []
@@ -310,7 +310,7 @@ def make_link(link: Path, target: Path, folder: bool = False) -> None:
     try:
         link.symlink_to(target, target_is_directory=folder)
     except OSError:
-        pytest.skip("symbolic links cannot be made here, #115")
+        pytest.skip("symbolic links cannot be made here, issue #115")
 
 
 def test_ec10_a_target_that_is_a_link(tmp_path: Path) -> None:

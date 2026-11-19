@@ -48,11 +48,31 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 TESTS = ROOT / "tests"
 
-# PROMOTION.md section 5.1, "Skip-marker check": the names that skip a test or expect it to fail.
-SKIPS = frozenset({"skip", "skipif", "xfail", "importorskip", "skipIf", "skipUnless", "expectedFailure", "skipTest"})
+# PROMOTION.md section 5.1, "Skip-marker check": the names that skip a test or expect it to fail,
+# and the exceptions whose raising skips one (unittest's SkipTest, pytest's Skipped).
+SKIPS = frozenset(
+    {"skip", "skipif", "xfail", "importorskip", "skipIf", "skipUnless", "expectedFailure", "skipTest", "SkipTest", "Skipped"}
+)
 # The modules from which such a name may be imported on its own.
-SKIP_MODULES = frozenset({"pytest", "unittest", "_pytest.outcomes", "_pytest.mark"})
-ISSUE_LINK = re.compile(r"#\d+\b|/issues/\d+\b")
+SKIP_MODULES = frozenset({"pytest", "unittest", "unittest.case", "_pytest.outcomes", "_pytest.mark"})
+# The calls that take a skip by its name as text: pytest's add_marker and applymarker, getattr.
+BY_NAME = frozenset({"add_marker", "applymarker", "getattr"})
+ISSUE_LINK = re.compile(r"\bissue #\d+\b|/issues/\d+\b", re.IGNORECASE)
+# Where Python ends a line (the language reference, "Physical lines"); str.splitlines() also
+# ends one at a form feed, a vertical tab and Unicode separators, which would shift the count.
+LINE_END = re.compile(r"\r\n|\r|\n")
+
+
+def called_name(call: ast.Call) -> str:
+    """Return the name a call is made by: `f` for f(), `g` for x.g(), "" for anything else.
+
+    Why: a skip named by text is known by the call that takes it (add_marker, getattr).
+
+    Contract: reads the function's own name only, not what it is bound to.
+    """
+    if isinstance(call.func, ast.Attribute):
+        return call.func.attr
+    return call.func.id if isinstance(call.func, ast.Name) else ""
 
 
 def unlinked(source: str, name: str = "<source>") -> list[str]:
@@ -62,24 +82,45 @@ def unlinked(source: str, name: str = "<source>") -> list[str]:
     on source made for it.
 
     Contract: a skip is an attribute that ends in one of SKIPS (`pytest.skip`,
-    `pytest.mark.xfail`, `unittest.skip`, `self.skipTest`), judged on the lines of the call it
-    is the function of, or on its own line where it is not called; and a `from` import of such
-    a name from one of SKIP_MODULES. A link is "#" and digits, or "/issues/" and digits.
-    Lines are counted from 1. Raises SyntaxError when `source` is not Python.
+    `pytest.mark.xfail`, `unittest.SkipTest`, `self.skipTest`), judged on the lines of the call
+    it is the function of, or on its own line where it is not called; a string equal to one of
+    SKIPS given to a call in BY_NAME, judged on that call's lines; and, link or not, such an
+    attribute given a name of its own by an assignment, or such a name imported from one of
+    SKIP_MODULES, since either hides every later call. A link is "issue #" and digits, in any
+    case, or "/issues/" and digits. Lines are counted from 1, as Python counts them. Raises
+    SyntaxError when `source` is not Python.
+
+    Known limits: a link is not checked to name an issue that exists, or one still open. Only
+    the source given is read: the run of EC5 reads `tests/`, so a `conftest.py` at the root of
+    the repository would not be read (none exists). A skip reached any other way is not seen:
+    a name held in a variable, `exec`, a module imported by `importlib`, a hook that skips by
+    its return value.
     """
-    lines = source.splitlines()
+    lines = LINE_END.split(source)
     tree = ast.parse(source)
     called = {id(node.func): node for node in ast.walk(tree) if isinstance(node, ast.Call)}
+    aliased = {id(node.value) for node in ast.walk(tree) if isinstance(node, ast.Assign | ast.AnnAssign | ast.NamedExpr)}
+    judged: list[tuple[ast.expr, str]] = []
     found = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Attribute) and node.attr in SKIPS:
-            span = called.get(id(node), node)
-            text = "\n".join(lines[span.lineno - 1 : span.end_lineno])
-            if not ISSUE_LINK.search(text):
-                found.append((span.lineno, node.attr))
+            if id(node) in aliased:
+                found.append((node.lineno, node.attr))
+            else:
+                judged.append((called.get(id(node), node), node.attr))
+        elif isinstance(node, ast.Call) and called_name(node) in BY_NAME:
+            judged += [(node, arg.value) for arg in node.args if isinstance(arg, ast.Constant) and arg.value in SKIPS]
         elif isinstance(node, ast.ImportFrom) and node.module in SKIP_MODULES:
             found += [(node.lineno, alias.name) for alias in node.names if alias.name in SKIPS]
+    for span, skip in judged:
+        if not ISSUE_LINK.search("\n".join(lines[span.lineno - 1 : span.end_lineno])):
+            found.append((span.lineno, skip))
     return [f"{name}:{line} {skip}" for line, skip in sorted(found)]
+
+
+def test_called_name() -> None:
+    calls = [ast.parse(text).body[0].value for text in ("f()", "x.g()", "f()()")]  # type: ignore[attr-defined]
+    assert [called_name(call) for call in calls] == ["f", "g", ""]
 
 
 def test_ec1_with_a_link() -> None:
