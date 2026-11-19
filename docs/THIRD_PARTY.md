@@ -2,7 +2,7 @@
 
 Everything shipped, executed or relied on, with its source, version and license. `scripts/download_models.py` regenerates the model rows; the rest is maintained by hand.
 
-CI fails if a model present in `models/` is absent from this file (`build-plan.md` Phase 0 gate).
+The fast suite fails if a model present in `models/` is absent from this file (`tests/t0_contract/test_third_party.py`; `build-plan.md` Phase 0 gate). It bites on the machine that holds the models: `models/` is not in git, so on GitHub the check has nothing to look at, and the gate's words "CI fails" are not met there.
 
 ## Models
 
