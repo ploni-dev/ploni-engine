@@ -254,8 +254,10 @@ def test_a1_taken_on_its_own() -> None:
         'skip = functools.partial(pytest.skip)  # issue #115\nskip("x")',
         'S = {"s": pytest.skip}  # issue #115\nS["s"]("x")',
         'def t(skip=pytest.skip):  # issue #115\n    skip("x")',
+        'skip = getattr(pytest, "skip")  # issue #115\nskip("x")',
     ):
         assert unlinked(source) == ["<source>:1 skip"], source
+    assert unlinked('S = getattr(unittest, "SkipTest")  # issue #115\nraise S("x")') == ["<source>:1 SkipTest"]
     assert unlinked("from pytest import raises") == []
 
 
