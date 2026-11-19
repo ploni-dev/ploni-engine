@@ -19,8 +19,8 @@ Equivalence classes:
                                                                   judged as a function or class
   EC8  a private class                judged: "every class" (PROCESS.md section 5.3); its
                                       members are not
-  EC9  a class or function under a top-level `if`, `try` (body, handler, else, finally) or
-       `with`                         judged as if at the top
+  EC9  a class or function under a top-level `if`, `try` (body, handler, else, finally),
+       `try` with `except*`, or `with`                         judged as if at the top
   EC7  the repository: every file under ploni/ and scripts/, sub-packages too    no line
 
 Boundaries:
@@ -305,7 +305,12 @@ def test_ec9_definitions_under_a_top_level_block() -> None:
         with open("x") as handle:
             def read():
                 pass
+        try:
+            import fast
+        except* ImportError:
+            def star():
+                pass
         ''')
     assert [line.split(": ")[0] for line in problems(source, "m.py")] == [
-        "m.py:8 link", "m.py:11 Link", "m.py:16 slow", "m.py:19 quick", "m.py:22 done", "m.py:25 read",
+        "m.py:8 link", "m.py:11 Link", "m.py:16 slow", "m.py:19 quick", "m.py:22 done", "m.py:25 read", "m.py:30 star",
     ]
