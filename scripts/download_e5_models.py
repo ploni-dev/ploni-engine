@@ -17,7 +17,8 @@ step of E5 uses, from a GitHub repository at a pinned commit, each file checked 
 the id the commit records for it.
 
 Known limits: the licence of each model is read by a person at the pinned commit and
-written into `docs/THIRD_PARTY.md` by hand; this script does not read it. A re-run trusts
+written by hand, since issue #28 into MODELS of `scripts/download_models.py`, which writes
+the table of `docs/THIRD_PARTY.md`; this script does not read it. A re-run trusts
 files already present, but hashes them again.
 """
 

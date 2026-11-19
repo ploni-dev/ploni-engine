@@ -20,6 +20,11 @@ Known limits:
   when its phase comes, with Achia's yes.
 - The list of given names of E5 (`alumag/hebrew-names`) is data from GitHub, not a model, and
   stays with `scripts/download_e5_models.py`.
+- A download runs from the experiments' environment, where `huggingface_hub` is pinned
+  (`experiments/e1_hebrew_recall/requirements.txt`); the project's `.venv` does not have it,
+  and adding it to a requirements file is a new dependency, Achia's to decide.
+- The license of each model is read by a person from the model's card at its commit and
+  written into MODELS; the script does not read it.
 """
 
 import argparse
@@ -40,7 +45,7 @@ HEADER = "| Model | URL | Revision | License | License source | Used by | Shippe
 
 
 class Model(NamedTuple):
-    """One pinned model: where it comes from, which files are fetched, and its row.
+    """One pinned model: its source, its files, its row.
 
     Why: the pin, the files and the license of a model are read by the download and by the
     table of docs/THIRD_PARTY.md, so they live in one place.
@@ -153,7 +158,7 @@ def row(model: Model) -> str:
 
 
 def table(models: Sequence[Model]) -> str:
-    """Return the whole table: its header, the line under it, and one row per model.
+    """Return the whole table: header, rule line, one row per model.
 
     Why: the table is written whole, so it never holds a row of a model that is not in MODELS.
 
@@ -167,14 +172,16 @@ def replace_table(text: str, new_table: str) -> str:
 
     Why: the rest of docs/THIRD_PARTY.md is written by hand and must not be touched.
 
-    Contract: the table is the run of lines that begin with "|", the first such run after the
-    heading. Raises ValueError when the heading or a table under it is missing.
+    Contract: the table is the first run of lines that begin with "|" after the heading and
+    before the next "## " heading. Raises ValueError when the heading, or a table in its
+    section, is missing.
     """
     lines = text.splitlines(keepends=True)
     heading = next((i for i, line in enumerate(lines) if line.rstrip() == HEADING), None)
     if heading is None:
         raise ValueError(f"no {HEADING} heading")
-    start = next((i for i in range(heading + 1, len(lines)) if lines[i].startswith("|")), None)
+    section_end = next((i for i in range(heading + 1, len(lines)) if lines[i].startswith("## ")), len(lines))
+    start = next((i for i in range(heading + 1, section_end) if lines[i].startswith("|")), None)
     if start is None:
         raise ValueError(f"no table under {HEADING}")
     end = next((i for i in range(start, len(lines)) if not lines[i].startswith("|")), len(lines))
@@ -184,8 +191,8 @@ def replace_table(text: str, new_table: str) -> str:
 def file_sha256(path: Path) -> str:
     """Return the hex SHA-256 of one file.
 
-    Why: a commit pins the repository, and the weights are checked as well against the hash
-    the hub records, so that a changed file on disk is not trusted.
+    Why: a commit pins the repository; the weights are checked as well against the hash the
+    hub records, so that weights changed on disk are not trusted.
 
     Contract: reads in chunks; raises OSError when the file cannot be read.
     """
@@ -193,36 +200,30 @@ def file_sha256(path: Path) -> str:
         return hashlib.file_digest(handle, "sha256").hexdigest()
 
 
-def hub_fetch() -> Callable[..., Any]:
-    """Return huggingface_hub's snapshot_download, imported only when a model is downloaded.
-
-    Why: the rows and the tests need no network package; only a download does.
-
-    Contract: raises ImportError when huggingface_hub is not installed (it is pinned in the
-    experiments' requirements, not in requirements-dev.txt).
-    """
-    from huggingface_hub import snapshot_download
-
-    return snapshot_download  # type: ignore[no-any-return]
-
-
 def download(model: Model, fetch: Callable[..., Any] | None = None) -> Path:
     """Fetch one model at its pinned commit into models/<folder>/<revision>/; check its weights.
 
     Why: a pin by branch name would let the weights change between a measured run and the next.
 
-    Contract: `fetch` is snapshot_download or a stand-in with its arguments. Sends no stored
-    account token (`token=False`). Returns the folder. Raises ValueError, naming the folder,
-    when the weights do not have the pinned hash; the hub's errors pass unchanged.
+    Contract: `fetch` is snapshot_download or a stand-in with its arguments; when it is None,
+    huggingface_hub is imported here, as only a download needs it (ImportError when it is not
+    installed). Sends no stored account token (`token=False`). Returns the folder. Raises
+    ValueError, naming the folder, when the weights do not have the pinned hash; the hub's
+    errors pass unchanged.
+
+    Known limits: only the weights are checked; the tokenizer and config files are trusted as
+    the hub serves them at the commit, and a re-run trusts files already present. A model with
+    no `allow` (dictabert-joint) gets every file of its commit but those `ignore` names.
     """
     target = MODELS_ROOT / model.folder / model.revision
-    fetch = fetch or hub_fetch()
+    if fetch is None:
+        from huggingface_hub import snapshot_download as fetch
     fetch(
         model.repo,
         revision=model.revision,
         local_dir=target,
         token=False,
-        allow_patterns=list(model.allow) if model.allow else None,
+        allow_patterns=list(model.allow) if model.allow is not None else None,
         ignore_patterns=list(model.ignore),
     )
     found = file_sha256(target / model.weights)

@@ -11,8 +11,9 @@ one `sha256  bytes  name` line per file. Raises whatever `huggingface_hub`
 raises on a network or revision error; nothing is caught, so a partial download
 is never reported as a success.
 
-Known limits: no license capture and no docs/THIRD_PARTY.md regeneration; the
-E1 row there is maintained by hand until Phase 0 replaces this script.
+Known limits: no license capture and no docs/THIRD_PARTY.md regeneration. Since
+issue #28 the row is written by `scripts/download_models.py --rows` from its MODELS,
+which holds this model with the same pin and files; edit the row there, not by hand.
 """
 
 from __future__ import annotations
