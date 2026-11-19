@@ -27,7 +27,7 @@ The same script fetched the given-name tables of `alumag/hebrew-names` (GitHub, 
 
 Phase 3 adds `dicta-il/dictabert-joint` (CC BY 4.0) to the product and Phase 4 adds `fastino/gliner2-base-v1` (Apache 2.0), each pinned by commit hash.
 
-`experiments/e2_int8_latency/export.py` derives two ONNX files from that model, the encoder and NER head in FP32 and in dynamic INT8. They are written under `models/`, which is not in the repository, carry the same CC BY 4.0 license, and are not shipped.
+`experiments/e2_int8_latency/export.py` derives two ONNX files from that model, the encoder and NER head in FP32 and in dynamic INT8. They are written under `models/`, which is not in the repository, carry the same CC BY 4.0 license, and are not shipped. On the laptop they are in `models/e2_onnx/` (written 2026-11-11) and `models/e2_onnx_run3/` (2026-11-12): `ner_fp32.onnx`, 735,322,572 bytes, SHA-256 `e686ac235181498b9bef5c3f660db18e42c0120dc21e0a5cead5950c4151d760`, and `ner_int8.onnx`, 184,958,516 bytes, SHA-256 `b12eaf9283bbc40ae7473461a93e4b8872b44478503af9ad51e7fb0922b83b05`, the same two files in both folders (measured 2026-11-19).
 
 Python packages for the experiments are pinned in `experiments/e1_hebrew_recall/requirements.txt` and, with the ONNX packages added, in `experiments/e2_int8_latency/requirements.txt`. None is shipped. Licenses of the direct ones, as declared in their installed metadata: torch 2.15.0 (Apache-2.0 and BSD-family, per its SPDX expression), transformers 5.22.2 (Apache 2.0), huggingface_hub 2.4.0 (Apache-2.0), python-docx 1.2.0 (MIT), pytest 9.2.0 (MIT), onnx 1.23.2 (Apache-2.0), onnxruntime 1.31.1 (MIT).
 
