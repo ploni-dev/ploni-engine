@@ -24,8 +24,11 @@ Equivalence classes (problems):
   EC7  a test file deleted                           a line per counter, down to 0
   EC8  a new test file                               no line
   EC9  suppressions over the ceiling                 one line; equal or under: none
-  EC10 no ceiling in .ratchet.json, or a ceiling that is not a whole number, or no valid JSON
-                                                     one line
+  EC10 no ceiling in .ratchet.json, or a ceiling that is not a whole number, or no valid JSON,
+       or JSON that is not an object                 one line
+
+Error paths (main):
+  E1  wrong argument count                           exit 2, a usage line
 
 Equivalence classes (the parts):
   EC11 count(): test functions at module level, in a class, async; the names pytest collects
@@ -117,7 +120,7 @@ def test_ec9_the_ceiling(suppressions: int, lines: list[str]) -> None:
     assert problems("", {}, {}, paths=[], suppressions=suppressions) == lines
 
 
-@pytest.mark.parametrize("ratchet", ["{}", '{"suppressions_ceiling": "10"}', '{"suppressions_ceiling": 1.5}', "not json", '{"suppressions_ceiling": true}'])
+@pytest.mark.parametrize("ratchet", ["{}", '{"suppressions_ceiling": "10"}', '{"suppressions_ceiling": 1.5}', "not json", '{"suppressions_ceiling": true}', "[10]"])
 def test_ec10_no_readable_ceiling(ratchet: str) -> None:
     assert problems("", {}, {}, paths=[], ratchet=ratchet) == [".ratchet.json has no whole-number suppressions_ceiling"]
 
@@ -200,6 +203,14 @@ def test_b4_a_line_not_read(line: str) -> None:
 def test_b6_source_that_does_not_parse() -> None:
     with pytest.raises(SyntaxError):
         check.count("def test(:\n")
+
+
+@pytest.mark.parametrize("argv", [[], ["HEAD^1"], ["a", "b", "c"]])
+def test_e1_main_needs_two_revisions(argv: list[str], capsys: pytest.CaptureFixture[str]) -> None:
+    assert check.main(argv, {}) == 2
+    out, err = capsys.readouterr()
+    assert out == ""
+    assert err.startswith("usage: ")
 
 
 def test_a1_an_override_in_a_quote() -> None:

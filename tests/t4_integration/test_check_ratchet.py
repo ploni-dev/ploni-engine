@@ -14,6 +14,10 @@ Matrix:
   M6  a test file deleted                            exit 1, both counters to 0
   M7  a revision git does not know                   exit not 0, git's "fatal" line
   M8  no PR_BODY, and a test added                   exit 0
+  M9  a type-ignore or noqa written with no space, or with several, the ceiling not raised
+                                                     exit 1: each spelling counts
+  M10 a helper under tests/ loses a test-named function, and a Markdown file changes
+                                                     exit 0: neither is a counted test file
 
 Not in the fast suite: PROCESS.md section 5.1 puts t4 in the full suite. Until the full
 workflow exists it is run by hand: python -m pytest tests/t4_integration
@@ -118,6 +122,25 @@ def test_m4_a_noqa_without_the_ceiling(repo: Path) -> None:
 def test_m5_a_noqa_with_the_ceiling_raised(repo: Path) -> None:
     write(repo, "ploni/b.py", "import sys  # type: ignore[import]\n")
     write(repo, ".ratchet.json", '{"suppressions_ceiling": 2}\n')
+    commit(repo)
+    done = run(repo, "", "HEAD^1", "HEAD")
+    assert (done.returncode, done.stderr) == (0, "")
+
+
+@pytest.mark.parametrize("line", ["x = 1  #type:ignore\n", "x = 1  #  type:  ignore[misc]\n", "import os  #noqa\n"])
+def test_m9_a_suppression_written_tight_or_wide(repo: Path, line: str) -> None:
+    write(repo, "ploni/c.py", line)
+    commit(repo)
+    done = run(repo, "", "HEAD^1", "HEAD")
+    assert done.returncode == 1
+    assert done.stderr.splitlines() == ["suppressions 2, ceiling 1 in .ratchet.json: raise suppressions_ceiling in the PR that adds one"]
+
+
+def test_m10_files_that_are_not_counted(repo: Path) -> None:
+    write(repo, "tests/helper.py", "def test_like():\n    assert 1\n")
+    commit(repo)
+    write(repo, "tests/helper.py", "X = 1\n")
+    write(repo, "docs/a.md", "not python: [\n")
     commit(repo)
     done = run(repo, "", "HEAD^1", "HEAD")
     assert (done.returncode, done.stderr) == (0, "")
