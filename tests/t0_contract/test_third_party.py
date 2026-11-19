@@ -69,8 +69,13 @@ def holds_path(text: str, path: str) -> bool:
     """Say whether the text holds the path whole, not as the start of a longer name.
 
     Why: `models/e2` must not pass because the file names `models/e2_onnx/`.
+
+    Contract: a folder path, ending in "/", may be the start of a longer path in the text
+    (`models/e2_onnx/` in `models/e2_onnx/ner.onnx`); a file path may not be followed by a
+    character of a name.
     """
-    return re.search(rf"{re.escape(path)}(?![\w.-])", text) is not None
+    edge = "" if path.endswith("/") else r"(?![\w.-])"
+    return re.search(re.escape(path) + edge, text) is not None
 
 
 def by_name(folder: Path) -> list[Path]:
@@ -83,7 +88,7 @@ def by_name(folder: Path) -> list[Path]:
 
 
 def judge_folder(folder: Path, third_party: str) -> list[str]:
-    """Return one line per revision folder or loose file of one name folder that is not named.
+    """Return one line per revision folder that is not named, one more if loose files are not.
 
     Why: a name folder may hold revision folders, files, or both, and each is judged.
     """
