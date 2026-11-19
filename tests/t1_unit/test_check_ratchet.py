@@ -29,7 +29,8 @@ Equivalence classes (ceiling_problems):
        valid JSON, or JSON that is not an object     one line
   EC14 suppressions rose from base to head by more than the ceiling did    one line, even
        under the ceiling ("so the rise shows", Achia's answer); the ceiling raised by at
-       least the rise: none; no ceiling at the base (the PR that sets it): only EC9
+       least the rise: none; no ceiling at the base (the PR that sets it): only EC9; the
+       ceiling lowered while the count stays or falls (tightening it): none
 
 Error paths (main):
   E1  wrong argument count                           exit 2, a usage line
@@ -142,6 +143,9 @@ def test_ec10_no_readable_ceiling(ratchet: str) -> None:
         (2, 1, 3, 3, []),
         (2, 2, 3, 3, []),
         (1, 2, None, 3, []),
+        (10, 10, 12, 10, []),
+        (10, 8, 12, 8, []),
+        (10, 8, 12, 9, []),
     ],
 )
 def test_ec14_a_rise_shows_in_the_ceiling(before: int, after: int, base: int | None, head: int, lines: list[str]) -> None:

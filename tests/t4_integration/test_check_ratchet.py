@@ -23,6 +23,8 @@ Matrix:
   M13 a Hebrew test-file name loses a test           exit 1, the name whole
   M14 shown() of a missing file is "", of a file its text; suppressions() counts, and raises
       CalledProcessError on a revision git does not know
+  M15 git show failing on a file git cat-file found (only that command swapped for one that
+      fails)                                         shown() raises CalledProcessError
   M10 a helper under tests/ loses a test-named function, and a Markdown file changes
                                                      exit 0: neither is a counted test file
 
@@ -34,6 +36,7 @@ import os
 import subprocess
 import sys
 from pathlib import Path
+from typing import Any
 
 import pytest
 
@@ -80,8 +83,8 @@ def run(folder: Path, body: str | None, *revisions: str) -> subprocess.Completed
     """Run the script in folder as the workflow runs it, with the body in PR_BODY."""
     environment = {key: value for key, value in os.environ.items() if key != "PR_BODY"}
     environment["PYTHONPATH"] = str(REPOSITORY)
-    # GitHub's runners write UTF-8; a pipe on Windows would use the local code page, which
-    # cannot write a Hebrew path (the script's Known limits).
+    # This reader decodes UTF-8, as GitHub's runners write; on Windows a pipe would carry the
+    # local code page (the script's Known limits).
     environment["PYTHONIOENCODING"] = "utf-8"
     if body is not None:
         environment["PR_BODY"] = body
@@ -210,6 +213,22 @@ def test_m14_shown_and_suppressions_on_their_own(repo: Path, monkeypatch: pytest
     assert check.suppressions("HEAD") == 1
     with pytest.raises(subprocess.CalledProcessError):
         check.suppressions("no-such-revision")
+
+
+def test_m15_git_show_failing_on_a_file_that_is_there(repo: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    # No real git state makes git show fail once git cat-file found the file, so only that
+    # one command is swapped for one that fails; everything else runs for real.
+    real = subprocess.run
+
+    def failing_show(args: list[str], **kwargs: Any) -> Any:
+        if args[:2] == ["git", "show"]:
+            args = ["git", "show", "no-such-revision:x"]
+        return real(args, **kwargs)
+
+    monkeypatch.chdir(repo)
+    monkeypatch.setattr(check.subprocess, "run", failing_show)
+    with pytest.raises(subprocess.CalledProcessError):
+        check.shown("HEAD", TESTS)
 
 
 def test_m6_a_test_file_deleted(repo: Path) -> None:
