@@ -210,7 +210,7 @@ When Ponytail flags one of these, the answer is the ADR number, and the abstract
 - **ruff's banned imports:** PyMuPDF anywhere, and networking modules under `ploni/`. Two hard constraints of `CLAUDE.md` become a lint error.
 - **mypy, strict, on `ploni/` only.** Not on `experiments/`, which is not product code.
 - **Vendored third-party code is outside both tools:** `experiments/*/vendored/` today, and the model's code wherever Phase 3 puts it. It is pinned byte for byte, so it cannot be changed to satisfy a linter.
-- **Suppressions:** a `noqa` or a `type: ignore` carries its reason on the same line. Phase 0 adds a ceiling counter for them to `.ratchet.json`: a number that may not rise, where the ratchet's existing counters may not fall, except in the PR that adds a suppression, which raises it by at least as much, in the same PR and with no decision of Achia's needed (Achia, 2026-11-20, "Same PR, no ask each time"; `PROMOTION.md` section 6).
+- **Suppressions:** a `noqa` or a `type: ignore` carries its reason on the same line. Phase 0 adds a ceiling counter for them to `.ratchet.json`: a number that may not rise, except in the PR that adds a `noqa` line, which raises it by at least as much, in the same PR and with no decision of Achia's needed (Achia, 2026-11-20, "Same PR, no ask each time"; `PROMOTION.md` section 6; a raise for a `type: ignore` line still needs his decision); the ratchet's existing counters may not fall.
 
 None of this exists yet. There is no `pyproject.toml`, and neither tool is installed or pinned.
 
