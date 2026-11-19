@@ -56,30 +56,65 @@ ROOT = Path(__file__).resolve().parents[2]
 COMMIT = re.compile(r"[0-9a-f]{40}")
 
 
+def holds_hash(text: str, revision: str) -> bool:
+    """Say whether the text holds the hash whole, not as part of a longer run of hex digits.
+
+    Why: the first 40 characters of a SHA-256 in the file must not pass for a commit hash.
+    """
+    return re.search(rf"(?<![0-9a-f]){revision}(?![0-9a-f])", text) is not None
+
+
+def holds_path(text: str, path: str) -> bool:
+    """Say whether the text holds the path whole, not as the start of a longer name.
+
+    Why: `models/e2` must not pass because the file names `models/e2_onnx/`.
+    """
+    return re.search(rf"{re.escape(path)}(?![\w.-])", text) is not None
+
+
+def by_name(folder: Path) -> list[Path]:
+    """Return the entries of a folder sorted by name as strings, capitals first, on every system.
+
+    Why: on Windows sorted() of paths ignores case, so the lines would come out in another
+    order there than on Linux.
+    """
+    return sorted(folder.iterdir(), key=lambda path: path.name)
+
+
+def judge_folder(folder: Path, third_party: str) -> list[str]:
+    """Return one line per revision folder or loose file of one name folder that is not named.
+
+    Why: a name folder may hold revision folders, files, or both, and each is judged.
+    """
+    found = []
+    for revision in (path for path in by_name(folder) if path.is_dir()):
+        if not COMMIT.fullmatch(revision.name):
+            found.append(f"{folder.name}/{revision.name}: not pinned")
+        elif not holds_hash(third_party, revision.name):
+            found.append(f"{folder.name}/{revision.name}: not in THIRD_PARTY.md")
+    if any(path.is_file() for path in folder.iterdir()) and not holds_path(third_party, f"models/{folder.name}/"):
+        found.append(f"{folder.name}: not in THIRD_PARTY.md")
+    return found
+
+
 def unlisted(models: Path, third_party: str) -> list[str]:
     """Return one line per model on disk that the THIRD_PARTY text does not name.
 
     Why: the judgement of the check, apart from where the folder and the text come from.
 
     Contract: for each name folder, each revision folder must be a full commit hash that the
-    text holds ("<name>/<revision>: not pinned" or "<name>/<revision>: not in THIRD_PARTY.md");
-    files directly in a name folder, or at the top of `models`, need their path
-    `models/<name>/` or `models/<file>` in the text. Sorted by name. A missing `models` gives [].
+    text holds whole ("<name>/<revision>: not pinned" or "<name>/<revision>: not in
+    THIRD_PARTY.md"); files directly in a name folder, or at the top of `models`, need their
+    path `models/<name>/` or `models/<file>` whole in the text. Sorted by name as strings. A
+    missing `models` gives [].
     """
     if not models.is_dir():
         return []
     found = []
-    for entry in sorted(models.iterdir()):
-        if entry.is_file():
-            if f"models/{entry.name}" not in third_party:
-                found.append(f"{entry.name}: not in THIRD_PARTY.md")
-            continue
-        for revision in sorted(path for path in entry.iterdir() if path.is_dir()):
-            if not COMMIT.fullmatch(revision.name):
-                found.append(f"{entry.name}/{revision.name}: not pinned")
-            elif revision.name not in third_party:
-                found.append(f"{entry.name}/{revision.name}: not in THIRD_PARTY.md")
-        if any(path.is_file() for path in entry.iterdir()) and f"models/{entry.name}/" not in third_party:
+    for entry in by_name(models):
+        if entry.is_dir():
+            found.extend(judge_folder(entry, third_party))
+        elif not holds_path(third_party, f"models/{entry.name}"):
             found.append(f"{entry.name}: not in THIRD_PARTY.md")
     return found
 
@@ -119,6 +154,7 @@ def test_ec4_loose_files_in_a_named_folder(tmp_path: Path) -> None:
 
 def test_ec5_loose_files_in_a_folder_not_named(tmp_path: Path) -> None:
     assert unlisted(make(tmp_path, "e2_onnx/ner.onnx"), "written to `models/e2_onnx_run3/`") == ["e2_onnx: not in THIRD_PARTY.md"]
+    assert unlisted(tmp_path, "the e2_onnx export") == ["e2_onnx: not in THIRD_PARTY.md"]
 
 
 def test_ec6_a_file_at_the_top(tmp_path: Path) -> None:
