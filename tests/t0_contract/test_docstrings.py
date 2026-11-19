@@ -92,7 +92,7 @@ def judged(body: list[ast.stmt], prefix: str = "") -> list[tuple[str, ast.AST, b
                 found.extend(judged(node.body, f"{prefix}{node.name}."))
         elif isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and not node.name.startswith("_"):
             found.append((prefix + node.name, node, True))
-        elif isinstance(node, ast.If | ast.Try | ast.With):
+        elif isinstance(node, ast.If | ast.Try | ast.TryStar | ast.With):
             handlers = [handler.body for handler in getattr(node, "handlers", [])]
             blocks = [node.body, *handlers, getattr(node, "orelse", []), getattr(node, "finalbody", [])]
             found.extend(judged([statement for block in blocks for statement in block], prefix))
