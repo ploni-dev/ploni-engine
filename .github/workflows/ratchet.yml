@@ -1,0 +1,36 @@
+# The ratchet of issue #78: a PR lowers no test function or assertion count without an override
+# line in its body, and adds no suppression without raising the ceiling in .ratchet.json
+# (PROMOTION.md section 6; PROCESS.md section 4.5). A workflow of its own, on pull requests only,
+# as Achia chose on 2026-11-20 ("New workflow file (Recommended)"). It came in a PR of its own,
+# with no .py file, because the changed-paths check forbids the two together. A PR that edits
+# this file is judged by its own edited copy; against that, only the review and CLAUDE.md stand.
+name: ratchet
+
+on:
+  pull_request:
+    # edited: an override line added to the body, or a new base, is judged again.
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  ratchet:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The checkout is GitHub's merge of the PR into its base. Its first parent is the
+          # base, an ancestor of the merge as the script needs, so HEAD^1...HEAD is what the PR
+          # changes and HEAD^1 holds the counts and the ceiling to compare with; depth 2
+          # fetches that parent.
+          fetch-depth: 2
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          # The version of the fast workflow (build-plan.md Phase 0: Python 3.13).
+          python-version: "3.13.5"
+      - run: python -m scripts.check_ratchet HEAD^1 HEAD
+        env:
+          # The body reaches the script only through the environment, never inside a shell command.
+          PR_BODY: ${{ github.event.pull_request.body }}
