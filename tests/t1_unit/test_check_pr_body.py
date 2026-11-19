@@ -19,7 +19,7 @@ Equivalence classes:
   EC7  the repository's own template, unfilled    both sections are there, and all is empty
   EC8  the workflow: on pull_request (opened, edited, synchronize, reopened); actions pinned by
        a full commit hash; the body reaches the script only through the environment
-  EC9  section(), labelled(), filled() each on its own; problems() without a template file
+  EC9  heading_of(), section(), labelled(), filled() each on its own; problems() without a template file
        raises FileNotFoundError
 
 Boundaries:
@@ -132,6 +132,13 @@ def test_ec8_the_workflow() -> None:
 def test_ec9_section_on_its_own() -> None:
     assert check_pr_body.section("## A\nx\n## B\ny\n", "## B") == "y\n"
     assert check_pr_body.section("## A\nx\n", "## B") is None
+
+
+def test_ec9_heading_of_on_its_own() -> None:
+    assert check_pr_body.heading_of("  ## Ponytail review \r") == "## Ponytail review"
+    assert check_pr_body.heading_of("### x") is None
+    assert check_pr_body.heading_of("    ## x") is None
+    assert check_pr_body.heading_of("## ") == "## "
 
 
 def test_ec9_labelled_on_its_own() -> None:
