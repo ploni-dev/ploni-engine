@@ -189,3 +189,17 @@ On the model: the two are close enough here that the choice turns on time and me
 None. This is not a waiver request.
 
 ## Decision
+
+Achia, 2026-11-19, in the Claude Code session. Told that no setup of this note found 100 percent of the names on both piles, he wrote "so lets have it -  remember we need accuracy of 100%." He was then asked, through the session's question dialog:
+
+> No setup found 100% of names on both halves. The plan's model got 100% on one half and 99.4% on the other; golem got the reverse. How should we go for 100%?
+
+He was offered "Combine and test fresh (Recommended)", "Pick plan's model now" and "Wait for new models", and chose:
+
+> Combine and test fresh (Recommended)
+
+That option was described to him as: "Run both models together, plus the three new models you allowed, and measure on new Supreme Court documents I bring you as a list first. Only a test on unseen documents can show a true 100%."
+
+The other two were described as: "Decide now: the plan's model with carry and titles (100% and 99.4%). The three new models are still tested later." and "Decide nothing yet. First run the three new models (each download needs your yes), then choose."
+
+What this decides, read with the options above: option 4 (the model of Phase 3) is not decided now; option 5 runs, together with a run of `joint` and `golem` combined, which no option above named, and on new real documents (option 6) rather than on these twenty. What it does not decide, because it was not asked: options 1, 2 and 3; which documents, and how many (Claude brings him the list before anything is fetched); how the two models are combined; and where this run stands against the rest of Phase 0, for which his order of 2026-11-18 (the rest of Phase 0, then the three models) stands. Each download still needs his yes, per model.
