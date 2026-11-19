@@ -28,6 +28,7 @@ Equivalence classes (the parts):
        above the first section is not a waiver; the repository's own docs/WAIVERS.md has none
   EC12 closed_phases(): a dated row is closed, an undated one is open; the repository's own
        STATUS table has phase 0 open
+  EC14 main(), with git and the clock stubbed: it judges by today(), not the machine's date
   EC13 covers(): an exact path; a folder ending in "/"; `*` within one folder; `**` across
        folders; several entries separated by commas, with spaces and backquotes
 
@@ -376,6 +377,16 @@ def test_b14_no_expiry_line() -> None:
 )
 def test_b15_today_is_the_date_at_utc_plus_3(now: datetime, day: date) -> None:
     assert check.today(now) == day
+
+
+def test_ec14_main_judges_by_today_at_utc_plus_3(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(check, "changed", lambda base, head, cwd: ["ploni/a.py"])
+    monkeypatch.setattr(check, "shown", lambda revision, path: WAIVERS if path == check.WAIVERS_FILE else STATUS)
+    monkeypatch.setattr(check, "today", lambda: date(2026, 12, 1))
+    assert check.main(["HEAD^1", "HEAD"], {"PR_BODY": "waiver: WAIVER-005"}) == 1
+    assert capsys.readouterr().err.splitlines() == ["WAIVER-005 has expired: 2026-11-18"]
+    monkeypatch.setattr(check, "today", lambda: date(2026, 11, 18))
+    assert check.main(["HEAD^1", "HEAD"], {"PR_BODY": "waiver: WAIVER-005"}) == 0
 
 
 @pytest.mark.parametrize("mark", ["‏", "‎", "؜"])

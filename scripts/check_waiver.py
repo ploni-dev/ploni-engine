@@ -18,9 +18,14 @@ exit code is 0. A body that cites nothing exits 0 without calling git. Wrong arg
 usage line, exit 2. A git failure: git's error, a traceback, a non-zero exit.
 
 Known limits:
-- A citation is found anywhere in the body, quotes and code spans included: a PR body that
-  talks about the check must not write the token itself.
-- Today is the date of the machine that runs it; on GitHub that is UTC.
+- A citation is found anywhere in the body, quotes and code spans included, the stricter
+  side. A PR body that quotes the token without citing (a question of Achia's, a review
+  brief) writes its colon as `&#58;`: GitHub shows it the same, and the check does not see it.
+- Achia's own PR that adds a waiver to docs/WAIVERS.md cannot cite that waiver: the base does
+  not have it yet.
+- A green run is not run again when a cited waiver expires while the PR is open; the merge
+  gate reads that old run. A push or an edit of the body runs it again.
+- Today is the date at UTC+3 (`today()`), whatever the machine's own zone.
 - A waiver is read only as `docs/WAIVERS.md` writes one: the ID alone on a line under
   `## Active` or `## Expired`, then `key: value` lines up to a blank or other line.
 - A scope entry is a path, a folder ending in "/", or a pattern where `*` stays inside one
@@ -32,7 +37,7 @@ import re
 import subprocess
 import sys
 from collections.abc import Mapping
-from datetime import date
+from datetime import UTC, date, datetime, timedelta, timezone
 from pathlib import Path, PurePosixPath
 
 from scripts.check_changed_paths import changed
@@ -40,7 +45,15 @@ from scripts.check_changed_paths import changed
 WAIVERS_FILE = "docs/WAIVERS.md"
 STATUS_FILE = "docs/STATUS.md"
 USAGE = "usage: python -m scripts.check_waiver <base> <head>, with the PR body in PR_BODY"
-CITATION = re.compile(r"waiver:\s*(\S+)", re.IGNORECASE)
+# A citation stops at a space, at a backquote (PROMOTION.md 8.4 writes it in backquotes) and at
+# a direction mark, which a Hebrew body may hold next to the ID and which cannot be seen.
+MARKS = "‎‏؜"
+CITATION = re.compile(rf"waiver:[\s{MARKS}]*([^\s`{MARKS}]+)", re.IGNORECASE)
+# The date of Israel's summer offset, UTC+3: a date waiver never lives past Israel's midnight;
+# in winter (UTC+2) it ends an hour early, the stricter side. No tz database is needed.
+ISRAEL_SUMMER = timezone(timedelta(hours=3))
+# Well inside the job's 2-minute timeout; git show of one file takes well under a second.
+GIT_TIMEOUT_SECONDS = 60
 WAIVER_ID = re.compile(r"WAIVER-\d+")
 FIELD = re.compile(r"([a-z]+):\s*(.*)")
 DATE = re.compile(r"\d{4}-\d{2}-\d{2}")
@@ -208,9 +221,21 @@ def shown(revision: str, path: str) -> str:
         ["git", "show", f"{revision}:{path}"],  # noqa: S607 git from PATH, as in CI
         stdout=subprocess.PIPE,
         check=True,
-        timeout=60,
+        timeout=GIT_TIMEOUT_SECONDS,
     )
     return done.stdout.decode("utf-8")
+
+
+def today(now: datetime | None = None) -> date:
+    """Return the date at UTC+3 of a moment, by default of now.
+
+    Why: GitHub's runners keep UTC, which would leave a date waiver in force up to three hours
+    into Israel's next day; Achia's answer reads "has expired after that date" by his calendar.
+
+    Contract: `now` must carry a time zone. In winter the date turns an hour before Israel's
+    midnight, so a waiver ends that hour early.
+    """
+    return (now or datetime.now(UTC)).astimezone(ISRAEL_SUMMER).date()
 
 
 def main(argv: list[str], environ: Mapping[str, str]) -> int:
@@ -230,7 +255,7 @@ def main(argv: list[str], environ: Mapping[str, str]) -> int:
         return 0
     base, head = argv
     paths = changed(base, head, Path.cwd())
-    found = problems(body, paths, shown(base, WAIVERS_FILE), shown(base, STATUS_FILE), date.today())
+    found = problems(body, paths, shown(base, WAIVERS_FILE), shown(base, STATUS_FILE), today())
     for line in found:
         print(line, file=sys.stderr)
     return 1 if found else 0
