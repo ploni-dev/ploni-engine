@@ -10,14 +10,15 @@ Test matrix:
 Equivalence classes:
   EC1  models/<name>/<revision>/ whose revision is in the file      no line
   EC2  a revision that is not in the file                           one line, name/revision
-  EC3  a revision folder that is not a full commit hash ("main", a short hash)
+  EC3  a revision folder that is not a full commit hash ("main", a short hash, a hash with a tail)
                                                                     one line: not pinned
   EC4  files directly in a name folder, the folder named in the file as `models/<name>/`
                                                                     no line
   EC5  such files, the folder not named                             one line, the name
   EC6  a file at the top of models/, named or not                   as EC4 and EC5, by its path
   EC7  an empty name folder                                         no line
-  EC8  no models folder (the repository on GitHub: models/ is not in git)    no line
+  EC8  no models folder (the repository on GitHub: models/ is not in git), or a file by that
+       name                                                          no line
   EC9  this laptop's models/ against the repository's docs/THIRD_PARTY.md    no line
 
 Boundaries:
@@ -102,8 +103,8 @@ def test_ec2_a_revision_not_listed(tmp_path: Path) -> None:
 
 
 def test_ec3_a_revision_that_is_not_a_commit_hash(tmp_path: Path) -> None:
-    models = make(tmp_path, "joint/main/", "joint/7b1256f/")
-    assert unlisted(models, "main 7b1256f") == ["joint/7b1256f: not pinned", "joint/main: not pinned"]
+    models = make(tmp_path, "joint/main/", "joint/7b1256f/", f"joint/{HASH}-old/")
+    assert unlisted(models, f"main 7b1256f {HASH}-old") == ["joint/7b1256f: not pinned", f"joint/{HASH}-old: not pinned", "joint/main: not pinned"]
 
 
 def test_ec4_loose_files_in_a_named_folder(tmp_path: Path) -> None:
@@ -124,6 +125,8 @@ def test_ec7_an_empty_name_folder(tmp_path: Path) -> None:
 
 
 def test_ec8_no_models_folder(tmp_path: Path) -> None:
+    assert unlisted(tmp_path / "models", "") == []
+    (tmp_path / "models").write_bytes(b"not a folder")
     assert unlisted(tmp_path / "models", "") == []
 
 
