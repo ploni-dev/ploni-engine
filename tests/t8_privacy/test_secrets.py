@@ -229,7 +229,7 @@ def test_a1_inside_a_word_or_a_url(kind: str) -> None:
     assert secrets_in(f"see https://example.invalid/?k={MAKERS[kind](9)}&x=1\n") == [f"1: {kind}"]
 
 
-def test_a2_in_a_binary_file(tmp_path: Path) -> None:
+def test_a2_in_a_binary_file() -> None:
     data = b"\x89PNG\r\n\x1a\n\xff\xfe" + MAKERS["aws"](4).encode() + b"\x00\x81"
     assert secrets_in(data.decode("utf-8", "replace")) == ["3: aws"]
 
@@ -247,3 +247,81 @@ def test_a3_a_fine_grained_github_key() -> None:
 def test_a4_two_keys_of_one_kind_and_keys_out_of_order() -> None:
     assert secrets_in(MAKERS["aws"](6) + "\n" + MAKERS["aws"](7) + "\n") == ["1: aws", "2: aws"]
     assert secrets_in(MAKERS["hugging face"](6) + "\n" + MAKERS["aws"](6) + "\n") == ["1: hugging face", "2: aws"]
+
+
+def readable_stub(data: bytes) -> str:
+    """Stand in for `readable` until it exists."""
+    return data.decode("utf-8", "replace")
+
+
+# One value per alternative of each prefix pattern, and one at each pattern's shortest length.
+ALTERNATIVES = [
+    ("github", _fake("gh" + "o_", MIXED, 36, 1)),
+    ("github", _fake("gh" + "u_", MIXED, 36, 1)),
+    ("github", _fake("gh" + "s_", MIXED, 36, 1)),
+    ("github", _fake("gh" + "r_", MIXED, 36, 1)),
+    ("github", _fake("github" + "_pat_", MIXED + "_", 22, 1)),
+    ("slack", _fake("xo" + "xa-", MIXED, 10, 1)),
+    ("slack", _fake("xo" + "xp-", MIXED, 10, 1)),
+    ("slack", _fake("xo" + "xr-", MIXED, 10, 1)),
+    ("slack", _fake("xo" + "xs-", MIXED, 10, 1)),
+    ("sk", _fake("s" + "k-proj-", MIXED, 20, 1)),
+    ("sk", _fake("s" + "k-", MIXED, 20, 1)),
+    ("hugging face", _fake("h" + "f_", MIXED, 30, 1)),
+    ("aws", _fake("AS" + "IA", UPPER, 16, 1)),
+    ("private key", "-----BEGIN PGP PRIVATE" + " KEY BLOCK-----"),
+]
+
+
+@pytest.mark.parametrize(("kind", "value"), ALTERNATIVES)
+def test_a5_each_alternative_and_each_shortest_length(kind: str, value: str) -> None:
+    assert secrets_in(f"x = 1\n{value}\n") == [f"2: {kind}"]
+
+
+# The assigned rule: each name, a suffix, the two separators, both quotes, upper case, a dict
+# or JSON key, the shortest value; and a .env line.
+ASSIGNED = [
+    "api_key = '" + _fake("", MIXED, 12, 3) + "'",
+    "apikey: \"" + _fake("", MIXED, 16, 3) + "\"",
+    "API-KEY='" + _fake("", MIXED, 16, 3) + "'",
+    "secret = '" + _fake("", MIXED, 16, 3) + "'",
+    "SECRET_KEY = '" + _fake("", MIXED, 40, 3) + "'",
+    "aws_secret_access_key = '" + _fake("", MIXED, 40, 3) + "'",
+    "private_key = '" + _fake("", MIXED, 40, 3) + "'",
+    "password = '" + _fake("", MIXED, 16, 3) + "'",
+    "PASSWD='" + _fake("", MIXED, 16, 3) + "'",
+    "token = '" + _fake("", MIXED, 16, 3) + "'",
+    '{"password": "' + _fake("", MIXED, 16, 3) + '"}',
+    '{"api_key": "' + _fake("", MIXED, 32, 3) + '"}',
+    "{'token': '" + _fake("", MIXED, 32, 3) + "'}",
+    "DB_PASSWORD=" + _fake("", MIXED, 16, 3),
+    "HF_TOKEN=" + _fake("", MIXED, 16, 3),
+]
+
+
+@pytest.mark.parametrize("line", ASSIGNED)
+def test_a6_a_value_given_to_a_name_that_says_secret(line: str) -> None:
+    assert [found.split(": ", 1)[0] for found in secrets_in(f"x = 1\n{line}\n")] == ["2"]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "pad_token = \"<|endoftext|>\"\n",
+        "bos_token = \"<|begin_of_text|>\"\n",
+        "eos_token = '<|im_start|>'\n",
+        "token: \"${{secrets.GITHUB_TOKEN}}\"\n",
+        "      token: ${{ secrets.GITHUB_TOKEN }}\n",
+        "risk-" + _fake("", string.ascii_lowercase, 24, 4) + "\n",
+        "self_hf_" + _fake("", MIXED, 34, 4) + "\n",
+        "api_key =\n    '" + _fake("", MIXED, 16, 4) + "'\n",
+    ],
+)
+def test_b4_special_tokens_templates_and_word_boundaries(text: str) -> None:
+    assert secrets_in(text) == []
+
+
+@pytest.mark.parametrize("encoding", ["utf-16", "utf-16-le", "utf-16-be"])
+def test_a7_a_key_in_a_utf_16_file(encoding: str) -> None:
+    data = ("x = 1\nHF_TOKEN=" + MAKERS["hugging face"](8) + "\n").encode(encoding)
+    assert secrets_in(readable_stub(data)) == ["2: hugging face"]
