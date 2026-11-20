@@ -4,7 +4,8 @@ Why: Phase 0 asks for a program that installs, imports and runs, with the comman
 the plan in place, and a `selftest` that shows which models are on the machine and that
 nothing of Ploni loaded network code (build-plan.md Phase 0, Deliverable and Gate).
 
-Contract: `python -m ploni <command>`. `selftest` prints one line per model revision under
+Contract: `ploni <command>` once installed (pyproject.toml), or `python -m ploni <command>`.
+`selftest` prints one line per model revision under
 the models folder, and one per name folder that holds files outside a revision folder, then "offline OK", and exits 0; or a line that names the networking
 modules that are loaded, and exits 1. Each other command writes one line on the error
 stream that says it is not built yet, and exits 2. No command, or an unknown one, is a usage
@@ -18,8 +19,6 @@ Known limits:
   `_socket` and `_ssl`, the C modules under every network call, are not on the list yet: a
   module that imports them directly is not seen. They come with the PR of the longer
   no-network list (build-plan.md Phase 0, "Four stricter rules").
-- The command is `python -m ploni`, not `ploni`: an installed `ploni` command needs an entry
-  in `pyproject.toml`, which comes with issue #17.
 - The models folder is `models/` beside `ploni/`, the place of a development checkout. An
   installed program will have another; that comes with Phase 13.
 - The inventory lists what is on disk; whether each model is in `docs/THIRD_PARTY.md` is the

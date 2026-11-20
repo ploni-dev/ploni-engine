@@ -1,11 +1,16 @@
 """The project section of pyproject.toml: the installed `ploni` command, built by one pinned tool.
 
 Why: `build-plan.md` Phase 0, Gate: "`ploni selftest` prints the model inventory and "offline
-OK"". Until a project section exists only `python -m ploni selftest` works. Achia decided on
-2026-11-20 to build it as asked: "Add a project section to pyproject.toml with a `ploni`
-command, so `ploni selftest` works as the Phase 0 gate words it (today only `python -m ploni
-selftest` works). Adds one build tool, setuptools, pinned with its hash." These tests pin what
-that answer allows and no more.
+OK"". Until a project section exists only `python -m ploni selftest` works.
+Achia, 2026-11-20, asked "Which of the four may I build? (1) the `ploni` command, (2) the
+nightly full test run on GitHub, (3) the PR size limit, (4) the quick check before every
+commit. You can pick several.", answered "Why not all of them"; asked "I read "Why not all of
+them" as: yes, build all four (the ploni command, the full test run, the PR size limit, the
+check before commit). Is that right?", he chose "Yes, all four (Recommended)".
+The option for this part, "1. The ploni command", read: "Type `ploni selftest` instead of
+`python -m ploni selftest`. One line in the protected settings file, plus the standard install
+tool setuptools, pinned."
+These tests pin what that answer allows and no more.
 
 Test matrix:
 

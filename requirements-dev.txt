@@ -1,4 +1,5 @@
-# Development tools for the fast suite: pytest, ruff, mypy, with everything they pull in.
+# Development tools: the fast suite (pytest, ruff, mypy, with everything they pull in) and the
+# build tool of the installed `ploni` command (setuptools).
 # Every version is pinned and every wheel is hashed (CLAUDE.md, Hard constraints).
 # Install:  python -m pip install --require-hashes -r requirements-dev.txt
 #
