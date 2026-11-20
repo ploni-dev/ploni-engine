@@ -15,8 +15,12 @@ staged files do not decide it):
   M7  a vendored file staged            exit 0: ruff leaves out what pyproject.toml excludes
   M8  under a GIT_INDEX_FILE of a commit's own    exit 0, and that index untouched
   M9  a tool's own output                reaches the screen
-  M10 the hook file run by sh, with a stand-in for the environment's python that exits 3, and
-      one that exits 0                   the hook ends as it ends: it starts that python
+  M10 the hook run as git runs it (`git hook run`), with a stand-in for the environment's python
+      that exits 3, and one that exits 0  the hook ends as it ends: it starts that python
+  M11 the hook in a worktree with no .venv of its own   it starts the main checkout's
+  M12 no .venv anywhere                  it says so on the error stream and starts python on PATH
+  M14 no .venv and no python on PATH    the hook fails: the commit is not made
+  M13 a step that runs out of time (the real timeout, made one second)   it fails, "timed out"
   M4  the hook file                        LF line ends in the repository and on checkout
                                            (`.gitattributes`), a shell shebang, and it runs
                                            `scripts.pre_commit`
@@ -109,14 +113,65 @@ def test_m9_a_tool_s_own_output_reaches_the_screen(monkeypatch: pytest.MonkeyPat
     assert "the reason, from the tool" in capfd.readouterr().out
 
 
+def _stand_in(folder: Path, name: str, code: int) -> None:
+    """Write a stand-in for python that exits with `code`, as an executable sh script."""
+    folder.mkdir(parents=True, exist_ok=True)
+    (folder / name).write_text(f"#!/bin/sh\nexit {code}\n", encoding="utf-8", newline="\n")
+    (folder / name).chmod(0o755)
+
+
+def _repository(folder: Path) -> Path:
+    """Return a git repository with one commit and this branch's hook in .githooks/."""
+    git(folder, "init", "-q", "-b", "main")
+    (folder / "a.txt").write_text("x\n", encoding="utf-8")
+    git(folder, "add", "a.txt")
+    git(folder, "commit", "-q", "-m", "base")
+    (folder / ".githooks").mkdir()
+    shutil.copy(HOOK, folder / ".githooks" / "pre-commit")
+    return folder / ".githooks"
+
+
+def _hook(folder: Path, hooks: Path, env: dict[str, str] | None = None) -> int:
+    """Run the pre-commit hook in a repository as git runs it before a commit; return its exit code."""
+    return hook._run([hook.GIT, "-c", f"core.hooksPath={hooks}", "hook", "run", "pre-commit"], folder, env=env).returncode
+
+
+VENV_PYTHON = Path(".venv", "Scripts", "python.exe") if os.name == "nt" else Path(".venv", "bin", "python")
+
+
 @pytest.mark.parametrize("code", [3, 0])
-def test_m10_the_hook_file_starts_the_environment_s_python(tmp_path: Path, code: int) -> None:
-    shutil.copy(HOOK, tmp_path / "pre-commit")
-    folder = tmp_path / ".venv" / ("Scripts" if os.name == "nt" else "bin")
-    folder.mkdir(parents=True)
-    stand_in = folder / ("python.exe" if os.name == "nt" else "python")
-    stand_in.write_text(f"#!/bin/sh\nexit {code}\n", encoding="utf-8", newline="\n")
-    stand_in.chmod(0o755)
-    sh = shutil.which("sh")
-    assert sh is not None
-    assert hook._run([sh, "pre-commit"], tmp_path).returncode == code
+def test_m10_the_hook_starts_the_environment_s_python(tmp_path: Path, code: int) -> None:
+    hooks = _repository(tmp_path)
+    _stand_in(tmp_path / VENV_PYTHON.parent, VENV_PYTHON.name, code)
+    assert _hook(tmp_path, hooks) == code
+
+
+def test_m11_in_a_worktree_the_hook_starts_the_main_checkout_s_python(tmp_path: Path) -> None:
+    main = tmp_path / "main"
+    main.mkdir()
+    hooks = _repository(main)
+    _stand_in(main / VENV_PYTHON.parent, VENV_PYTHON.name, 4)
+    git(main, "worktree", "add", "-q", str(tmp_path / "wt"))
+    assert _hook(tmp_path / "wt", hooks) == 4
+
+
+def test_m12_with_no_environment_the_hook_says_so_and_runs_python_on_path(tmp_path: Path, capfd: pytest.CaptureFixture[str]) -> None:
+    hooks = _repository(tmp_path)
+    bin_folder = tmp_path / "bin"
+    _stand_in(bin_folder, "python", 5)
+    env = {**os.environ, "PATH": f"{bin_folder}{os.pathsep}{os.environ['PATH']}"}
+    assert _hook(tmp_path, hooks, env) == 5
+    assert "no .venv found here or in the main checkout" in capfd.readouterr().err
+
+
+def test_m13_a_step_out_of_time(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(hook, "STEP_TIMEOUT_SECONDS", 1)
+    assert hook._status([sys.executable, "-c", "import time; time.sleep(10)"], ROOT) == 1
+    assert "timed out after 1 seconds" in capsys.readouterr().out
+
+
+def test_m14_with_no_python_at_all_the_hook_fails(tmp_path: Path) -> None:
+    hooks = _repository(tmp_path)
+    empty = tmp_path / "empty"
+    empty.mkdir()
+    assert _hook(tmp_path, hooks, {**os.environ, "PATH": str(empty)}) != 0
