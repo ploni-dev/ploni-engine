@@ -8,6 +8,8 @@ main. Equivalence classes:
                                      command and says it is not built yet; nothing on the output
   EC2  no command, or an unknown one    exit code 2 (argparse's usage error)
   EC3  selftest                      what `selftest` returns
+  EC15 no argument list given (the installed `ploni` command calls main so)    the arguments
+       of the process, without the program name
 
 inventory. Equivalence classes:
   EC4  models/<name>/<revision>/ with files    one line per revision: name, revision, number
@@ -188,3 +190,9 @@ def test_ec14_a_name_folder_it_cannot_read(tmp_path: Path) -> None:
         assert cli.inventory(tmp_path) == ["m rev 1 files 1 bytes"]
     finally:
         allow_reading(tmp_path / "locked")
+
+
+def test_ec15_no_argument_list_reads_the_process_arguments(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(cli.sys, "argv", ["ploni", "usage"])
+    assert cli.main() == cli.NOT_BUILT
+    assert capsys.readouterr().err == "ploni usage: not built yet\n"

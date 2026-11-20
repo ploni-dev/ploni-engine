@@ -9,21 +9,38 @@ Matrix (`python -m ploni ...` started in the repository):
                                  are the inventory of models/
   M2  a stub                     exit 2; nothing on the output; one line on the error stream
   M3  no command                 exit 2; a usage line on the error stream
+  M4  the installed `ploni selftest`: the project installed as pyproject.toml says, offline,
+      into a fresh environment that sees the packages of this one (setuptools among them, as
+      requirements-dev.txt holds it)      exit 0; the last line is "offline OK"
 
 Not in the fast suite: PROCESS.md section 5.1 puts t4 in the full suite. Until the full
 workflow exists it is run by hand: python -m pytest tests/t4_integration
 """
 
+import os
 import subprocess
 import sys
+import sysconfig
+import venv
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
 
 
+# The seconds a run of the command may take, as before M4; and an install into a fresh
+# environment, which takes about ten on the laptop.
+RUN_TIMEOUT_SECONDS = 60
+INSTALL_TIMEOUT_SECONDS = 120
+
+
+def started(*command: str, timeout: int = RUN_TIMEOUT_SECONDS) -> subprocess.CompletedProcess[str]:
+    """Run one program in the repository and return how it ended."""
+    return subprocess.run([*command], cwd=ROOT, capture_output=True, text=True, timeout=timeout, check=False)  # noqa: S603 fixed argv, no shell
+
+
 def run(*argv: str) -> subprocess.CompletedProcess[str]:
     """Run `python -m ploni` with these arguments in the repository."""
-    return subprocess.run([sys.executable, "-m", "ploni", *argv], cwd=ROOT, capture_output=True, text=True, timeout=60, check=False)  # noqa: S603 fixed argv, no shell
+    return started(sys.executable, "-m", "ploni", *argv)
 
 
 def test_m1_selftest() -> None:
@@ -42,3 +59,19 @@ def test_m2_a_stub() -> None:
 def test_m3_no_command() -> None:
     done = run()
     assert done.returncode == 2 and "usage" in done.stderr
+
+
+def test_m4_the_installed_command(tmp_path: Path) -> None:
+    environment = tmp_path / "env"
+    venv.create(environment, with_pip=False)
+    scripts = environment / ("Scripts" if os.name == "nt" else "bin")
+    python = scripts / ("python.exe" if os.name == "nt" else "python")
+    base = {"base": str(environment), "platbase": str(environment)}
+    site = Path(sysconfig.get_paths(scheme="venv", vars=base)["purelib"])
+    (site / "outer.pth").write_text(sysconfig.get_paths()["purelib"] + "\n", encoding="utf-8")
+    pip = (str(python), "-m", "pip", "install", "-q", "--no-index", "--no-build-isolation", "--no-deps", "-e", str(ROOT))
+    install = started(*pip, timeout=INSTALL_TIMEOUT_SECONDS)
+    assert install.returncode == 0, install.stdout + install.stderr
+    done = started(str(scripts / ("ploni.exe" if os.name == "nt" else "ploni")), "selftest")
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert done.stdout.splitlines()[-1] == "offline OK"
