@@ -42,8 +42,8 @@ Adversarial:
   B4  a model's special token, a template expression, `risk-` and `self_hf_` before a long
       word (the word boundaries of `sk-` and `hf_`), a name and its value on two lines   not found
 
-Sample size (CLAUDE.md, Tests: detectors 40 positive and 40 negative): EC1, A1, A5, A6 and A7
-give 77 positive cases, EC2, B1, B2 and B4 give 51 negative ones.
+Sample size (CLAUDE.md, Tests: detectors 40 positive and 40 negative): EC1, A1, A5, A6, A7 and A8
+give 83 positive cases, EC2, B1, B2 and B4 give 54 negative ones.
 
 Not applicable: the Hebrew axes of the test-matrix skill but one (EC2 holds Hebrew text, so that
 the scan is shown not to break on it), and the document axes: no document is handled.
