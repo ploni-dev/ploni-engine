@@ -1,4 +1,5 @@
-# Development tools for the fast suite: pytest, ruff, mypy, with everything they pull in.
+# Development tools: the fast suite (pytest, ruff, mypy, with everything they pull in) and the
+# build tool of the installed `ploni` command (setuptools).
 # Every version is pinned and every wheel is hashed (CLAUDE.md, Hard constraints).
 # Install:  python -m pip install --require-hashes -r requirements-dev.txt
 #
@@ -12,7 +13,9 @@
 #     --only-binary=:all: --platform manylinux_2_28_x86_64 \
 #     --platform manylinux_2_17_x86_64 --platform manylinux2014_x86_64 \
 #     --python-version 3.13 --implementation cp --abi cp313
-# Asked for by name: pytest, ruff, mypy. The rest are their dependencies.
+# Asked for by name: pytest, ruff, mypy, and setuptools, the one build tool of the installed
+# `ploni` command (pyproject.toml; Achia, 2026-11-20), one wheel for every platform, its hash
+# PyPI's for setuptools-84.2.1-py3-none-any.whl. The rest are dependencies of the first three.
 ast-serialize==0.13.1 \
     --hash=sha256:9f99786e0d62082a5b121b3437f3167562133711df22128de1e9886f57f0b226 \
     --hash=sha256:ddf7cbc9c8abf70102c4a088efe154bb86bfb825b0a10e556d2b15972cf99bd7
@@ -41,5 +44,7 @@ pytest==9.2.0 \
 ruff==0.17.5 \
     --hash=sha256:40ca8afaac309b41a5b2e09e4e7beb1f824826b93c25697c4d74f573324fba4e \
     --hash=sha256:aa415d57c244299279901d776607fee3df7831c2a7435433fbfacde8632c6550
+setuptools==84.2.1 \
+    --hash=sha256:ca140b45d5325a9478f880e351484f62fef15f336462e449ca0c03c873d589c2
 typing-extensions==4.16.0 \
     --hash=sha256:481caa481374e813c1b176ada14e97f1f67a4539ce9cfeb3f350d78d6370c2e8

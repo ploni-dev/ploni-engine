@@ -123,7 +123,7 @@ Updating is a PR of its own: replace `guides/` from a newer commit, and update t
 
 ## Tools of the fast suite
 
-None is shipped. They come from PyPI, pip's default index. They run on the laptop and in the GitHub workflow, and once the workflow is on `main`, a PR merges only when their run on its last commit is green (`CLAUDE.md`, Merging). Each is pinned to one version in `requirements-dev.txt`, with the SHA-256 of its Windows and of its Linux wheel for CPython 3.13, and is installed with `pip install --require-hashes`, which refuses any other file. `requirements-dev.txt` and the workflow come with the PR of issues #17 and #22.
+None is shipped. They come from PyPI, pip's default index. They run on the laptop and in the GitHub workflow, and once the workflow is on `main`, a PR merges only when their run on its last commit is green (`CLAUDE.md`, Merging). Each is pinned to one version in `requirements-dev.txt`, with the SHA-256 of its Windows and of its Linux wheel for CPython 3.13 (setuptools: of its one wheel for every platform), and is installed with `pip install --require-hashes`, which refuses any other file. `requirements-dev.txt` and the workflow come with the PR of issues #17 and #22.
 
 Where they come from: Achia asked on 2026-11-15 for tests on every merge, "like a pytest and jenkins (but whatever fits here)". ruff and mypy are named in `PROCESS.md` section 4.5.
 
@@ -142,8 +142,9 @@ Where they come from: Achia asked on 2026-11-15 for tests on every merge, "like 
 | packaging | 26.3 | Apache-2.0 OR BSD-2-Clause | needed by pytest |
 | pluggy | 1.7.0 | MIT | needed by pytest |
 | pygments | 2.21.0 | BSD-2-Clause | needed by pytest |
+| setuptools | 84.2.1 | MIT; vendors autocommand 2.2.2, which declares LGPLv3 | the build tool of the installed `ploni` command (`pyproject.toml`; Achia, 2026-11-20) |
 
-None declares GPL or AGPL. pathspec declares MPL 2.0; it is used as published and is not shipped.
+None declares GPL or AGPL. pathspec declares MPL 2.0; it is used as published and is not shipped. setuptools carries, vendored inside it, autocommand 2.2.2, which declares LGPLv3. setuptools is installed with the development tools, on the laptop and on GitHub's runner, from PyPI with its hash, and builds the installed `ploni` command; nothing of it is shipped, and nothing of it is copied into `ploni/`. Achia was asked on 2026-11-20 whether that is fine and chose "Fine as it is (Recommended)" (the question, which said it runs "only on this laptop", is quoted in #157).
 
 The workflow uses two GitHub actions, each pinned by commit:
 

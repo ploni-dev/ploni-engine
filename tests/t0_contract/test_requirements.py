@@ -55,8 +55,10 @@ Known limits:
     `--require-hashes` does. The hashes under `experiments/` are PyPI's for the pinned versions,
     read from its metadata on 2026-11-20; no install with them has been run since.
   - Only files named `requirements*.txt` are read, and `-r` may name only such a file, so that
-    every file an install reads is read here. `pyproject.toml` declares no dependency yet; when
-    it does, this check is widened in the same PR.
+    every file an install reads is read here. `pyproject.toml` declares no dependency, and its one
+    build requirement, setuptools, is pinned there to the version requirements-dev.txt pins and
+    hashes (a hash cannot be written in `pyproject.toml`); tests/t0_contract/test_project.py
+    holds both. A dependency added there widens this check in the same PR.
   - A line broken inside a word is joined here with a space, so it is refused where pip would
     join it with nothing; a backslash followed by white space continues the line here, where pip
     stops on it. Both differences refuse, or leave pip to fail; neither lets a line through.
