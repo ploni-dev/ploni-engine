@@ -22,7 +22,7 @@ name that is `logging` or a dunder, and the attribute `logging` of any module a 
 (`concurrent.futures._base.logging`, also bound by a from-import), but for a module of the
 project's own outside ploni/safety/ (`settings.logging`), which cannot import `logging` under
 this rule. So is any of three names that lead from any object to every other
-(`object.__subclasses__`, `f.__globals__`, `f.__builtins__`; ESCAPES), as an attribute or by
+(`object.__subclasses__`, `f.__globals__`, a frame's `f_locals`; ESCAPES), as an attribute or by
 `getattr`. The files judged are the product's two folders, ploni/ and ui/ (build-plan.md section
 4.7), but ploni/safety/. What that leaves open is under Known limits.
 
@@ -31,8 +31,9 @@ product code may do: a plain logging call is refused too (before `install` runs,
 module's last-resort handler prints the message of a WARNING or worse); the warnings module is
 held to three names (its `catch_warnings` and `showwarning` take warnings around the filter);
 only three names of the filter may be used, `event` and `install` only called as statements; a
-package above a guarded module may not be used as a value; one of the modules may not be imported by a call;
-a name bound to one of the modules and bound again is still judged as that module. Some code to
+package above a guarded module may not be used as a value; one of the modules may not be
+imported by a call; a name bound to one of the modules and bound again is still judged as that
+module. Some code to
 come is refused by them: `warnings.catch_warnings()` around a model load, `@warnings.deprecated`,
 a local name `warnings` in a file that imports the module. Silence a library's warnings with
 `warnings.filterwarnings` and its `module` argument; a need beyond that is a helper under
@@ -49,7 +50,7 @@ Equivalence classes:
   EC3  one of the modules imported by a call, its name given by position, by keyword, or
        relative with a package                                             a line
   EC4  one of the modules, or a package above it, used as a value         a line
-  EC5  the scope: every file under ploni/ but those under ploni/safety/
+  EC5  the scope: every file under ploni/ and ui/ but those under ploni/safety/
   EC6  the repository                                                      no line
   EC7  the order of the lines `setups` gives                                by line
   EC8  a package's own file (`__init__.py`) with a relative import         resolved from the package
@@ -71,6 +72,8 @@ Adversarial:
   A4  the ways pass 2 of the review ran: the globals of `install` or `event`, either function
       handed on as a value, a dunder read past `Event`                     refused
   A5  the attribute `logging` of another module (`concurrent.futures._base.logging`)    refused
+  A6  an escape from any object (ESCAPES), as an attribute or by getattr: every class, a
+      function's globals or builtins, a frame's or a traceback's globals, locals, frame   refused
 
 Not applicable: the Hebrew axes and the document axes of the test-matrix skill, as the input
 is Python source and no document is handled.
@@ -86,8 +89,10 @@ Known limits:
     result of such an `install` can be read, and a project module's field `logging` is allowed.
   - A module read as a mapping or through another reader: `vars(m)["logging"]`,
     `m.__dict__["logging"]`, `operator.attrgetter("logging")(m)`.
-  - Objects found while the program runs: `gc.get_objects()`, `Event.mro()` onward into the enum
-    module.
+  - Reflection while the program runs, as a class: `gc`, frames and tracebacks reached by other
+    names than ESCAPES, `inspect` (`inspect.getmodule(Event)` gives the filter's module itself,
+    `inspect.stack()`), `Event.mro()` onward into the enum module, and a stream handed to
+    `install` that reads its caller's frame. A later route of this class is covered by this line.
   - A warning's text is written as it is until `install` has run: `warnings.warn` is allowed, so
     product code warns only with fixed text, never with text from a document.
   - Names that code reaches some other way are not seen: code given to `exec`, a module found
@@ -148,8 +153,9 @@ SAFETY = "ploni.safety."
 # The function that reads an attribute by a name given as text.
 GETATTR = "getattr"
 # The names that lead from any object to every other: every class, a function's module globals,
-# its builtins. Product code has no use for them.
-ESCAPES = ("__subclasses__", "__globals__", "__builtins__")
+# its builtins, and a frame's or a traceback's globals, locals and frame. Product code has no use
+# for them.
+ESCAPES = ("__subclasses__", "__globals__", "__builtins__", "f_globals", "f_locals", "tb_frame")
 # The product's two folders (build-plan.md section 4.7), and the folder of the filter, not judged.
 PRODUCT_FOLDERS = ("ploni", "ui")
 FILTER_FOLDER = ("ploni", "safety")
