@@ -31,8 +31,10 @@ The one push needs a separator sign in a quoted option of git before `push`
 Known limits: the shapes are a fixed list, not a grammar of two shells. A shape that is
 not in the list is not tested. Nothing here starts a shell: that a shell really runs the
 command in each shape was looked at by hand in the review of this branch, not here.
-I2 is not held two deep: a shape may put a word next to another shape's bracket, which
-the reader then takes for a branch name it cannot know.
+I2 is held two deep in the full suite only (tests/sizes.py), and there not for the 40 pairs of
+KNOWN_REFUSED_TWO_DEEP: a shape may put a word next to another shape's bracket, which the
+reader then takes for a branch name it cannot know, and refuses. Those pairs are held to be
+refused, and no other.
 """
 
 import pytest
@@ -195,14 +197,53 @@ def test_i2_an_allowed_command_is_let_through_in_every_shape(shape: str) -> None
 OUTER_FOR_ALLOWED = SHAPES if full() else ["{c}"]
 
 
-# Measured in the first full run, 2026-11-20: a push that names its branch, inside a command
-# substitution inside another (20 of the 41 * 41 pairs each), is refused although it would not
-# reach main. That errs to the safe side; guard.py's Known limits do not name it, and changing
-# guard.py needs a decision of Achia's (PROMOTION.md, Level 3), so it is named here and in
-# docs/STATUS.md.
+# Measured in the first full run, 2026-11-20: the two allowed pushes, inside
+# `OUT="$({c} 2>&1)"; echo "$OUT"` or `OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"`, with a
+# second shape around or inside it, are refused although they would not reach main: the reader
+# takes `; echo $OUT` for push targets (the case of the module's Known limits: a word beside a
+# bracket taken for a branch). That errs to the safe side, and changing guard.py needs a decision
+# of Achia's (PROMOTION.md, Level 3). The pairs, as (command, outer, inner), exactly:
 KNOWN_REFUSED_TWO_DEEP = {
-    "git push -u origin feat/x",
-    "git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x",
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'OUT="$(cd "/c/my dir" && {c})"', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"'),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'OUT="$(cd "/c/my dir" && {c})"', 'OUT="$({c} 2>&1)"; echo "$OUT"'),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"'),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"', 'OUT="$({c} 2>&1)"; echo "$OUT"'),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"', 'Write-Output "it`"s done"; {c}'),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"', "cat <<'EOF'\nit's a text\nEOF\n{c}"),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"', "echo 'a'\n{c}"),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'OUT="$({c} 2>&1)"; echo "$OUT"', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"'),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'OUT="$({c} 2>&1)"; echo "$OUT"', 'OUT="$({c} 2>&1)"; echo "$OUT"'),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'OUT="$({c} 2>&1)"; echo "$OUT"', 'Write-Output "it`"s done"; {c}'),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'OUT="$({c} 2>&1)"; echo "$OUT"', "cat <<'EOF'\nit's a text\nEOF\n{c}"),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'OUT="$({c} 2>&1)"; echo "$OUT"', "echo 'a'\n{c}"),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'OUT="$({c})"', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"'),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'OUT="$({c})"', 'OUT="$({c} 2>&1)"; echo "$OUT"'),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'OUT="`{c}`"', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"'),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'OUT="`{c}`"', 'OUT="$({c} 2>&1)"; echo "$OUT"'),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'Write-Output "it`"s done"; {c}', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"'),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'Write-Output "it`"s done"; {c}', 'OUT="$({c} 2>&1)"; echo "$OUT"'),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'git commit -q -m "subject\n\nbody" && {c}', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"'),
+    ("git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x", 'git commit -q -m "subject\n\nbody" && {c}', 'OUT="$({c} 2>&1)"; echo "$OUT"'),
+    ('git push -u origin feat/x', 'OUT="$(cd "/c/my dir" && {c})"', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"'),
+    ('git push -u origin feat/x', 'OUT="$(cd "/c/my dir" && {c})"', 'OUT="$({c} 2>&1)"; echo "$OUT"'),
+    ('git push -u origin feat/x', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"'),
+    ('git push -u origin feat/x', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"', 'OUT="$({c} 2>&1)"; echo "$OUT"'),
+    ('git push -u origin feat/x', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"', 'Write-Output "it`"s done"; {c}'),
+    ('git push -u origin feat/x', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"', "cat <<'EOF'\nit's a text\nEOF\n{c}"),
+    ('git push -u origin feat/x', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"', "echo 'a'\n{c}"),
+    ('git push -u origin feat/x', 'OUT="$({c} 2>&1)"; echo "$OUT"', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"'),
+    ('git push -u origin feat/x', 'OUT="$({c} 2>&1)"; echo "$OUT"', 'OUT="$({c} 2>&1)"; echo "$OUT"'),
+    ('git push -u origin feat/x', 'OUT="$({c} 2>&1)"; echo "$OUT"', 'Write-Output "it`"s done"; {c}'),
+    ('git push -u origin feat/x', 'OUT="$({c} 2>&1)"; echo "$OUT"', "cat <<'EOF'\nit's a text\nEOF\n{c}"),
+    ('git push -u origin feat/x', 'OUT="$({c} 2>&1)"; echo "$OUT"', "echo 'a'\n{c}"),
+    ('git push -u origin feat/x', 'OUT="$({c})"', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"'),
+    ('git push -u origin feat/x', 'OUT="$({c})"', 'OUT="$({c} 2>&1)"; echo "$OUT"'),
+    ('git push -u origin feat/x', 'OUT="`{c}`"', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"'),
+    ('git push -u origin feat/x', 'OUT="`{c}`"', 'OUT="$({c} 2>&1)"; echo "$OUT"'),
+    ('git push -u origin feat/x', 'Write-Output "it`"s done"; {c}', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"'),
+    ('git push -u origin feat/x', 'Write-Output "it`"s done"; {c}', 'OUT="$({c} 2>&1)"; echo "$OUT"'),
+    ('git push -u origin feat/x', 'git commit -q -m "subject\n\nbody" && {c}', 'OUT="$(echo "all green" && {c} 2>&1)"; echo "$OUT"'),
+    ('git push -u origin feat/x', 'git commit -q -m "subject\n\nbody" && {c}', 'OUT="$({c} 2>&1)"; echo "$OUT"'),
 }
 
 
@@ -212,15 +253,20 @@ def test_i2_an_allowed_command_is_let_through_in_every_shape_inside_every_shape(
         outer.format(c=inner.format(c=command))
         for inner in SHAPES
         for command in ALLOWED
-        if command not in KNOWN_REFUSED_TWO_DEEP and refused(outer.format(c=inner.format(c=command)))
+        if (command, outer, inner) not in KNOWN_REFUSED_TWO_DEEP and refused(outer.format(c=inner.format(c=command)))
     ]
     assert wrongly == []
 
 
-def test_the_allowed_commands_known_to_be_refused_two_deep_are() -> None:
-    assert KNOWN_REFUSED_TWO_DEEP <= set(ALLOWED)
-    for command in KNOWN_REFUSED_TWO_DEEP:
-        assert any(refused(outer.format(c=inner.format(c=command))) for outer in SHAPES for inner in SHAPES), command
+def test_the_allowed_commands_known_to_be_refused_two_deep_are_refused_there_and_nowhere_else() -> None:
+    found = {
+        (command, outer, inner)
+        for command in {known[0] for known in KNOWN_REFUSED_TWO_DEEP}
+        for outer in SHAPES
+        for inner in SHAPES
+        if refused(outer.format(c=inner.format(c=command)))
+    }
+    assert found == KNOWN_REFUSED_TWO_DEEP
 
 
 @pytest.mark.parametrize("command", KNOWN_MISSED)
@@ -239,4 +285,5 @@ def test_the_sample_is_over_the_minimum_for_an_invariant() -> None:
     assert len(REFUSED) * len(SHAPES) >= 500
     assert len(REFUSED) * len(SHAPES) * len(SHAPES) >= 5000
     assert len(ALLOWED) * len(SHAPES) >= 500
-    assert len(ALLOWED) * len(SHAPES) * len(OUTER_FOR_ALLOWED) >= (INVARIANT_FULL if full() else 500)
+    checked = len(ALLOWED) * len(SHAPES) * len(OUTER_FOR_ALLOWED) - (len(KNOWN_REFUSED_TWO_DEEP) if full() else 0)
+    assert checked >= (INVARIANT_FULL if full() else 500)

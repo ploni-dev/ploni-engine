@@ -11,7 +11,7 @@ Invariants:
   I3  the order of the paths and of the citations does not change the answer.
 
 Sample (in the full suite, tests/sizes.py: five IDs, six paths, three days, 6,144; I1 over 27
-bodies that cite nothing, 5,184): every subset of four IDs, times every subset of four paths, times two days: 512
+bodies that cite nothing, 6,912): every subset of four IDs, times every subset of four paths, times two days: 512
 cases, each also with paths and citations reversed.
 
 Known limits: the pools are fixed; other shapes are covered by the unit tests
@@ -53,13 +53,23 @@ COVERS = {
 }
 
 
-# Bodies that cite no waiver: the empty body only, in the fast suite; in the full suite also 26
-# bodies that name a waiver where no citation stands (mid-sentence, after a word, as a quote),
-# 27 * 64 * 3 = 5,184 cases for I1.
+# Bodies that cite no waiver: the empty body only, in the fast suite. In the full suite also the
+# seven shapes of the unit test's A7 that hold the token and its colon where no citation stands,
+# each with five IDs that give a line whenever they are read as cited (999 absent, 002 expired,
+# 006 no scope, 007 an unreadable expiry, 008 a closed phase): 36 * 64 * 3 = 6,912 cases for I1.
+NOT_CITATIONS = (
+    "> waiver: {id}",
+    "> > waiver: {id}",
+    "PROMOTION.md says a PR carries `waiver: {id}` in its body.",
+    "see waiver: {id}",
+    "בקשה waiver: {id}",
+    "waiver:\n{id}",
+    "> - waiver: {id}",
+)
+MISREAD_IDS = ("WAIVER-999", "WAIVER-002", "WAIVER-006", "WAIVER-007", "WAIVER-008")
 BODIES = [""]
 if full():
-    BODIES += [f"Line {n}: waiver WAIVER-00{n % 9 + 1} is named mid sentence.\n" for n in range(13)]
-    BODIES += [f"> waiver: WAIVER-00{n % 9 + 1}\nsee the quote above ({n})\n" for n in range(13)]
+    BODIES += [shape.format(id=waiver_id) for shape in NOT_CITATIONS for waiver_id in MISREAD_IDS]
 
 
 def subsets(pool: list[str]) -> list[list[str]]:
