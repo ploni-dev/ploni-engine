@@ -10,9 +10,9 @@ The rule: no tracked file holds a match of PATTERNS: a cloud or service key by i
 (AWS, GitHub, Slack, Google, an `sk-` key, Hugging Face), a private key block, a quoted value of
 twelve or more characters given to a name that says key, secret, password or token (in code, a
 dict or JSON; not one that begins with `<` or `$`, a model's special token or a template), or such
-a value given to such a name on a `.env` line (indented or after `export`, either line end). A
-file is read as UTF-8, its zero bytes dropped, so that a file written as UTF-16 (PowerShell
-5.1's default) is read too.
+a value given to such a name on a `.env` line (indented or after `export`, followed by spaces or a
+comment, either line end). A file is read as UTF-8, its byte order mark and zero bytes dropped,
+so that a file written as UTF-16 (PowerShell 5.1's default) is read too.
 
 Test matrix:
 
@@ -39,6 +39,7 @@ Adversarial:
       separators, both quotes, upper case, a dict and a JSON key, a .env line   found
   A7  a key in a file written as UTF-16, with and without a byte order mark    found
   A8  a .env line with a Windows line end, as text and from UTF-16                found
+  A9  a .env file with a byte order mark (UTF-8, UTF-16) and the key on its first line   found
   B4  a model's special token, a template expression, `risk-` and `self_hf_` before a long
       word (the word boundaries of `sk-` and `hf_`), a name and its value on two lines   not found
 
@@ -90,11 +91,14 @@ PATTERNS = {
         r"(?i)(?:api[_-]?key|secret(?:[_-]?(?:access[_-]?)?key)?|private[_-]?key|passw(?:or)?d|token)"
         r"['\"]?[ \t]*[:=][ \t]*['\"](?![<$])[^'\"\s]{12,}['\"]"
     ),
-    "env": r"(?m)^[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:KEY|SECRET|PASSWORD|PASSWD|TOKEN)=(?![<$])[^\s'\"]{12,}\r?$",
+    "env": r"(?m)^[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:KEY|SECRET|PASSWORD|PASSWD|TOKEN)=(?![<$])[^\s'\"]{12,}[ \t]*(?:#.*?)?\r?$",
 }
 
 
 COMPILED = {kind: re.compile(pattern) for kind, pattern in PATTERNS.items()}
+# The byte order marks an editor or a shell writes at the start of a file: UTF-8, and UTF-16 in
+# each byte order (PowerShell 5.1 writes the little-endian one).
+BYTE_ORDER_MARKS = (b"\xef\xbb\xbf", b"\xff\xfe", b"\xfe\xff")
 # git from PATH, as a full path, as in CI; the seconds a git command may take.
 GIT = shutil.which("git") or "git"
 GIT_TIMEOUT_SECONDS = 60
@@ -129,8 +133,12 @@ def readable(data: bytes) -> str:
     Why: a file written as UTF-16 holds a zero byte beside every ASCII character, so a key in it
     would match no pattern; PowerShell 5.1 writes UTF-16 by default.
 
-    Contract: never raises; a byte that is not UTF-8 becomes U+FFFD.
+    Contract: a byte order mark at the start (UTF-8, or UTF-16 of either order) is dropped first,
+    so that a key on the first line is read as the line's start. Never raises; a byte that is
+    not UTF-8 becomes U+FFFD.
     """
+    for mark in BYTE_ORDER_MARKS:
+        data = data.removeprefix(mark)
     return data.decode("utf-8", "replace").replace("\0", "")
 
 
