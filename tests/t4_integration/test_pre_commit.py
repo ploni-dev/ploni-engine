@@ -12,12 +12,20 @@ staged files do not decide it):
   M5  what git says is staged, in a temporary repository: an added, a modified and a renamed
       file are staged; a deleted one, an unstaged edit and an untracked file are not
   M6  a git command that fails             CalledProcessError
+  M7  a vendored file staged            exit 0: ruff leaves out what pyproject.toml excludes
+  M8  under a GIT_INDEX_FILE of a commit's own    exit 0, and that index untouched
+  M9  a tool's own output                reaches the screen
+  M10 the hook file run by sh, with a stand-in for the environment's python that exits 3, and
+      one that exits 0                   the hook ends as it ends: it starts that python
   M4  the hook file                        LF line ends in the repository and on checkout
                                            (`.gitattributes`), a shell shebang, and it runs
                                            `scripts.pre_commit`
 """
 
+import os
+import shutil
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -78,3 +86,37 @@ def test_m5_what_git_says_is_staged(tmp_path: Path) -> None:
 def test_m6_a_git_command_that_fails(tmp_path: Path) -> None:
     with pytest.raises(subprocess.CalledProcessError):
         hook._output([hook.GIT, "rev-parse", "no-such-revision"], tmp_path)
+
+
+def test_m7_a_vendored_file(monkeypatch: pytest.MonkeyPatch) -> None:
+    vendored = next(ROOT.glob("experiments/*/vendored/**/*.py"))
+    monkeypatch.setattr(hook, "staged", lambda cwd: [vendored.relative_to(ROOT).as_posix()])
+    assert hook.main(ROOT) == 0
+
+
+def test_m8_under_an_index_of_a_commit_s_own(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    index = tmp_path / "commit-index"
+    monkeypatch.setenv("GIT_INDEX_FILE", str(index))
+    monkeypatch.setattr(hook, "staged", lambda cwd: [])
+    assert hook.main(ROOT) == 0
+    assert not index.exists()
+
+
+def test_m9_a_tool_s_own_output_reaches_the_screen(monkeypatch: pytest.MonkeyPatch, capfd: pytest.CaptureFixture[str]) -> None:
+    monkeypatch.setattr(hook, "staged", lambda cwd: [])
+    monkeypatch.setattr(hook, "steps", lambda paths: [("say", [sys.executable, "-c", "print('the reason, from the tool')"])])
+    assert hook.main(ROOT) == 0
+    assert "the reason, from the tool" in capfd.readouterr().out
+
+
+@pytest.mark.parametrize("code", [3, 0])
+def test_m10_the_hook_file_starts_the_environment_s_python(tmp_path: Path, code: int) -> None:
+    shutil.copy(HOOK, tmp_path / "pre-commit")
+    folder = tmp_path / ".venv" / ("Scripts" if os.name == "nt" else "bin")
+    folder.mkdir(parents=True)
+    stand_in = folder / ("python.exe" if os.name == "nt" else "python")
+    stand_in.write_text(f"#!/bin/sh\nexit {code}\n", encoding="utf-8", newline="\n")
+    stand_in.chmod(0o755)
+    sh = shutil.which("sh")
+    assert sh is not None
+    assert hook._run([sh, "pre-commit"], tmp_path).returncode == code
