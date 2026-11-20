@@ -321,6 +321,11 @@ ASSIGNED = [
     "{'token': '" + _fake("", MIXED, 32, 3) + "'}",
     "DB_PASSWORD=" + _fake("", MIXED, 16, 3),
     "HF_TOKEN=" + _fake("", MIXED, 16, 3),
+    "AWS_SECRET_ACCESS_KEY=" + _fake("", MIXED, 40, 3),
+    "CLIENT_SECRET=" + _fake("", MIXED, 24, 3),
+    "DB_PASSWD=" + _fake("", MIXED, 16, 3),
+    "export DB_PASSWORD=" + _fake("", MIXED, 16, 3),
+    "  DB_PASSWORD=" + _fake("", MIXED, 16, 3),
 ]
 
 
@@ -340,6 +345,9 @@ def test_a6_a_value_given_to_a_name_that_says_secret(line: str) -> None:
         "risk-" + _fake("", string.ascii_lowercase, 24, 4) + "\n",
         "self_hf_" + _fake("", MIXED, 34, 4) + "\n",
         "api_key =\n    '" + _fake("", MIXED, 16, 4) + "'\n",
+        "ANTHROPIC_API_KEY=<your-api-key>\n",
+        "GITHUB_TOKEN=${{secrets.GITHUB_TOKEN}}\n",
+        "PLONI_TOKEN=${PLONI_TOKEN_FROM_CI}\n",
     ],
 )
 def test_b4_special_tokens_templates_and_word_boundaries(text: str) -> None:
@@ -350,3 +358,9 @@ def test_b4_special_tokens_templates_and_word_boundaries(text: str) -> None:
 def test_a7_a_key_in_a_utf_16_file(encoding: str) -> None:
     data = ("x = 1\nvalue = " + MAKERS["hugging face"](8) + "\n").encode(encoding)
     assert secrets_in(readable(data)) == ["2: hugging face"]
+
+
+def test_a8_a_env_line_with_a_windows_line_end() -> None:
+    line = "DB_PASSWORD=" + _fake("", MIXED, 16, 5)
+    assert secrets_in(f"x = 1\r\n{line}\r\ny = 2\r\n") == ["2: env"]
+    assert secrets_in(readable(f"x = 1\r\n{line}\r\n".encode("utf-16"))) == ["2: env"]
