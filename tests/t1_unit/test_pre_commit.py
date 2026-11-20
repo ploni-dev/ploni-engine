@@ -88,3 +88,12 @@ def test_ec8_a_step_fails_and_every_step_runs(monkeypatch: pytest.MonkeyPatch, c
     assert hook.main(Path(".")) == 1
     assert ran == ["ruff", "mypy", "pytest"]
     assert capsys.readouterr().out.splitlines()[-1] == "check before commit: FAILED: ruff"
+
+
+def test_the_check_tests_are_the_four_named() -> None:
+    assert hook.CHECK_TESTS == (
+        "tests/t8_privacy/test_secrets.py",
+        "tests/t8_privacy/test_imports.py",
+        "tests/t0_contract/test_docstrings.py",
+        "tests/t0_contract/test_third_party.py",
+    )

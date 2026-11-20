@@ -1,0 +1,7 @@
+#!/bin/sh
+# The check before a commit (PROCESS.md section 5.6; scripts/pre_commit.py). Git runs it once
+# `git config core.hooksPath .githooks` is set in the clone. The project's environment first.
+for python in .venv/Scripts/python.exe .venv/bin/python; do
+    if [ -x "$python" ]; then exec "$python" -m scripts.pre_commit; fi
+done
+exec python -m scripts.pre_commit
