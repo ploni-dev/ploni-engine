@@ -1,7 +1,7 @@
 """Tests of scripts/check_nightly.py: did the last nightly full run on main fail?
 
 The check reads GitHub's list of runs of `.github/workflows/full.yml` and says whether the newest
-finished one on main, of a nightly or a by-hand start, failed. The workflow that calls it (a PR of
+finished nightly one on main failed. The workflow that calls it (a PR of
 its own) then runs the full suite on the PR (Achia, 2026-11-20: "A robot blocks the next merge
 (Recommended)", then "Yes, run the full tests (Recommended)").
 
@@ -12,7 +12,7 @@ last_run(), equivalence classes:
   L4 a pull_request run, newer than a nightly one                the nightly one (PR runs do not count)
   L5 a run on another branch                                     not counted
   L6 a run not finished (queued, in_progress)                    not counted
-  L7 a by-hand run (workflow_dispatch) on main                   counted
+  L7 a by-hand run (workflow_dispatch) on main, newer            not counted: only the nightly result
 failed(), equivalence classes:
   F1 no run                                                      None
   F2 conclusion success                                          None
@@ -82,9 +82,11 @@ def test_l6_a_run_not_finished_does_not_count(status: str) -> None:
     assert check.last_run([run("2026-11-21T01:17:00Z", status=status, conclusion=None), done]) == done
 
 
-def test_l7_a_run_by_hand_counts() -> None:
-    by_hand = run("2026-11-21T10:00:00Z", event="workflow_dispatch", conclusion="failure")
-    assert check.last_run([run("2026-11-21T01:17:00Z"), by_hand]) == by_hand
+@pytest.mark.parametrize("conclusion", ["success", "failure"])
+def test_l7_a_run_by_hand_does_not_count(conclusion: str) -> None:
+    nightly = run("2026-11-21T01:17:00Z", conclusion="failure" if conclusion == "success" else "success")
+    by_hand = run("2026-11-21T10:00:00Z", event="workflow_dispatch", conclusion=conclusion)
+    assert check.last_run([nightly, by_hand]) == nightly
 
 
 def test_f1_no_run() -> None:

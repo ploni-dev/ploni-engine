@@ -12,7 +12,7 @@ reading; the workflow that calls it, in a PR of its own, runs the full suite whe
 
 Contract: `python -m scripts.check_nightly <owner/repo>`, with the token in GITHUB_TOKEN. It
 asks GitHub's REST API for the newest finished runs of full.yml on main, takes the newest by
-`created_at` of those started nightly (`schedule`) or by hand (`workflow_dispatch`), and writes
+`created_at` of those started by the nightly schedule (`schedule`), and writes
 `failed=true` when its conclusion is anything but success, else `failed=false`, as one line
 appended to the file named by GITHUB_OUTPUT (on stdout when it is not set). When it failed, it
 also prints a GitHub warning line naming the conclusion and the run's page. Exit 0 either way:
@@ -21,9 +21,12 @@ token: a line on the error stream, exit 2. An HTTP or network error: a traceback
 exit, so the check is red rather than silent.
 
 Known limits:
-- One page of RUNS_PER_PAGE finished runs is read; when all of them were started by PRs, no
-  nightly run is seen and the answer is failed=false. Those runs carry the PR's branch, which the
-  branch filter leaves out, so only a by-hand run on another branch fills the page that way.
+- Only nightly runs count. A run started by hand from the Actions tab neither sets nor clears
+  the block: his option says "the next night's run then clears the block for everyone". That
+  is Claude's reading of "the last nightly result", and it only narrows.
+- One page of RUNS_PER_PAGE finished runs on main is read; when all of them were started by
+  hand, no nightly run is seen and the answer is failed=false. A PR's labelled runs carry the
+  PR's branch, which the branch filter leaves out.
 - No run at all (before the first night) is failed=false.
 - A cancelled or timed-out night counts as failed: only success is green.
 """
@@ -41,18 +44,19 @@ API = "https://api.github.com"
 API_VERSION = "2022-11-28"
 WORKFLOW_FILE = "full.yml"
 BRANCH = "main"
-COUNTED_EVENTS = ("schedule", "workflow_dispatch")
-# A month of nights fits with room for runs by hand.
+COUNTED_EVENTS = ("schedule",)
+# A month of nights fits, with room for runs started by hand on main.
 RUNS_PER_PAGE = 50
 TIMEOUT_SECONDS = 30
 USAGE = "usage: python -m scripts.check_nightly <owner/repo>"
 
 
 def last_run(runs: list[dict[str, Any]]) -> dict[str, Any] | None:
-    """Return the newest finished nightly or by-hand run on main, or None when there is none.
+    """Return the newest finished nightly run on main, or None when there is none.
 
-    Why: a run started by a PR's label shows that PR's state, not main's, and a run not finished
-    has no verdict yet; the list's own order is not relied on.
+    Why: a run started by a PR's label shows that PR's state, not main's; a run started by hand
+    is not the nightly result (the module's Known limits); a run not finished has no verdict yet;
+    the list's own order is not relied on.
 
     Contract: `runs` as GitHub lists workflow runs (dicts with created_at, event, head_branch,
     status). created_at is ISO 8601 in UTC, as GitHub writes it, so it compares as text.
