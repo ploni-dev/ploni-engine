@@ -50,6 +50,8 @@ Equivalence classes (the parts):
        an ordinary attribute set to False does not refuse
   EC19 a module that sets __test__ to a false value at its top level: pytest collects none
        of its tests, so its test functions count 0 (its assertions still count)
+  EC20 refused() and switched_off() on their own: __new__ refuses, a plain test class does
+       not; a chained `__test__ = flag = False` switches off, `__test__ = True` does not
   EC12 overrides(): a line read whole; in backquotes; spaces; Hebrew in the reason
   EC13 is_test_file(): tests/**/test_*.py and tests/**/*_test.py, the files pytest collects
        by default
@@ -93,6 +95,7 @@ import pytest
 
 import ast
 from pathlib import Path
+from typing import cast
 
 from scripts import check_ratchet as check
 from scripts.check_ratchet import Counts
@@ -314,6 +317,13 @@ def test_ec18_an_attribute_set_to_false_does_not_refuse() -> None:
 def test_ec19_a_module_switched_off_counts_no_test(line: str) -> None:
     source = f"{line}\n\n\ndef test_a():\n    assert 1\n\n\nclass TestB:\n    def test_b(self):\n        assert 2\n"
     assert check.count(source) == Counts(test_functions=0, assertions=2)
+
+
+def test_ec20_refused_and_switched_off_on_their_own() -> None:
+    assert check.refused(cast(ast.ClassDef, ast.parse("class TestA:\n    def __new__(cls): ...\n").body[0])) is True
+    assert check.refused(cast(ast.ClassDef, ast.parse("class TestA:\n    def test_a(self): ...\n").body[0])) is False
+    assert check.switched_off(ast.parse("__test__ = flag = False\n").body) is True
+    assert check.switched_off(ast.parse("flag = False\n__test__ = True\n").body) is False
 
 
 def test_ec18_a_class_switched_off_is_a_drop() -> None:

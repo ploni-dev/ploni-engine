@@ -28,7 +28,8 @@ Known limits:
 - Functions are counted, not named, and parametrized cases are not counted: a renamed test
   and a shorter parameter list are not seen; assertions catch part of the second.
 - Test functions are counted as pytest collects them only as far as the source shows it:
-  `collected()` lists the shapes where the two differ, none of which a test file here uses.
+  `collected()`, `refused()` and `switched_off()` list the shapes where the two differ, none
+  of which a test file here uses.
 - A test file renamed counts as one file gone and one new: the old one's counters fall to
   zero and need override lines.
 - A suppression is a `#`, spaces, an optional `ruff:`, `flake8:` or `mypy:`, then `noqa`,
@@ -76,7 +77,8 @@ class Counts(NamedTuple):
     Contract: test_functions counts the test functions pytest collects, as far as the
     source shows it (`collected()`, with its Known limits): module-level `test*` functions
     and `test*` methods of `Test*` classes, nested Test* classes too, not of a class pytest
-    refuses; assertions counts `assert` statements anywhere in the file.
+    refuses, and none in a module switched off (`switched_off()`); assertions counts
+    `assert` statements anywhere in the file.
     """
 
     test_functions: int
@@ -104,7 +106,8 @@ def count(source: str) -> Counts:
 
     Why: the two counters of section 6, read from the code, not from a run.
 
-    Contract: raises SyntaxError when the source does not parse.
+    Contract: test functions 0 when the module is switched off (`switched_off()`), else
+    `collected()`. Raises SyntaxError when the source does not parse.
     """
     tree = ast.parse(source)
     functions = 0 if switched_off(tree.body) else collected(tree.body)
@@ -149,7 +152,7 @@ def refused(test_class: ast.ClassDef) -> bool:
 
     Known limits: read from the class's own body only (measured in the review of this
     change): an `__init__` inherited from a base class, `__init__` bound to another
-    function, an `__init__` under an `if`, an abstract Test* class, or a function given
+    function, an `__init__` under an `if`, an `async def __init__`, an abstract Test* class, or a function given
     `.__test__ = False` after it are still counted; a class not named Test* with
     `__test__ = True` is not.
     """
@@ -164,7 +167,12 @@ def switched_off(body: list[ast.stmt]) -> bool:
     or `0` there switches off every test inside, silently.
 
     Contract: reads plain and annotated assignments of a constant to the name `__test__`,
-    standing directly in `body`.
+    chained ones too, standing directly in `body`.
+
+    Known limits: read from the body alone (measured in the review of this change): a
+    `__test__` set from another name (`OFF = False` then `__test__ = OFF`) or under an `if`
+    is not seen, so its tests still count; a false value set and then set true again counts
+    as switched off, a false drop, the safe side.
     """
     for node in body:
         targets = node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
