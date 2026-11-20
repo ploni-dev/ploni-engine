@@ -16,6 +16,8 @@ one pytest run. Each step's name is printed before it runs, every step runs, and
 is 1 when any failed (git then makes no commit), else 0.
 
 Known limits:
+- The checks run without git's hook variables (GIT_HOOK_VARIABLES), so in a worktree and under
+  `git commit -a` they read the repository as the fast suite does, not the commit's own index.
 - ruff and mypy read the staged files as they are in the folder, not as staged: a file staged
   and then edited again is checked as edited. The scans read every tracked file, as they do in
   the fast suite.
@@ -25,6 +27,7 @@ Known limits:
 - The tests and layers it does not run (unit, property, layering) run in the fast suite.
 """
 
+import os
 import shutil
 import subprocess
 import sys
@@ -39,26 +42,40 @@ CHECK_TESTS = (
     "tests/t0_contract/test_third_party.py",
 )
 PRODUCT = "ploni/"
-# git from PATH, as a full path; the seconds a step may take (the scans take about five).
+# git from PATH, as a full path; the seconds a step may take (the scans took about two, measured
+# 2026-11-20); a step that takes longer fails.
 GIT = shutil.which("git") or "git"
 STEP_TIMEOUT_SECONDS = 300
+# What git sets for a hook and a check tool must not inherit: a test that runs git in a folder of
+# its own would otherwise write into the index of the commit being made.
+GIT_HOOK_VARIABLES = ("GIT_INDEX_FILE", "GIT_DIR", "GIT_WORK_TREE")
 
 
-def _run(command: list[str], cwd: Path) -> subprocess.CompletedProcess[bytes]:
-    """Return how one program ended, with its output captured only when asked for by `_output`."""
-    return subprocess.run(command, cwd=cwd, stdout=subprocess.PIPE if command[0] == GIT else None, check=False, timeout=STEP_TIMEOUT_SECONDS)  # noqa: S603 fixed argv, no shell
+def _run(
+    command: list[str], cwd: Path, *, stdout: int | None = None, env: dict[str, str] | None = None
+) -> subprocess.CompletedProcess[bytes]:
+    """Return how one program ended: its output kept when `stdout` is PIPE, else on the screen."""
+    return subprocess.run(command, cwd=cwd, stdout=stdout, env=env, check=False, timeout=STEP_TIMEOUT_SECONDS)  # noqa: S603 fixed argv, no shell
 
 
 def _output(command: list[str], cwd: Path) -> bytes:
     """Return what a git command printed, or raise CalledProcessError when it fails."""
-    done = _run(command, cwd)
+    done = _run(command, cwd, stdout=subprocess.PIPE)
     done.check_returncode()
     return done.stdout
 
 
 def _status(command: list[str], cwd: Path) -> int:
-    """Return the exit code of one check, its output passed through."""
-    return _run(command, cwd).returncode
+    """Return the exit code of one check, its output on the screen; 1 when it runs out of time.
+
+    The check runs without the variables git sets for a hook (GIT_HOOK_VARIABLES).
+    """
+    env = {name: value for name, value in os.environ.items() if name not in GIT_HOOK_VARIABLES}
+    try:
+        return _run(command, cwd, env=env).returncode
+    except subprocess.TimeoutExpired:
+        print(f"timed out after {STEP_TIMEOUT_SECONDS} seconds", flush=True)
+        return 1
 
 
 def steps(paths: list[str]) -> list[tuple[str, list[str]]]:
@@ -75,7 +92,8 @@ def steps(paths: list[str]) -> list[tuple[str, list[str]]]:
     product = [path for path in code if path.startswith(PRODUCT)]
     found = []
     if code:
-        found.append(("ruff", [*python, "ruff", "check", *code]))
+        # --force-exclude: ruff leaves out what pyproject.toml excludes even when it is named.
+        found.append(("ruff", [*python, "ruff", "check", "--force-exclude", *code]))
     if product:
         found.append(("mypy", [*python, "mypy", *product]))
     found.append(("scans", [*python, "pytest", "-q", "-p", "no:cacheprovider", *CHECK_TESTS]))
@@ -99,8 +117,9 @@ def main(cwd: Path) -> int:
 
     Why: the entry point of the hook, given its folder so that a test can call it.
 
-    Contract: prints "== <name>" before each step; every step runs; ends with a line naming the
-    failed steps when any failed, and returns 1; else returns 0.
+    Contract: prints "== <name>" before each step; every step runs, and one that runs out of
+    time fails; ends with a line naming the failed steps when any failed, and returns 1; else
+    returns 0. Raises CalledProcessError when git cannot say what is staged.
     """
     failed = []
     for name, command in steps(staged(cwd)):

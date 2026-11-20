@@ -1,3 +1,4 @@
-# The hook of the check before a commit runs under sh, which reads a carriage return as part of
-# a command: it keeps LF line ends on every checkout (scripts/pre_commit.py).
+# The hook of the check before a commit keeps LF line ends on every checkout (core.autocrlf is
+# true on this laptop). Git for Windows' sh reads a CRLF hook as it is (measured 2026-11-20);
+# a POSIX sh that does not drop the carriage return (WSL, Cygwin) would not.
 .githooks/* text eol=lf
