@@ -330,6 +330,8 @@ ASSIGNED = [
     "DB_PASSWD=" + _fake("", MIXED, 16, 3),
     "export DB_PASSWORD=" + _fake("", MIXED, 16, 3),
     "  DB_PASSWORD=" + _fake("", MIXED, 16, 3),
+    "DB_PASSWORD=" + _fake("", MIXED, 18, 3) + " ",
+    "DB_PASSWORD=" + _fake("", MIXED, 18, 3) + "  # prod",
 ]
 
 
@@ -352,6 +354,8 @@ def test_a6_a_value_given_to_a_name_that_says_secret(line: str) -> None:
         "ANTHROPIC_API_KEY=<your-api-key>\n",
         "GITHUB_TOKEN=${{secrets.GITHUB_TOKEN}}\n",
         "PLONI_TOKEN=${PLONI_TOKEN_FROM_CI}\n",
+        "API_KEY=<your-api-key>  # set me\n",
+        "MAX_TOKEN=512\n",
     ],
 )
 def test_b4_special_tokens_templates_and_word_boundaries(text: str) -> None:
@@ -368,3 +372,9 @@ def test_a8_a_env_line_with_a_windows_line_end() -> None:
     line = "DB_PASSWORD=" + _fake("", MIXED, 16, 5)
     assert secrets_in(f"x = 1\r\n{line}\r\ny = 2\r\n") == ["2: env"]
     assert secrets_in(readable(f"x = 1\r\n{line}\r\n".encode("utf-16"))) == ["2: env"]
+
+
+@pytest.mark.parametrize("encoding", ["utf-8-sig", "utf-16"])
+def test_a9_a_env_file_with_a_byte_order_mark(encoding: str) -> None:
+    line = "DB_PASSWORD=" + _fake("", MIXED, 18, 6)
+    assert secrets_in(readable(f"{line}\r\n".encode(encoding))) == ["1: env"]
