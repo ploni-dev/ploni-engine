@@ -11,7 +11,8 @@ with optional extras, spaces around `==` and an environment marker, and at least
 `--hash=sha256:` of 64 hex digits among its words. The only other lines are `-r` of another
 requirements file that exists, `--require-hashes` and `--only-binary :all:`, each alone on its
 line. No other option (`-e`, an index URL, `-f`), no URL or path as a requirement, no wildcard
-version. Lines are joined and comments cut as pip does it.
+version. Comments are cut as pip cuts them; lines are joined much as pip joins them (Known
+limits).
 
 Test matrix:
 
@@ -42,8 +43,9 @@ Adversarial:
   A3  a hash inside a marker string                                         a line
   A4  a continued requirement with its hash on a comment line               a line
 
-And for the parts on their own: `_logical` names each logical line at its first line, and a
-problem never prints a hash in full.
+And for the parts on their own: `_logical` names each logical line at its first line; a problem
+never prints a hash in full; `requirement_files` reads `requirements*.txt` in any folder, not
+`constraints.txt`, `*.in`, `*.orig` or other names.
 
 Not applicable: the Hebrew axes and the document axes of the test-matrix skill: the input is
 a requirements file.
@@ -55,6 +57,9 @@ Known limits:
   - Only files named `requirements*.txt` are read, and `-r` may name only such a file, so that
     every file an install reads is read here. `pyproject.toml` declares no dependency yet; when
     it does, this check is widened in the same PR.
+  - A line broken inside a word is joined here with a space, so it is refused where pip would
+    join it with nothing; a backslash followed by white space continues the line here, where pip
+    stops on it. Both differences refuse, or leave pip to fail; neither lets a line through.
   - Refused though pip would take them, as none of this repository's files needs them: an
     option line other than `-r`, `--require-hashes` and `--only-binary :all:`.
 """
