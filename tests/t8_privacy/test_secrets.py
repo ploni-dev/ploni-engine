@@ -10,8 +10,9 @@ The rule: no tracked file holds a match of PATTERNS: a cloud or service key by i
 (AWS, GitHub, Slack, Google, an `sk-` key, Hugging Face), a private key block, a quoted value of
 twelve or more characters given to a name that says key, secret, password or token (in code, a
 dict or JSON; not one that begins with `<` or `$`, a model's special token or a template), or such
-a value given to such a name on a `.env` line. A file is read as UTF-8, its zero bytes dropped,
-so that a file written as UTF-16 (PowerShell 5.1's default) is read too.
+a value given to such a name on a `.env` line (indented or after `export`, either line end). A
+file is read as UTF-8, its zero bytes dropped, so that a file written as UTF-16 (PowerShell
+5.1's default) is read too.
 
 Test matrix:
 
@@ -37,6 +38,7 @@ Adversarial:
   A6  every form of a value given to a name that says secret: each name, a suffix, both
       separators, both quotes, upper case, a dict and a JSON key, a .env line   found
   A7  a key in a file written as UTF-16, with and without a byte order mark    found
+  A8  a .env line with a Windows line end, as text and from UTF-16                found
   B4  a model's special token, a template expression, `risk-` and `self_hf_` before a long
       word (the word boundaries of `sk-` and `hf_`), a name and its value on two lines   not found
 
@@ -48,8 +50,10 @@ the scan is shown not to break on it), and the document axes: no document is han
 
 Known limits:
   - Shapes only. A secret with no known prefix, given to a name that does not say what it is,
-    unquoted outside a `.env` line (a YAML `password: value`), or split, encoded or encrypted,
-    is not found. `sk-` and `hf_` keys need a word boundary before them, so one glued to a
+    unquoted outside a `.env` line (a YAML `password: value`), on a `.env` line with spaces
+    around `=` (left out: in code, `TOKEN = SOME_CONSTANT` would alarm), or split, encoded or
+    encrypted, is not found. A placeholder with no `<` or `$` (`HF_TOKEN=your_token_here`)
+    alarms. `sk-` and `hf_` keys need a word boundary before them, so one glued to a
     word (`key_sk-...`) is not found; the others are found inside a word or a URL.
   - The lengths are the shortest the rule takes, chosen at or below the length of the real keys
     of each provider seen by the author, not a length the provider documents.
@@ -86,7 +90,7 @@ PATTERNS = {
         r"(?i)(?:api[_-]?key|secret(?:[_-]?(?:access[_-]?)?key)?|private[_-]?key|passw(?:or)?d|token)"
         r"['\"]?[ \t]*[:=][ \t]*['\"](?![<$])[^'\"\s]{12,}['\"]"
     ),
-    "env": r"(?m)^[A-Z0-9_]*(?:KEY|SECRET|PASSWORD|PASSWD|TOKEN)=[^\s'\"]{12,}$",
+    "env": r"(?m)^[ \t]*(?:export[ \t]+)?[A-Z0-9_]*(?:KEY|SECRET|PASSWORD|PASSWD|TOKEN)=(?![<$])[^\s'\"]{12,}\r?$",
 }
 
 
