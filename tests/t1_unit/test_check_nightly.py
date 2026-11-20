@@ -11,16 +11,21 @@ last_run(), equivalence classes:
   L3 several, in any order                                       the newest by created_at
   L4 a pull_request run, newer than a nightly one                the nightly one (PR runs do not count)
   L5 a run on another branch                                     not counted
-  L6 a run not finished (queued, in_progress)                    not counted
+  L6 a first attempt not finished (queued, in_progress)          not counted: no verdict yet
   L7 a by-hand run (workflow_dispatch) on main, newer            not counted: only the nightly result
+  L8 a night re-run by hand (run_attempt above 1), not finished  counted, so the night before is not read
 failed(), equivalence classes:
   F1 no run                                                      None
   F2 conclusion success                                          None
   F3 conclusion failure                                          a reason naming it and the run's page
+  F5 a night re-run by hand (run_attempt above 1), passed or not  a reason: a re-run never clears the
+     block, only the next night does (the review of #178, finding 1)
   F4 any other conclusion (cancelled, timed_out, startup_failure, action_required, neutral,
      skipped, none at all)                                       a reason: only success is green
 fetch(), with urlopen stubbed:
-  G1 the URL: the repository, full.yml, branch main, finished runs, one page of RUNS_PER_PAGE
+  G1 the URL: the repository, full.yml, branch main, nightly runs only (event=schedule), in any
+     status, one page of RUNS_PER_PAGE (the review of #178, finding 2: by-hand runs cannot push a
+     night off the page)
   G2 the headers: the token as a Bearer token, the API version
   G3 returns the list under "workflow_runs"; G4 an HTTP error is raised, not swallowed
 main():
@@ -48,8 +53,9 @@ import pytest
 from scripts import check_nightly as check
 
 
-def run(created: str, *, event: str = "schedule", branch: str = "main", status: str = "completed", conclusion: str | None = "success", url: str = "https://github.test/r/1") -> dict[str, Any]:
-    return {"created_at": created, "event": event, "head_branch": branch, "status": status, "conclusion": conclusion, "html_url": url}
+def run(created: str, *, event: str = "schedule", branch: str = "main", status: str = "completed", conclusion: str | None = "success", url: str = "https://github.test/r/1", attempt: int = 1) -> dict[str, Any]:
+    """Build one workflow run as GitHub lists it."""
+    return {"created_at": created, "event": event, "head_branch": branch, "status": status, "conclusion": conclusion, "html_url": url, "run_attempt": attempt}
 
 
 def test_l1_no_runs() -> None:
@@ -89,6 +95,11 @@ def test_l7_a_run_by_hand_does_not_count(conclusion: str) -> None:
     assert check.last_run([nightly, by_hand]) == nightly
 
 
+def test_l8_a_rerun_not_finished_counts() -> None:
+    rerun = run("2026-11-21T01:17:00Z", status="in_progress", conclusion=None, attempt=2)
+    assert check.last_run([rerun, run("2026-11-20T01:17:00Z")]) == rerun
+
+
 def test_f1_no_run() -> None:
     assert check.failed(None) is None
 
@@ -106,6 +117,18 @@ def test_f3_failure() -> None:
 def test_f4_only_success_is_green(conclusion: str | None) -> None:
     reason = check.failed(run("2026-11-21T01:17:00Z", conclusion=conclusion))
     assert reason == f"the last nightly full run on main ended {conclusion}: https://github.test/r/1"
+
+
+@pytest.mark.parametrize("conclusion", ["success", "failure", None])
+def test_f5_a_rerun_is_never_green(conclusion: str | None) -> None:
+    reason = check.failed(run("2026-11-21T01:17:00Z", conclusion=conclusion, attempt=2))
+    assert reason == f"the last nightly full run on main was run again by hand (attempt 2, ended {conclusion}): https://github.test/r/1"
+
+
+def test_f5_a_run_with_no_attempt_field_is_a_first_attempt() -> None:
+    first = run("2026-11-21T01:17:00Z")
+    del first["run_attempt"]
+    assert check.failed(first) is None
 
 
 @pytest.mark.parametrize("field", ["conclusion", "html_url"])
@@ -130,7 +153,7 @@ def test_g1_g2_g3_the_request(monkeypatch: pytest.MonkeyPatch) -> None:
 
     monkeypatch.setattr(check.urllib.request, "urlopen", urlopen)
     runs = check.fetch("owner/repo", "tkn")
-    assert seen["url"] == f"https://api.github.com/repos/owner/repo/actions/workflows/full.yml/runs?branch=main&status=completed&per_page={check.RUNS_PER_PAGE}"
+    assert seen["url"] == f"https://api.github.com/repos/owner/repo/actions/workflows/full.yml/runs?branch=main&event=schedule&per_page={check.RUNS_PER_PAGE}"
     assert seen["headers"]["Authorization"] == "Bearer tkn"
     assert seen["headers"]["X-github-api-version"] == check.API_VERSION
     assert seen["timeout"] == check.TIMEOUT_SECONDS

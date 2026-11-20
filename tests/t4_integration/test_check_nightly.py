@@ -31,7 +31,8 @@ class Handler(BaseHTTPRequestHandler):
     body: ClassVar[dict[str, Any]] = {}
     seen: ClassVar[list[tuple[str, dict[str, str]]]] = []
 
-    def do_GET(self) -> None:  # the name http.server calls
+    def do_GET(self) -> None:
+        """Record the request and answer it; http.server calls it by this name."""
         type(self).seen.append((self.path, dict(self.headers.items())))
         payload = json.dumps(type(self).body).encode()
         self.send_response(type(self).status)
@@ -60,6 +61,7 @@ def server(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> Iterator[type[Han
 
 
 def run(created: str, event: str, conclusion: str) -> dict[str, Any]:
+    """Build one finished first-attempt workflow run on main as GitHub lists it."""
     return {"created_at": created, "event": event, "head_branch": "main", "status": "completed", "conclusion": conclusion, "html_url": f"https://github.test/{created}"}
 
 
@@ -81,7 +83,7 @@ def test_m3_the_request(server: type[Handler]) -> None:
     server.body = {"total_count": 0, "workflow_runs": []}
     check.main(["owner/repo"])
     [(path, headers)] = server.seen
-    assert path == f"/repos/owner/repo/actions/workflows/full.yml/runs?branch=main&status=completed&per_page={check.RUNS_PER_PAGE}"
+    assert path == f"/repos/owner/repo/actions/workflows/full.yml/runs?branch=main&event=schedule&per_page={check.RUNS_PER_PAGE}"
     assert headers["Authorization"] == "Bearer tkn"
     assert headers["X-Github-Api-Version"] == check.API_VERSION
     assert headers["Accept"] == "application/vnd.github+json"
