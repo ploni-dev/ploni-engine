@@ -15,6 +15,11 @@ Matrix (a repository in a temporary folder, the hook copied into its .githooks/)
   P5  no .venv and no python on PATH                            127: the push is not made
   P6  a real `git push` to a bare repository, the suite red     refused: the remote has no new commit
   P7  the same push, the suite green                            made: the remote has the commit
+Adversarial (measured on 2026-11-20, the first version of this hook): in a worktree git sets
+GIT_DIR for the hook, and `git -c` sets GIT_CONFIG_PARAMETERS; passed on to the suite, a test's
+`git init --bare` in a temporary folder re-initialised the real repository as bare.
+  A1  the suite starts with none of git's repository-local variables (`git rev-parse --local-env-vars`)
+  A2  a suite that runs `git init --bare` inside a folder of its own, from a worktree: the repository stays not bare
 Hebrew and document axes: do not apply; the input is a git push.
 """
 
@@ -113,3 +118,28 @@ def test_p6_p7_a_real_push(tmp_path: Path, code: int, made: bool) -> None:
     assert (pushed.returncode == 0) is made
     remote = git(tmp_path / "remote.git", "rev-parse", "--verify", "-q", "main").stdout.decode().strip()
     assert (remote == head) is made
+
+
+def test_a1_none_of_git_s_local_variables_reach_the_suite(tmp_path: Path) -> None:
+    hooks = repository(tmp_path / "main")
+    probe = 'for v in $(git rev-parse --local-env-vars); do if env | grep -q "^$v="; then exit 7; fi; done; exit 0'
+    folder = tmp_path / "main" / VENV_PYTHON.parent
+    folder.mkdir(parents=True)
+    (folder / VENV_PYTHON.name).write_text(f"#!/bin/sh\n{probe}\n", encoding="utf-8", newline="\n")
+    (folder / VENV_PYTHON.name).chmod(0o755)
+    git(tmp_path / "main", "worktree", "add", "-q", str(tmp_path / "wt"))
+    assert hook(tmp_path / "wt", hooks) == 0
+
+
+def test_a2_a_suite_that_inits_a_bare_repository_leaves_the_real_one_alone(tmp_path: Path) -> None:
+    hooks = repository(tmp_path / "main")
+    folder = tmp_path / "main" / VENV_PYTHON.parent
+    folder.mkdir(parents=True)
+    other = (tmp_path / "other.git").as_posix()
+    # As the tests that did the harm ran it: in a folder of their own, with no path argument.
+    (folder / VENV_PYTHON.name).write_text(f'#!/bin/sh\nmkdir -p "{other}" && cd "{other}" && git init -q --bare\n', encoding="utf-8", newline="\n")
+    (folder / VENV_PYTHON.name).chmod(0o755)
+    git(tmp_path / "main", "worktree", "add", "-q", str(tmp_path / "wt"))
+    assert hook(tmp_path / "wt", hooks) == 0
+    assert git(tmp_path / "main", "config", "--bool", "core.bare").stdout.decode().strip() == "false"
+    assert (tmp_path / "other.git" / "HEAD").is_file()
