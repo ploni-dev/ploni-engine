@@ -25,7 +25,7 @@ fetch(), with urlopen stubbed:
   G3 returns the list under "workflow_runs"; G4 an HTTP error is raised, not swallowed
 main():
   M1 wrong arguments: usage, exit 2
-  M2 no GITHUB_TOKEN: a line on the error stream, exit 2
+  M2 no GITHUB_TOKEN, or an empty one: a line on the error stream, exit 2
   M3 the last run failed: "failed=true" in the file named by GITHUB_OUTPUT, a warning line, exit 0
   M4 the last run passed, or none: "failed=false", nothing printed, exit 0
   M5 no GITHUB_OUTPUT: the output line on stdout
@@ -150,8 +150,12 @@ def test_m1_usage(argv: list[str], capsys: pytest.CaptureFixture[str]) -> None:
     assert capsys.readouterr().err == check.USAGE + "\n"
 
 
-def test_m2_no_token(monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+@pytest.mark.parametrize("token", [None, ""], ids=["unset", "empty"])
+def test_m2_no_token(token: str | None, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
+    if token is None:
+        monkeypatch.delenv("GITHUB_TOKEN", raising=False)
+    else:
+        monkeypatch.setenv("GITHUB_TOKEN", token)
     assert check.main(["owner/repo"]) == 2
     assert capsys.readouterr().err == "GITHUB_TOKEN is not set\n"
 
