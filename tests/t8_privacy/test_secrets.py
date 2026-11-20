@@ -7,8 +7,11 @@ the repository is a key on GitHub and in every clone, and taking it out of the h
 harder than keeping it out.
 
 The rule: no tracked file holds a match of PATTERNS: a cloud or service key by its own prefix
-(AWS, GitHub, Slack, Google, an `sk-` key, Hugging Face), a private key block, or a quoted value
-of twelve or more characters given to a name that says key, secret, password or token.
+(AWS, GitHub, Slack, Google, an `sk-` key, Hugging Face), a private key block, a quoted value of
+twelve or more characters given to a name that says key, secret, password or token (in code, a
+dict or JSON; not one that begins with `<` or `$`, a model's special token or a template), or such
+a value given to such a name on a `.env` line. A file is read as UTF-8, its zero bytes dropped,
+so that a file written as UTF-16 (PowerShell 5.1's default) is read too.
 
 Test matrix:
 
@@ -30,18 +33,30 @@ Adversarial:
   A3  a GitHub key of the fine-grained form (`github_pat_`)           found
   A4  two keys of one kind in a text, and keys of two kinds out of the order of PATTERNS
                                                                        each found, by line
+  A5  each alternative of each prefix pattern, and each pattern's shortest length   found
+  A6  every form of a value given to a name that says secret: each name, a suffix, both
+      separators, both quotes, upper case, a dict and a JSON key, a .env line   found
+  A7  a key in a file written as UTF-16, with and without a byte order mark    found
+  B4  a model's special token, a template expression, `risk-` and `self_hf_` before a long
+      word (the word boundaries of `sk-` and `hf_`), a name and its value on two lines   not found
 
-Sample size (CLAUDE.md, Tests: detectors 40 positive and 40 negative): EC1 and A1 give 45
-positive cases, EC2, B1 and B2 give 43 negative ones.
+Sample size (CLAUDE.md, Tests: detectors 40 positive and 40 negative): EC1, A1, A5, A6 and A7
+give 77 positive cases, EC2, B1, B2 and B4 give 51 negative ones.
 
 Not applicable: the Hebrew axes of the test-matrix skill but one (EC2 holds Hebrew text, so that
 the scan is shown not to break on it), and the document axes: no document is handled.
 
 Known limits:
   - Shapes only. A secret with no known prefix, given to a name that does not say what it is,
-    or split, encoded or encrypted, is not found.
-  - Tracked files only: what git lists (the index, so a file added for the next commit is read).
-    An ignored file, and the history of the repository, are not read.
+    unquoted outside a `.env` line (a YAML `password: value`), or split, encoded or encrypted,
+    is not found. `sk-` and `hf_` keys need a word boundary before them, so one glued to a
+    word (`key_sk-...`) is not found; the others are found inside a word or a URL.
+  - The lengths are the shortest the rule takes, chosen at or below the length of the real keys
+    of each provider seen by the author, not a length the provider documents.
+  - Tracked files only: the paths git's index lists, their content as it is in the folder. An
+    ignored file, and the history of the repository, are not read.
+  - In CI the scan runs after the push: a key it finds there is already on GitHub and must be
+    revoked. The scan before a commit (`PROCESS.md` sections 2 and 5.6) comes in a PR of its own.
   - The fake values of this file are made at run time, so that the file itself holds none.
 """
 
@@ -57,16 +72,21 @@ import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
 # The shapes of the keys of the services a developer of this project is likely to hold, each by
-# the prefix and length its provider documents, and the header of a private key file.
+# its prefix and the shortest length the rule takes (Known limits), and the header of a private
+# key file. No pattern reaches past the end of a line.
 PATTERNS = {
-    "aws": r"AKIA[0-9A-Z]{16}",
+    "aws": r"(?:AKIA|ASIA)[0-9A-Z]{16}",
     "github": r"gh[pousr]_[A-Za-z0-9]{36,}|github_pat_[A-Za-z0-9_]{22,}",
-    "private key": r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY-----",
+    "private key": r"-----BEGIN (?:[A-Z]+ )?PRIVATE KEY(?: BLOCK)?-----",
     "slack": r"xox[baprs]-[A-Za-z0-9-]{10,}",
     "google": r"AIza[0-9A-Za-z_-]{35}",
     "sk": r"\bsk-[A-Za-z0-9_-]{20,}",
     "hugging face": r"\bhf_[A-Za-z0-9]{30,}",
-    "assigned": r"(?i)(?:api[_-]?key|secret|passw(?:or)?d|token)\s*[:=]\s*['\"][^'\"\s]{12,}['\"]",
+    "assigned": (
+        r"(?i)(?:api[_-]?key|secret(?:[_-]?(?:access[_-]?)?key)?|private[_-]?key|passw(?:or)?d|token)"
+        r"['\"]?[ \t]*[:=][ \t]*['\"](?![<$])[^'\"\s]{12,}['\"]"
+    ),
+    "env": r"(?m)^[A-Z0-9_]*(?:KEY|SECRET|PASSWORD|PASSWD|TOKEN)=[^\s'\"]{12,}$",
 }
 
 
@@ -88,8 +108,7 @@ def secrets_in(text: str) -> list[str]:
 
     Why: the rule of this file, apart from where the text comes from.
 
-    Contract: a line is counted from 1; a match that spans lines (none of PATTERNS does) is
-    named at its first line. Each match is named once, with its kind, and no part of the
+    Contract: a line is counted from 1. Each match is named once, with its kind, and no part of the
     value, so that a failing test does not print the secret.
     """
     found = [
@@ -98,6 +117,17 @@ def secrets_in(text: str) -> list[str]:
         for match in pattern.finditer(text)
     ]
     return [f"{line}: {kind}" for line, kind in sorted(found)]
+
+
+def readable(data: bytes) -> str:
+    """Return the text of a file's bytes for the scan: UTF-8, leniently, with its zero bytes dropped.
+
+    Why: a file written as UTF-16 holds a zero byte beside every ASCII character, so a key in it
+    would match no pattern; PowerShell 5.1 writes UTF-16 by default.
+
+    Contract: never raises; a byte that is not UTF-8 becomes U+FFFD.
+    """
+    return data.decode("utf-8", "replace").replace("\0", "")
 
 
 def tracked(root: Path) -> list[Path]:
@@ -173,7 +203,7 @@ def test_ec4_the_repository() -> None:
         f"{path.relative_to(ROOT).as_posix()}:{line}"
         for path in files
         if path.is_file()
-        for line in secrets_in(path.read_bytes().decode("utf-8", "replace"))
+        for line in secrets_in(readable(path.read_bytes()))
     ]
     assert found == []
 
@@ -249,11 +279,6 @@ def test_a4_two_keys_of_one_kind_and_keys_out_of_order() -> None:
     assert secrets_in(MAKERS["hugging face"](6) + "\n" + MAKERS["aws"](6) + "\n") == ["1: hugging face", "2: aws"]
 
 
-def readable_stub(data: bytes) -> str:
-    """Stand in for `readable` until it exists."""
-    return data.decode("utf-8", "replace")
-
-
 # One value per alternative of each prefix pattern, and one at each pattern's shortest length.
 ALTERNATIVES = [
     ("github", _fake("gh" + "o_", MIXED, 36, 1)),
@@ -323,5 +348,5 @@ def test_b4_special_tokens_templates_and_word_boundaries(text: str) -> None:
 
 @pytest.mark.parametrize("encoding", ["utf-16", "utf-16-le", "utf-16-be"])
 def test_a7_a_key_in_a_utf_16_file(encoding: str) -> None:
-    data = ("x = 1\nHF_TOKEN=" + MAKERS["hugging face"](8) + "\n").encode(encoding)
-    assert secrets_in(readable_stub(data)) == ["2: hugging face"]
+    data = ("x = 1\nvalue = " + MAKERS["hugging face"](8) + "\n").encode(encoding)
+    assert secrets_in(readable(data)) == ["2: hugging face"]
