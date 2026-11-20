@@ -35,7 +35,7 @@ from typing import TextIO
 # Every module of ploni/, imported by name so that `network_modules_loaded` sees what each one
 # loads. A computed import is refused under ploni/ (tests/t8_privacy/test_imports.py), so the
 # list is written out; a test holds it to the modules on disk.
-from ploni import errors, types  # noqa: F401
+from ploni import bad_log_leak, errors, types  # noqa: F401
 from ploni.safety import atomic, logging, tempfiles  # noqa: F401
 
 # The models folder of a development checkout (see Known limits).
