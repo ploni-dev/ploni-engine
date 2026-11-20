@@ -14,6 +14,9 @@ last_run(), equivalence classes:
   L6 a first attempt not finished (queued, in_progress)          not counted: no verdict yet
   L7 a by-hand run (workflow_dispatch) on main, newer            not counted: only the nightly result
   L8 a night re-run by hand (run_attempt above 1), not finished  counted, so the night before is not read
+attempt(), equivalence classes:
+  T1 no run_attempt field: 1; T2 a number: that number; T3 not a number: ValueError, so the
+     check is red and a garbled re-run is never read as a first attempt (the review of #178, pass 2)
 failed(), equivalence classes:
   F1 no run                                                      None
   F2 conclusion success                                          None
@@ -123,6 +126,21 @@ def test_f4_only_success_is_green(conclusion: str | None) -> None:
 def test_f5_a_rerun_is_never_green(conclusion: str | None) -> None:
     reason = check.failed(run("2026-11-21T01:17:00Z", conclusion=conclusion, attempt=2))
     assert reason == f"the last nightly full run on main was run again by hand (attempt 2, ended {conclusion}): https://github.test/r/1"
+
+
+def test_t1_t2_attempt() -> None:
+    no_field = run("2026-11-21T01:17:00Z")
+    del no_field["run_attempt"]
+    assert check.attempt(no_field) == 1
+    assert check.attempt(run("2026-11-21T01:17:00Z", attempt=3)) == 3
+
+
+@pytest.mark.parametrize("value", ["x", None, ""])
+def test_t3_attempt_not_a_number(value: object) -> None:
+    garbled = run("2026-11-21T01:17:00Z")
+    garbled["run_attempt"] = value
+    with pytest.raises((ValueError, TypeError)):
+        check.attempt(garbled)
 
 
 def test_f5_a_run_with_no_attempt_field_is_a_first_attempt() -> None:
