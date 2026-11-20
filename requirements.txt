@@ -1,0 +1,5 @@
+# The product's third-party packages, each pinned and hashed (CLAUDE.md, Hard constraints;
+# build-plan.md Phase 0: "Pinned requirements.txt").
+# None as of Phase 0: ploni/ uses the standard library only. A package added here is a new
+# dependency, which needs a decision of Achia's (CLAUDE.md, "Merging").
+# Install:  python -m pip install --require-hashes -r requirements.txt
