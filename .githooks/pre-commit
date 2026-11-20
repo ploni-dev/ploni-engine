@@ -1,0 +1,10 @@
+#!/bin/sh
+# The check before a commit (PROCESS.md section 5.6; scripts/pre_commit.py). Git runs it once
+# `git config core.hooksPath .githooks` is set in the clone. The project's environment first:
+# this folder's .venv, then the .venv of the main checkout, for a worktree.
+common="$(git rev-parse --git-common-dir 2>/dev/null)"
+for python in .venv/Scripts/python.exe .venv/bin/python "$common/../.venv/Scripts/python.exe" "$common/../.venv/bin/python"; do
+    if [ -x "$python" ]; then exec "$python" -m scripts.pre_commit; fi
+done
+echo "check before commit: no .venv found here or in the main checkout; trying python on PATH" >&2
+exec python -m scripts.pre_commit
