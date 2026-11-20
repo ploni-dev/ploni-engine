@@ -73,7 +73,7 @@ def test_m2_sixteen_product_files(repo: Path, capsys: pytest.CaptureFixture[str]
     assert capsys.readouterr().err == "16 product files changed, over the hard limit of 15\n"
 
 
-def test_m3_four_hundred_and_one_net_lines(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+def test_m3_four_hundred_and_one_changed_lines(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
     commit(repo, {"ui/server.py": "y = 2\n" * 401})
     assert check.main(["main", "pr"]) == 0
     assert capsys.readouterr().out == "::warning::401 changed product lines, over the soft limit of 400\n"

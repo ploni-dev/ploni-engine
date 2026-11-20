@@ -70,6 +70,8 @@ def test_ec3_files_and_changed_lines_of_product_code_only() -> None:
 
 def test_ec4_a_binary_file() -> None:
     assert check.measure([("-", "-", "ploni/model.bin"), ("3", "0", "ploni/a.py")]) == (2, 3, ["ploni/model.bin"])
+    rows = [("-", "-", "ploni/model.bin"), ("-", "-", "tests/fixtures/a.docx"), ("3", "0", "ploni/a.py"), ("-", "-", "ploni/b.bin")]
+    assert check.measure(rows) == (3, 3, ["ploni/model.bin", "ploni/b.bin"])
 
 
 def test_ec5_only_deletions() -> None:
@@ -95,13 +97,13 @@ def test_b2_the_file_limits(files: int, found: tuple[list[str], list[str]]) -> N
 
 
 @pytest.mark.parametrize(
-    ("net", "found"),
+    ("lines", "found"),
     [(400, ([], [])), (401, ([], ["401 changed product lines, over the soft limit of 400"])),
      (800, ([], ["800 changed product lines, over the soft limit of 400"])),
      (801, (["801 changed product lines, over the hard limit of 800"], []))],
 )
-def test_b3_the_line_limits(net: int, found: tuple[list[str], list[str]]) -> None:
-    assert check.judge(0, net) == found
+def test_b3_the_line_limits(lines: int, found: tuple[list[str], list[str]]) -> None:
+    assert check.judge(0, lines) == found
 
 
 def test_ec7_both_over() -> None:

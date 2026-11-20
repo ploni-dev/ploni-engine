@@ -9,7 +9,10 @@ product files or 800 product lines turns red; over 10 files or 400 lines gets a 
 the same day whether a rewrite in place counts, he chose "Count every changed line
 (Recommended)": "Lines added plus lines removed. A 1,000-line rewrite turns red, a 450-line one
 gets a warning. Stricter: big rewrites must be split, as big additions are." So a line is
-counted when added and when removed, where PROCESS.md 6.3 says "net".
+counted when added and when removed, where PROCESS.md 6.3 says "net". The rule of his option,
+"Lines added plus lines removed", is read as it stands: the 450 of its example are lines counted,
+so a rewrite in place of 450 old lines counts 900 and turns red, and a file moved whole counts
+its lines twice (git's --no-renames). Both read the stricter way.
 
 Contract: `python -m scripts.check_pr_size <base> <head>`, run inside the checkout. What `head`
 changed since it left `base` is read from git (`base...head`). Product code is every file under
