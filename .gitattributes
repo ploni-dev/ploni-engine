@@ -1,0 +1,4 @@
+# The hook of the check before a commit keeps LF line ends on every checkout (core.autocrlf is
+# true on this laptop). Git for Windows' sh reads a CRLF hook as it is (measured 2026-11-20);
+# a POSIX sh that does not drop the carriage return (WSL, Cygwin) would not.
+.githooks/* text eol=lf
