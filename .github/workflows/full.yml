@@ -5,15 +5,16 @@
 # and on request." On a PR it runs when the PR carries the label run-full or phase-close; once a
 # night on main; and on request from the Actions tab. PLONI_FULL_SUITE=1 grows every property
 # test to 5,000 cases or more (tests/sizes.py). T5 to T7 have no tests yet: `pytest tests`
-# takes each tier as it comes. The merge gate reads only the checks of a PR's last commit; this
-# one is there only on a labelled PR.
+# takes each tier as it comes.
+# On a PR it starts only when a label is added: the merge gate counts a skipped check as red, so a
+# job that ran on every PR and skipped itself would block every unlabelled PR. A label other than
+# the two still shows this check as skipped on that commit. To run it again after a new push,
+# remove the label and add it again.
 name: full
 
 on:
   pull_request:
-    # labeled: adding run-full or phase-close starts it; the other events run it again while
-    # the label stays.
-    types: [labeled, opened, synchronize, reopened]
+    types: [labeled]
   schedule:
     # Nightly, 01:17 UTC.
     - cron: "17 1 * * *"
