@@ -1,0 +1,13 @@
+#!/bin/sh
+# The check before a push (PROCESS.md section 12 item 8; Achia, 2026-11-20, issue #174): the fast
+# suite, scripts/check.py, and a red result stops the push. Git runs it once
+# `git config core.hooksPath .githooks` is set in the clone. It checks the files of the checkout
+# it runs in, not only the commits being pushed: a change not yet committed counts too. The
+# project's environment first, as the check before a commit finds it: this folder's .venv, then
+# the .venv of the main checkout, for a worktree.
+common="$(git rev-parse --git-common-dir 2>/dev/null)"
+for python in .venv/Scripts/python.exe .venv/bin/python "$common/../.venv/Scripts/python.exe" "$common/../.venv/bin/python"; do
+    if [ -x "$python" ]; then exec "$python" scripts/check.py; fi
+done
+echo "check before push: no .venv found here or in the main checkout; trying python on PATH" >&2
+exec python scripts/check.py
