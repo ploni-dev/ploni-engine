@@ -27,6 +27,9 @@ traceback and a non-zero exit.
 Known limits:
 - Functions are counted, not named, and parametrized cases are not counted: a renamed test
   and a shorter parameter list are not seen; assertions catch part of the second.
+- Test functions are counted as pytest collects them only as far as the source shows it:
+  `collected()`, `refused()` and `switched_off()` list the shapes where the two differ, none
+  of which a test file here uses.
 - A test file renamed counts as one file gone and one new: the old one's counters fall to
   zero and need override lines.
 - A suppression is a `#`, spaces, an optional `ruff:`, `flake8:` or `mypy:`, then `noqa`,
@@ -71,9 +74,11 @@ class Counts(NamedTuple):
 
     Why: `PROMOTION.md` section 6 names these two per test file.
 
-    Contract: test_functions counts functions whose name starts with "test", wherever they
-    stand (pytest collects fewer: not nested ones, nor methods outside Test* classes);
-    assertions counts `assert` statements anywhere in the file.
+    Contract: test_functions counts the test functions pytest collects, as far as the
+    source shows it (`collected()`, with its Known limits): module-level `test*` functions
+    and `test*` methods of `Test*` classes, nested Test* classes too, not of a class pytest
+    refuses, and none in a module switched off (`switched_off()`); assertions counts
+    `assert` statements anywhere in the file.
     """
 
     test_functions: int
@@ -101,11 +106,81 @@ def count(source: str) -> Counts:
 
     Why: the two counters of section 6, read from the code, not from a run.
 
-    Contract: raises SyntaxError when the source does not parse.
+    Contract: test functions 0 when the module is switched off (`switched_off()`), else
+    `collected()`. Raises SyntaxError when the source does not parse.
     """
-    nodes = list(ast.walk(ast.parse(source)))
-    functions = sum(isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name.startswith("test") for node in nodes)
-    return Counts(functions, sum(isinstance(node, ast.Assert) for node in nodes))
+    tree = ast.parse(source)
+    functions = 0 if switched_off(tree.body) else collected(tree.body)
+    return Counts(functions, sum(isinstance(node, ast.Assert) for node in ast.walk(tree)))
+
+
+def collected(body: list[ast.stmt]) -> int:
+    """Return the number of test functions pytest collects from a module's or a Test class's body.
+
+    Why: Achia's answer of 2026-11-20, "Count what pytest runs (Recommended)": a test swapped
+    for a function pytest never runs must show as a drop.
+
+    Contract: counts `test*` functions (sync or async) standing directly in `body`, and,
+    recursively, those of each `Test*` class standing directly in it that pytest does not
+    refuse (`refused()`). A function nested in a function, a method of a class whose name
+    does not start with Test, or a class inside a function is not counted.
+
+    Known limits: read from the source alone, so it differs from pytest's own collection in
+    shapes no test file here uses (measured in the review of this change): tests under a
+    module-level `if` or `try`, methods a Test* class inherits, a test function imported
+    into the file, a `unittest.TestCase` subclass not named Test*, and a lambda bound to a
+    test* name are not counted; a `@pytest.fixture` named test*, and a name defined twice
+    (ruff F811 refuses that), are counted.
+    """
+    found = 0
+    for node in body:
+        if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name.startswith("test"):
+            found += 1
+        elif isinstance(node, ast.ClassDef) and node.name.startswith("Test") and not refused(node):
+            found += collected(node.body)
+    return found
+
+
+def refused(test_class: ast.ClassDef) -> bool:
+    """Say whether pytest refuses to collect a Test* class.
+
+    Why: a test class switched off this way runs none of its tests while the suite stays
+    green, so its tests must not count.
+
+    Contract: True when the class body defines `__init__` or `__new__` (pytest warns), or
+    sets `__test__` to a false value (pytest is silent), anywhere in the body.
+
+    Known limits: read from the class's own body only (measured in the review of this
+    change): an `__init__` inherited from a base class, `__init__` bound to another
+    function, an `__init__` under an `if`, an `async def __init__`, an abstract Test* class, or a function given
+    `.__test__ = False` after it are still counted; a class not named Test* with
+    `__test__ = True` is not.
+    """
+    constructor = any(isinstance(node, ast.FunctionDef) and node.name in ("__init__", "__new__") for node in test_class.body)
+    return constructor or switched_off(test_class.body)
+
+
+def switched_off(body: list[ast.stmt]) -> bool:
+    """Say whether a module's or a class's body sets `__test__` to a false value.
+
+    Why: pytest reads `__test__` on a module and on a class by its truth: `False`, `None`
+    or `0` there switches off every test inside, silently.
+
+    Contract: reads plain and annotated assignments of a constant to the name `__test__`,
+    chained ones too, standing directly in `body`.
+
+    Known limits: read from the body alone (measured in the review of this change): a
+    `__test__` set from another name (`OFF = False` then `__test__ = OFF`) or under an `if`
+    is not seen, so its tests still count; a false value set and then set true again counts
+    as switched off, a false drop, the safe side.
+    """
+    for node in body:
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
+        value = getattr(node, "value", None)
+        named = any(isinstance(target, ast.Name) and target.id == "__test__" for target in targets)
+        if named and isinstance(value, ast.Constant) and not value.value:
+            return True
+    return False
 
 
 def overrides(body: str) -> tuple[list[tuple[str, int]], list[str]]:
