@@ -8,7 +8,8 @@ Invariants:
       by delta, and no override line stands in a PR that changes ploni/.
   I2  every decrease that is not covered is named, with its counter and its delta.
 
-Sample: test functions and assertions before and after, each 0 to 2 (81 pairs of counts),
+Sample: test functions and assertions before and after, each 0 to 2 (81 pairs of counts; 0 to 6
+in the full suite, tests/sizes.py: 19,208 cases, I2 8,085 with a drop),
 times four sets of override lines, times whether the PR changes ploni/: 648 cases.
 
 Known limits: one file per case; several files are covered by the unit tests.
@@ -22,8 +23,9 @@ from scripts.check_ratchet import Counts
 from tests.sizes import INVARIANT_FULL, full
 
 FILE = "tests/t1_unit/test_a.py"
-# Five levels in the full suite: 5 ** 4 * 4 * 2 = 5,000 cases.
-LEVELS = range(5 if full() else 3)
+# Seven levels in the full suite: 7 ** 4 * 4 * 2 = 19,208 cases, 8,085 of them with a drop that
+# I2 must see named (six levels would give I2 only 4,275).
+LEVELS = range(7 if full() else 3)
 OVERRIDES = [[], [1], [2], [1, 2]]
 CASES = list(product(LEVELS, LEVELS, LEVELS, LEVELS, range(len(OVERRIDES)), [False, True]))
 

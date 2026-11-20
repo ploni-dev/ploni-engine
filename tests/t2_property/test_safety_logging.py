@@ -10,7 +10,8 @@ The invariant: for every way a text can reach the logging system, the line that 
 the same for every text, once the numbers in it are masked (the time, the line number, the
 length of a string). And the text itself is not in the line.
 
-Generated input: TEXTS are 640 texts: 600 from a seeded generator, Hebrew, Latin, digits and
+Generated input (in the full suite, tests/sizes.py: 5,000 generated, 5,040 texts, 100,800
+cases): TEXTS are 640 texts: 600 from a seeded generator, Hebrew, Latin, digits and
 punctuation in runs of 4 to 40 characters, and 40 of special shapes. WAYS are 20 ways a text
 can reach the logging system through a call that takes a text; most are ways of the canary
 test, which also has ways that take none (a warning, a record built by hand, a logger that

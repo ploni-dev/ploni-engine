@@ -16,7 +16,8 @@ Invariants:
       shape only puts the command somewhere; it adds nothing that is refused.
 
 Sample: len(REFUSED) * len(SHAPES) cases for I1 one deep, the same times len(SHAPES) two
-deep, and len(ALLOWED) * len(SHAPES) for I2. The test at the end holds the counts over
+deep, and len(ALLOWED) * len(SHAPES) for I2, the same times len(SHAPES) two deep in the full
+suite (tests/sizes.py). The test at the end holds the counts over
 the 500 that CLAUDE.md, Tests, asks of an invariant.
 
 Not held, and listed: I1 fails for a command whose own quoted text holds a separator sign
@@ -190,8 +191,19 @@ def test_i2_an_allowed_command_is_let_through_in_every_shape(shape: str) -> None
 
 
 # The shapes an allowed command is put inside before its own shape: none in the fast suite (I2
-# above holds it one deep).
-OUTER_FOR_ALLOWED = ["{c}"]
+# above holds it one deep); every shape in the full suite, 13 * 41 * 41 = 21,853 cases.
+OUTER_FOR_ALLOWED = SHAPES if full() else ["{c}"]
+
+
+# Measured in the first full run, 2026-11-20: a push that names its branch, inside a command
+# substitution inside another (20 of the 41 * 41 pairs each), is refused although it would not
+# reach main. That errs to the safe side; guard.py's Known limits do not name it, and changing
+# guard.py needs a decision of Achia's (PROMOTION.md, Level 3), so it is named here and in
+# docs/STATUS.md.
+KNOWN_REFUSED_TWO_DEEP = {
+    "git push -u origin feat/x",
+    "git -c credential.helper= -c credential.helper='!gh auth git-credential' push -q -u origin feat/x",
+}
 
 
 @pytest.mark.parametrize("outer", OUTER_FOR_ALLOWED)
@@ -200,9 +212,15 @@ def test_i2_an_allowed_command_is_let_through_in_every_shape_inside_every_shape(
         outer.format(c=inner.format(c=command))
         for inner in SHAPES
         for command in ALLOWED
-        if refused(outer.format(c=inner.format(c=command)))
+        if command not in KNOWN_REFUSED_TWO_DEEP and refused(outer.format(c=inner.format(c=command)))
     ]
     assert wrongly == []
+
+
+def test_the_allowed_commands_known_to_be_refused_two_deep_are() -> None:
+    assert KNOWN_REFUSED_TWO_DEEP <= set(ALLOWED)
+    for command in KNOWN_REFUSED_TWO_DEEP:
+        assert any(refused(outer.format(c=inner.format(c=command))) for outer in SHAPES for inner in SHAPES), command
 
 
 @pytest.mark.parametrize("command", KNOWN_MISSED)

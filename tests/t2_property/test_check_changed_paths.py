@@ -11,7 +11,8 @@ Invariants:
       nothing else.
   I3  the order of the paths does not change the answer.
 
-Sample: every subset of a pool of ten paths, 1,024 cases, each also given in reverse.
+Sample: every subset of a pool of ten paths, 1,024 cases, each also given in reverse; in the full
+suite (tests/sizes.py) one more path of each kind, 13 paths, 8,192 cases.
 
 Known limits: the pool is fixed; a path of a shape that is not in it is covered only by the
 unit tests (tests/t1_unit/test_check_changed_paths.py).
