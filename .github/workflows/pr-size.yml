@@ -1,0 +1,33 @@
+# The PR size check of issue #78: product files changed and changed product lines (ploni/ and
+# ui/), against PROCESS.md section 6.3. Over 15 files or 800 lines red; over 10 or 400 a warning
+# on the PR. Achia, 2026-11-20, "Yes, all four (Recommended)", of the option "3. PR size limit":
+# "A new GitHub robot: a change over 15 product files or 800 product lines turns red; over 10
+# files or 400 lines gets a warning." The script came in #159; this workflow alone, as the
+# changed-paths check refuses code and a workflow together. A PR that edits this file is judged
+# by its own edited copy; against that, only the review and CLAUDE.md stand.
+name: pr-size
+
+on:
+  pull_request:
+    # edited: a PR whose base branch is changed is judged again against the new base. GitHub
+    # also sends it when the title or the body is edited; the run is then the same.
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-size:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 2
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # The checkout is GitHub's merge of the PR into its base. Its first parent is the
+          # base, so HEAD^1...HEAD is what the PR changes; depth 2 fetches that parent.
+          fetch-depth: 2
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          # The version of the fast workflow (build-plan.md Phase 0: Python 3.13).
+          python-version: "3.13.5"
+      - run: python -m scripts.check_pr_size HEAD^1 HEAD
