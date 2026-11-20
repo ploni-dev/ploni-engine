@@ -27,14 +27,15 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[2]
 
 
-# The seconds a program of these tests may take: an install into a fresh environment takes the
-# longest, about ten on the laptop.
-TIMEOUT_SECONDS = 120
+# The seconds a run of the command may take, as before M4; and an install into a fresh
+# environment, which takes about ten on the laptop.
+RUN_TIMEOUT_SECONDS = 60
+INSTALL_TIMEOUT_SECONDS = 120
 
 
-def started(*command: str) -> subprocess.CompletedProcess[str]:
+def started(*command: str, timeout: int = RUN_TIMEOUT_SECONDS) -> subprocess.CompletedProcess[str]:
     """Run one program in the repository and return how it ended."""
-    return subprocess.run([*command], cwd=ROOT, capture_output=True, text=True, timeout=TIMEOUT_SECONDS, check=False)  # noqa: S603 fixed argv, no shell
+    return subprocess.run([*command], cwd=ROOT, capture_output=True, text=True, timeout=timeout, check=False)  # noqa: S603 fixed argv, no shell
 
 
 def run(*argv: str) -> subprocess.CompletedProcess[str]:
@@ -65,9 +66,11 @@ def test_m4_the_installed_command(tmp_path: Path) -> None:
     venv.create(environment, with_pip=False)
     scripts = environment / ("Scripts" if os.name == "nt" else "bin")
     python = scripts / ("python.exe" if os.name == "nt" else "python")
-    site = Path(started(str(python), "-c", "import sysconfig; print(sysconfig.get_paths()['purelib'])").stdout.strip())
+    base = {"base": str(environment), "platbase": str(environment)}
+    site = Path(sysconfig.get_paths(scheme="venv", vars=base)["purelib"])
     (site / "outer.pth").write_text(sysconfig.get_paths()["purelib"] + "\n", encoding="utf-8")
-    install = started(str(python), "-m", "pip", "install", "-q", "--no-index", "--no-build-isolation", "--no-deps", "-e", str(ROOT))
+    pip = (str(python), "-m", "pip", "install", "-q", "--no-index", "--no-build-isolation", "--no-deps", "-e", str(ROOT))
+    install = started(*pip, timeout=INSTALL_TIMEOUT_SECONDS)
     assert install.returncode == 0, install.stdout + install.stderr
     done = started(str(scripts / ("ploni.exe" if os.name == "nt" else "ploni")), "selftest")
     assert done.returncode == 0, done.stdout + done.stderr
