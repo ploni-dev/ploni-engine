@@ -1,0 +1,45 @@
+# The full suite (PROCESS.md section 5.1): "on a run-full label, on phase-close PRs, and nightly:
+# everything above at full example counts, plus T4 integration, T5 system journeys, T6 metric
+# gates, T7 performance." Achia, 2026-11-20, "Yes, all four (Recommended)", of the option "2.
+# Full test run": "A new GitHub robot: all tests at full size, nightly, before a phase closes,
+# and on request." On a PR it runs when the label run-full or phase-close is added, not on a later
+# push; once a night on main; and on request from the Actions tab. PLONI_FULL_SUITE=1 grows every property
+# test to 5,000 cases or more (tests/sizes.py). T5 to T7 have no tests yet: `pytest tests`
+# takes each tier as it comes.
+# On a PR it starts only when a label is added: the merge gate counts a skipped check as red, so a
+# job that ran on every PR and skipped itself would block every unlabelled PR. A label other than
+# the two still shows this check as skipped on that commit. To run it again after a new push,
+# remove the label and add it again.
+name: full
+
+on:
+  pull_request:
+    types: [labeled]
+  schedule:
+    # Nightly, 01:17 UTC.
+    - cron: "17 1 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  full-suite:
+    if: github.event_name != 'pull_request' || contains(github.event.pull_request.labels.*.name, 'run-full') || contains(github.event.pull_request.labels.*.name, 'phase-close')
+    runs-on: ubuntu-24.04
+    # The laptop runs the full property tests in 2.5 to 4.5 minutes; room for the rest.
+    timeout-minutes: 30
+    env:
+      PLONI_FULL_SUITE: "1"
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          # build-plan.md Phase 0: Python 3.13; the laptop runs 3.13.5.
+          python-version: "3.13.5"
+          # The pip that checks the hashes is pinned too; 25.1.1 is the laptop's.
+          pip-version: "25.1.1"
+      - run: python -m pip install --require-hashes -r requirements-dev.txt
+      - run: python -m ruff check .
+      - run: python -m mypy
+      - run: python -m pytest tests -q -p no:cacheprovider
