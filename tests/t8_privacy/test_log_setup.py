@@ -71,75 +71,129 @@ Known limits:
 import ast
 import logging
 import warnings
+from importlib.util import resolve_name
 from pathlib import Path
 
 import pytest
 
 import ploni.safety.logging
-from tests.project_imports import imported
 
 ROOT = Path(__file__).resolve().parents[2]
-# The calls and attributes by which logging is set up or taken apart (the logging module's
-# own API), and the attribute by which the warnings module prints (ploni/safety/logging.py,
-# Known limits). `addHandler` and `removeHandler` are refused by HANDLER_SUFFIX.
-SETUP_NAMES = (
-    "basicConfig",
-    "dictConfig",
-    "fileConfig",
-    "listen",
-    "setLoggerClass",
-    "setLogRecordFactory",
-    "captureWarnings",
-    "setFormatter",
-    "propagate",
-    "handlers",
-    "lastResort",
-    "showwarning",
-)
-HANDLER_SUFFIX = "Handler"
-# The module of the logging package that only sets logging up. Its other one, `logging.handlers`,
-# is refused by its name, `handlers`, in SETUP_NAMES.
-SETUP_MODULES = ("logging.config",)
+# What a file judged may use of each module: the level constants of the logging module (its
+# documentation, "Logging Levels", with the aliases WARN and FATAL), `warnings.warn`, and the
+# three names of ploni/safety/logging.py that product code calls.
+ALLOWED = {
+    "logging": ("CRITICAL", "FATAL", "ERROR", "WARNING", "WARN", "INFO", "DEBUG", "NOTSET"),
+    "warnings": ("warn",),
+    "ploni.safety.logging": ("Event", "event", "install"),
+}
+# The functions that import a module named by their first argument (as tests/project_imports.py).
+IMPORT_CALLS = ("import_module", "__import__")
 
 
-def _is_setup(name: str) -> bool:
-    """Say whether a name is a setup name or the name of a handler."""
-    return name in SETUP_NAMES or name.endswith(HANDLER_SUFFIX)
+def _base(node: ast.ImportFrom, importer: str, is_package: bool) -> str:
+    """Return the absolute name of the module a from-import reads from.
+
+    Raises ImportError for a relative import that climbs above the top package.
+    """
+    if not node.level:
+        return node.module or ""
+    package = importer if is_package else importer.rpartition(".")[0]
+    return resolve_name("." * node.level + (node.module or ""), package)
 
 
-def _names(node: ast.AST) -> list[str]:
-    """Return the names a node holds where code names a thing, and the text of a string."""
-    if isinstance(node, ast.Name):
-        return [node.id]
-    if isinstance(node, ast.Attribute):
-        return [node.attr]
-    if isinstance(node, ast.alias):
-        return [node.name.rsplit(".", 1)[-1]]
-    if isinstance(node, ast.Constant) and isinstance(node.value, str):
-        return [node.value]
-    return []
+def _bindings(tree: ast.AST, importer: str, is_package: bool) -> dict[str, str]:
+    """Map each name an import binds to the dotted name it stands for."""
+    bound: dict[str, str] = {}
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            for alias in node.names:
+                bound[alias.asname or alias.name.split(".")[0]] = alias.name if alias.asname else alias.name.split(".")[0]
+        elif isinstance(node, ast.ImportFrom):
+            base = _base(node, importer, is_package)
+            for alias in node.names:
+                bound[alias.asname or alias.name] = f"{base}.{alias.name}"
+    return bound
+
+
+def _refused(dotted: str) -> str | None:
+    """Say what a dotted name uses of a guarded module that ALLOWED does not hold, or None."""
+    for module, allowed in ALLOWED.items():
+        if dotted.startswith(f"{module}."):
+            name = dotted[len(module) + 1 :].split(".")[0]
+            if name not in allowed:
+                return f"uses {module}.{name}"
+    return None
+
+
+def _guarded_or_above(dotted: str) -> bool:
+    """Say whether a dotted name is a guarded module or a package that holds one."""
+    return any(module == dotted or module.startswith(f"{dotted}.") for module in ALLOWED)
+
+
+def _chain(name: ast.Name, parents: dict[ast.AST, ast.AST]) -> tuple[list[str], ast.AST]:
+    """Return the attribute names read after a name, and the outermost node of that chain."""
+    attributes: list[str] = []
+    node: ast.AST = name
+    parent = parents.get(node)
+    while isinstance(parent, ast.Attribute):
+        attributes.append(parent.attr)
+        node, parent = parent, parents.get(parent)
+    return attributes, node
+
+
+def _imports(tree: ast.AST, importer: str, is_package: bool) -> list[tuple[int, str]]:
+    """Return the lines whose import statement, or import call with a literal name, is refused."""
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Import):
+            found += [(node.lineno, why) for alias in node.names if (why := _refused(alias.name))]
+        elif isinstance(node, ast.ImportFrom):
+            base = _base(node, importer, is_package)
+            found += [(node.lineno, why) for alias in node.names if (why := _refused(f"{base}.{alias.name}"))]
+        elif isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", None)) in IMPORT_CALLS:
+            first = node.args[0] if node.args else None
+            if isinstance(first, ast.Constant) and isinstance(first.value, str):
+                if _guarded_or_above(first.value) or _refused(first.value):
+                    found.append((node.lineno, f"imports {first.value} by a call"))
+    return found
+
+
+def _uses(tree: ast.AST, bound: dict[str, str]) -> list[tuple[int, str]]:
+    """Return the lines that use a name bound to a guarded module beyond what ALLOWED holds."""
+    parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
+    found = []
+    for node in ast.walk(tree):
+        if isinstance(node, ast.Name) and node.id in bound:
+            attributes, outer = _chain(node, parents)
+            dotted = ".".join([bound[node.id], *attributes])
+            if why := _refused(dotted):
+                found.append((node.lineno, why))
+            elif _guarded_or_above(dotted):
+                found.append((node.lineno, f"uses {dotted} as a value"))
+    return found
 
 
 def setups(source: str, importer: str = "ploni.mod", is_package: bool = False) -> list[str]:
-    """Name each line of a source text that sets up logging, as "<line>: <what>".
+    """Name each line of a source text that reaches past ALLOWED, as "<line>: <what>", in order.
 
     Why: the rule of this file, apart from where the source comes from.
 
-    Contract: `importer` is the dotted name of the module, for a relative import. A line
-    holding several setups is named once for each; the lines are in order.
+    Contract: `importer` is the dotted name of the module and `is_package` says whether the
+    file is a package's `__init__.py`, for a relative import. A line that reaches past ALLOWED
+    in several ways is named once for each. Raises SyntaxError for a text that is not Python,
+    and ImportError for a relative import that climbs above the top package.
     """
-    found = [
-        (node.lineno, f"names {name}")
-        for node in ast.walk(ast.parse(source))
-        for name in _names(node)
-        if _is_setup(name)
-    ]
-    found += [(line, f"imports {module}") for line, module in imported(source, importer) if module in SETUP_MODULES]
+    tree = ast.parse(source)
+    found = _imports(tree, importer, is_package) + _uses(tree, _bindings(tree, importer, is_package))
     return [f"{line}: {what}" for line, what in sorted(found)]
 
 
 def judged(root: Path) -> list[Path]:
-    """Return the files under ploni/ that the rule judges: all but those under ploni/safety/."""
+    """Return the files under ploni/ that the rule judges, in order: all but those under ploni/safety/.
+
+    Why: Achia's option says "outside ploni/safety/", the folder where the filter lives.
+    """
     return sorted(
         path for path in (root / "ploni").rglob("*.py") if path.relative_to(root).parts[:2] != ("ploni", "safety")
     )
