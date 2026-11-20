@@ -1,4 +1,4 @@
-"""No module of ploni/ outside ploni/safety/ sets up a log handler or log configuration of its own.
+"""No product module outside ploni/safety/ sets up a log handler or log configuration of its own.
 
 Why: `CLAUDE.md`, Hard constraints: "No document text in logs or temp files." The filter of
 `ploni/safety/logging.py` is the one way a log line is written, and its Known limits name the
@@ -12,22 +12,26 @@ This is that test.
 The rule, an allow-list (ALLOWED): a file judged may use the standard `logging` module only for
 its level constants, the `warnings` module only for `warn`, `filterwarnings` and `simplefilter`,
 and `ploni.safety.logging` only for `Event`, `event` and `install`, with `event` and `install`
-only called, each as a statement of its own, so that what they return is never read. Every other name of the three is refused, however it is reached: an attribute
-(`logging.getLogger`), a name imported from it, a submodule (`logging.config`), a module
+only called, each as a statement of its own, so that what they return is never read. Every
+other name of the three is refused, however it is reached: an attribute (`logging.getLogger`),
+a name imported from it, a submodule (`logging.config`), a module
 imported by a call (`importlib.import_module("logging")`, by keyword or relative name too), or
 the module itself handed on as a value (`getattr(logging, name)`, `x = logging`). So is a dunder
 name read past an allowed one (`install.__globals__`, `Event.__init__`), `getattr` with a literal
 name that is `logging` or a dunder, and the attribute `logging` of any module a file imports
 (`concurrent.futures._base.logging`, also bound by a from-import), but for a module of the
 project's own outside ploni/safety/ (`settings.logging`), which cannot import `logging` under
-this rule. What that leaves open is under Known limits.
+this rule. So is any of three names that lead from any object to every other
+(`object.__subclasses__`, `f.__globals__`, `f.__builtins__`; ESCAPES), as an attribute or by
+`getattr`. The files judged are the product's two folders, ploni/ and ui/ (build-plan.md section
+4.7), but ploni/safety/. What that leaves open is under Known limits.
 
 That is narrower than the option's words, and each narrowing is Claude's and only narrows what
 product code may do: a plain logging call is refused too (before `install` runs, the logging
 module's last-resort handler prints the message of a WARNING or worse); the warnings module is
 held to three names (its `catch_warnings` and `showwarning` take warnings around the filter);
-only three names of the filter may be used, `event` and `install` only called as statements; a package above
-a guarded module may not be used as a value; one of the modules may not be imported by a call;
+only three names of the filter may be used, `event` and `install` only called as statements; a
+package above a guarded module may not be used as a value; one of the modules may not be imported by a call;
 a name bound to one of the modules and bound again is still judged as that module. Some code to
 come is refused by them: `warnings.catch_warnings()` around a model load, `@warnings.deprecated`,
 a local name `warnings` in a file that imports the module. Silence a library's warnings with
@@ -73,8 +77,17 @@ is Python source and no document is handled.
 
 Known limits:
   - A check over the names in a source text cannot close every route Python has to an object. This
-    one refuses the routes that the closing test (#150) and three passes of its review found, and
-    each is a case below; a route found later is a new case, or a line here.
+    one refuses the routes that the closing test (#150) and four passes of its review found that a
+    plain setup would take, and those a line or two of code closes; each is a case below. The
+    others, which only a deliberate attack on this check would write, are the lines that follow.
+    A route found later is a new case, or a line here.
+  - A project module that hands the filter's names on under its own (`from ploni.obs import
+    install`, or `ploni.__main__`'s own name `logging`, which is the filter) is not followed: the
+    result of such an `install` can be read, and a project module's field `logging` is allowed.
+  - A module read as a mapping or through another reader: `vars(m)["logging"]`,
+    `m.__dict__["logging"]`, `operator.attrgetter("logging")(m)`.
+  - Objects found while the program runs: `gc.get_objects()`, `Event.mro()` onward into the enum
+    module.
   - A warning's text is written as it is until `install` has run: `warnings.warn` is allowed, so
     product code warns only with fixed text, never with text from a document.
   - Names that code reaches some other way are not seen: code given to `exec`, a module found
@@ -83,7 +96,8 @@ Known limits:
     ploni.safety.logging handed on through a name bound by assignment. An import whose name is
     not a literal is reported by tests/t8_privacy/test_imports.py.
   - Another module's own logger object is not refused: a module that keeps one in an attribute
-    under another name (`concurrent.futures._base.LOGGER`) gives a file a logger to set up. So
+    under another name (`concurrent.futures._base.LOGGER`) gives a file a logger to set up, and
+    through `.root.handlers` the filter's own handler. So
     is another library's own helper that sets logging up for its caller (a third-party
     `enable_default_handler()`, or `multiprocessing.log_to_stderr()`, which the worker process
     of build-plan.md section 4.6 could reach): only the three modules, and the attribute
@@ -92,6 +106,10 @@ Known limits:
     `print` is banned under ploni/ by ruff (T201).
   - A name that a file binds to one of the three modules and then binds again to something else
     is judged as the module: refused, the safe side.
+  - The web server of ui/ (Phase 5) sets logging up for itself unless told not to: uvicorn's
+    default log configuration adds handlers of its own and turns propagation off, and its access
+    lines carry the request path. That call is another library's helper, so this rule does not see
+    it; start the server with `log_config=None`, so that its records reach the root logger.
   - ploni/safety/ is not judged: it is where the filter lives (Achia's option: "outside
     ploni/safety/").
 """
@@ -129,6 +147,12 @@ PROJECT = "ploni."
 SAFETY = "ploni.safety."
 # The function that reads an attribute by a name given as text.
 GETATTR = "getattr"
+# The names that lead from any object to every other: every class, a function's module globals,
+# its builtins. Product code has no use for them.
+ESCAPES = ("__subclasses__", "__globals__", "__builtins__")
+# The product's two folders (build-plan.md section 4.7), and the folder of the filter, not judged.
+PRODUCT_FOLDERS = ("ploni", "ui")
+FILTER_FOLDER = ("ploni", "safety")
 
 
 def _package(importer: str, is_package: bool) -> str:
@@ -201,12 +225,15 @@ def _imports(tree: ast.AST, importer: str, is_package: bool) -> list[tuple[int, 
                 found.append((node.lineno, f"imports {module} by a call"))
             if (name := _getattr_name(node)) and (name == LOGGING_ATTRIBUTE or name.startswith("__")):
                 found.append((node.lineno, f"reads {name} by getattr"))
+        elif isinstance(node, ast.Attribute) and node.attr in ESCAPES:
+            found.append((node.lineno, f"reads {node.attr}"))
     return found
 
 
 def _getattr_name(node: ast.Call) -> str | None:
     """Return the name a call of getattr reads, when it is written as a literal, or None."""
-    if not (isinstance(node.func, ast.Name) and node.func.id == GETATTR and len(node.args) > 1):
+    function = node.func.id if isinstance(node.func, ast.Name) else getattr(node.func, "attr", None)
+    if function != GETATTR or len(node.args) < 2:
         return None
     name = node.args[1]
     return name.value if isinstance(name, ast.Constant) and isinstance(name.value, str) else None
@@ -265,12 +292,16 @@ def setups(source: str, importer: str = "ploni.mod", is_package: bool = False) -
 
 
 def judged(root: Path) -> list[Path]:
-    """Return the files under ploni/ that the rule judges, in order: all but those under ploni/safety/.
+    """Return the files the rule judges, in order: those of ploni/ and ui/ but ploni/safety/.
 
-    Why: Achia's option says "outside ploni/safety/", the folder where the filter lives.
+    Why: Achia's option says "product code outside ploni/safety/", the folder where the filter
+    lives; ui/ is the product's other folder (build-plan.md section 4.7).
     """
     return sorted(
-        path for path in (root / "ploni").rglob("*.py") if path.relative_to(root).parts[:2] != ("ploni", "safety")
+        path
+        for folder in PRODUCT_FOLDERS
+        for path in (root / folder).rglob("*.py")
+        if path.relative_to(root).parts[:2] != FILTER_FOLDER
     )
 
 
@@ -569,7 +600,7 @@ def test_a4_the_filter_functions_only_called_and_no_dunder(source: str, found: l
         "import concurrent.futures\n\ngetattr(concurrent.futures, 'logging')\n",
         "import somepackage.logging as lg\n\nlg.getLogger\n",
         "from ploni.safety import atomic\n\natomic.logging.getLogger\n",
-        "import builtins\nimport concurrent.futures\n\nbuiltins.getattr(concurrent.futures, 'logging')\n",
+        "import builtins, concurrent.futures\n\nbuiltins.getattr(concurrent.futures, 'logging')\n",
     ],
 )
 def test_a5_the_logging_attribute_of_another_module(source: str) -> None:
@@ -598,7 +629,7 @@ def test_ec8_the_dotted_name_of_a_file() -> None:
         "x = 1\n\nobject.__subclasses__()\n",
         "x = 1\n\ngetattr(object, '__subclasses__')\n",
         "from ploni.obs import emit\n\nemit.__globals__\n",
-        "def run() -> None:\n    pass\n\nrun.__builtins__\n",
+        "def run() -> None:\n    pass\nrun.__builtins__\n",
     ],
 )
 def test_a6_an_escape_from_any_object(source: str) -> None:
