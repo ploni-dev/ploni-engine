@@ -389,6 +389,8 @@ def test_ec4_a_module_or_a_package_above_it_as_a_value(source: str) -> None:
 
 def test_ec5_the_scope(tmp_path: Path) -> None:
     names = (
+        "ui/server.py",
+        "ui/static/x.py",
         "ploni/a.py",
         "ploni/detect/b.py",
         "ploni/safety.py",
@@ -405,6 +407,8 @@ def test_ec5_the_scope(tmp_path: Path) -> None:
         "ploni/detect/b.py",
         "ploni/detect/safety/x.py",
         "ploni/safety.py",
+        "ui/server.py",
+        "ui/static/x.py",
     ]
 
 
@@ -565,6 +569,7 @@ def test_a4_the_filter_functions_only_called_and_no_dunder(source: str, found: l
         "import concurrent.futures\n\ngetattr(concurrent.futures, 'logging')\n",
         "import somepackage.logging as lg\n\nlg.getLogger\n",
         "from ploni.safety import atomic\n\natomic.logging.getLogger\n",
+        "import builtins\nimport concurrent.futures\n\nbuiltins.getattr(concurrent.futures, 'logging')\n",
     ],
 )
 def test_a5_the_logging_attribute_of_another_module(source: str) -> None:
@@ -585,3 +590,16 @@ def test_ec8_a_package_own_file(source: str, importer: str) -> None:
 def test_ec8_the_dotted_name_of_a_file() -> None:
     assert _module(ROOT / "ploni" / "detect" / "__init__.py") == ("ploni.detect", True)
     assert _module(ROOT / "ploni" / "errors.py") == ("ploni.errors", False)
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "x = 1\n\nobject.__subclasses__()\n",
+        "x = 1\n\ngetattr(object, '__subclasses__')\n",
+        "from ploni.obs import emit\n\nemit.__globals__\n",
+        "def run() -> None:\n    pass\n\nrun.__builtins__\n",
+    ],
+)
+def test_a6_an_escape_from_any_object(source: str) -> None:
+    assert lines(source) == [3]
