@@ -37,6 +37,7 @@ the reader then takes for a branch name it cannot know.
 import pytest
 
 from scripts import guard
+from tests.sizes import INVARIANT_FULL, full
 
 GIT = "git -c credential.helper= -c credential.helper='!gh auth git-credential' "
 
@@ -188,6 +189,22 @@ def test_i2_an_allowed_command_is_let_through_in_every_shape(shape: str) -> None
     assert [command for command in ALLOWED if refused(shape.format(c=command))] == []
 
 
+# The shapes an allowed command is put inside before its own shape: none in the fast suite (I2
+# above holds it one deep).
+OUTER_FOR_ALLOWED = ["{c}"]
+
+
+@pytest.mark.parametrize("outer", OUTER_FOR_ALLOWED)
+def test_i2_an_allowed_command_is_let_through_in_every_shape_inside_every_shape(outer: str) -> None:
+    wrongly = [
+        outer.format(c=inner.format(c=command))
+        for inner in SHAPES
+        for command in ALLOWED
+        if refused(outer.format(c=inner.format(c=command)))
+    ]
+    assert wrongly == []
+
+
 @pytest.mark.parametrize("command", KNOWN_MISSED)
 def test_the_known_misses_are_exactly_the_listed_shapes(command: str) -> None:
     assert refused(command)
@@ -204,3 +221,4 @@ def test_the_sample_is_over_the_minimum_for_an_invariant() -> None:
     assert len(REFUSED) * len(SHAPES) >= 500
     assert len(REFUSED) * len(SHAPES) * len(SHAPES) >= 5000
     assert len(ALLOWED) * len(SHAPES) >= 500
+    assert len(ALLOWED) * len(SHAPES) * len(OUTER_FOR_ALLOWED) >= (INVARIANT_FULL if full() else 500)

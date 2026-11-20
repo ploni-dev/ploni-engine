@@ -130,3 +130,8 @@ def test_whatever_tree_a_block_makes_nothing_is_left_and_nothing_outside_is_touc
     assert still_text == []
     # Without this, a generator that never made a link would let the invariant pass for nothing.
     assert made == set(KINDS)
+
+
+def test_the_sample_is_over_500() -> None:
+    # CLAUDE.md, Tests: an invariant is held over 500 generated cases, 5,000 at phase close.
+    assert TREES == (INVARIANT_FULL if full() else 500)

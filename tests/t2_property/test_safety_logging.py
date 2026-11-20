@@ -158,5 +158,6 @@ def test_the_text_is_not_in_what_is_written(logging_restored: None, name: str) -
 def test_the_sample_is_over_the_minimum_for_an_invariant() -> None:
     # CLAUDE.md, Tests: an invariant is held over 500 generated cases.
     assert len(TEXTS) >= 500
+    assert len(TEXTS) - len(SPECIAL) == (INVARIANT_FULL if full() else 600)
     assert len(set(TEXTS)) >= 500
     assert len(TEXTS) * len(WAYS) >= 5000

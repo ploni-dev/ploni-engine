@@ -5,7 +5,7 @@ Equivalence classes:
   EC2  the variable set to "1"                      full
   EC3  any other value ("0", "true", "yes", "", " 1")   not full: only "1" turns it on, so that
                                                     no other spelling widens a run by accident
-EC4  the full count of an invariant              5,000 (CLAUDE.md, Tests)
+  EC4  the full count of an invariant              5,000 (CLAUDE.md, Tests)
 """
 
 import pytest

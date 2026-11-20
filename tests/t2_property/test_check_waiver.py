@@ -21,7 +21,7 @@ from datetime import date
 from itertools import combinations
 
 from scripts import check_waiver as check
-from tests.sizes import full
+from tests.sizes import INVARIANT_FULL, full
 from tests.t1_unit.test_check_waiver import STATUS, WAIVERS
 
 DAYS = [date(2026, 11, 17), date(2026, 11, 19)]
@@ -52,6 +52,10 @@ COVERS = {
 }
 
 
+# Bodies that cite no waiver: the empty body only, in the fast suite.
+BODIES = [""]
+
+
 def subsets(pool: list[str]) -> list[list[str]]:
     """Return every subset of the pool, in pool order."""
     return [list(chosen) for size in range(len(pool) + 1) for chosen in combinations(pool, size)]
@@ -67,12 +71,15 @@ def body(ids: list[str]) -> str:
 
 def test_the_sample_is_over_500() -> None:
     assert len(CASES) == (6144 if full() else 512)
+    assert len(BODIES) * len(subsets(PATHS)) * len(DAYS) >= (INVARIANT_FULL if full() else 32)
+    assert all(check.cited(body) == [] for body in BODIES)
 
 
 def test_i1_no_citation_no_problem() -> None:
-    for paths in subsets(PATHS):
-        for day in DAYS:
-            assert check.problems("", paths, WAIVERS, STATUS, day) == [], paths
+    for body in BODIES:
+        for paths in subsets(PATHS):
+            for day in DAYS:
+                assert check.problems(body, paths, WAIVERS, STATUS, day) == [], (body, paths)
 
 
 def test_i2_the_answer_follows_the_labels() -> None:

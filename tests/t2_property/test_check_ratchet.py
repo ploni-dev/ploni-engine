@@ -39,7 +39,10 @@ def run(case: tuple[int, int, int, int, int, bool]) -> tuple[list[str], list[tup
 
 
 def test_the_sample_is_over_500() -> None:
-    assert len(CASES) == (INVARIANT_FULL if full() else 648)
+    assert len(CASES) == (19208 if full() else 648)
+    named = [case for case in CASES if case[5] or not OVERRIDES[case[4]]]
+    with_a_drop = [case for case in named if run(case)[1]]
+    assert len(with_a_drop) >= (INVARIANT_FULL if full() else 225)
 
 
 def test_i1_empty_exactly_when_every_decrease_is_covered() -> None:
