@@ -20,8 +20,8 @@ Equivalence classes:
   EC8  `.github/workflows/pr-body.yml`: its code lines, comments and blank lines left out,
        exactly as merged; the body reaches the script only through the environment.
        Why: a later workflow-only PR holds no .py file, so the changed-paths check
-       lets an edit through that switches this check off; a list of patterns let 18 such
-       edits through (the review of #164, finding 1: a checkout of another ref, a BASH_ENV, a
+       lets an edit through that switches this check off; the pin built from patterns let
+       most such edits through (#166, measured: a checkout of another ref, a BASH_ENV, a
        second `- run :` step, a push trigger, more permissions). Not refused: a comment.
   EC9  heading_of(), section(), labelled(), filled() each on its own; problems() without a template file
        raises FileNotFoundError
@@ -59,7 +59,7 @@ from pathlib import Path
 import pytest
 
 from scripts import check_pr_body
-from tests.t1_unit.test_check_changed_paths import code_lines
+from tests.workflow_lines import code_lines
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "pr-body.yml"

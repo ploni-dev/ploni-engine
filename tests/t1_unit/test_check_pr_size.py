@@ -44,7 +44,7 @@ from pathlib import Path
 import pytest
 
 from scripts import check_pr_size as check
-from tests.t1_unit.test_check_changed_paths import code_lines
+from tests.workflow_lines import code_lines
 
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "pr-size.yml"
 # The workflow's code lines as #163 merged them, comments and blank lines left out, indentation

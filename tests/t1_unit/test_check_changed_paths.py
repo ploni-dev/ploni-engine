@@ -26,8 +26,8 @@ Equivalence class (the workflow that runs the check, issue #121):
   EC11 `.github/workflows/changed-paths.yml`: its code lines, comments and blank lines left
        out, exactly as merged (#119).
        Why: a later workflow-only PR holds no .py file, so the changed-paths check
-       lets an edit through that switches this check off; a list of patterns let 18 such
-       edits through (the review of #164, finding 1: a checkout of another ref, a BASH_ENV, a
+       lets an edit through that switches this check off; the pin built from patterns let
+       most such edits through (#166, measured: a checkout of another ref, a BASH_ENV, a
        second `- run :` step, a push trigger, more permissions). Not refused: a comment.
 
 Boundaries:
@@ -64,12 +64,12 @@ Known limits:
     `pyproject.toml` (`max-complexity`, `max-statements`), later a `config.py` of Phase 3.
 """
 
-import re
 from pathlib import Path
 
 import pytest
 
 from scripts import check_changed_paths as check
+from tests.workflow_lines import code_lines
 
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "changed-paths.yml"
 # The code lines of changed-paths.yml as #119 merged them (code_lines()); any other line or one more
@@ -95,19 +95,6 @@ EXPECTED = [
     '      - run: python scripts/check_changed_paths.py HEAD^1 HEAD',
 ]
 
-
-def code_lines(path: Path) -> list[str]:
-    """The lines of a workflow that YAML reads, to compare with an exact list.
-
-    Why: a list of patterns misses spellings YAML takes (the review of #164 measured 18), so
-    each workflow pin compares the whole file. Contract: lines split at LF, comment lines and
-    blank lines left out, a trailing comment cut, indentation kept; whitespace is the space
-    only, as in YAML, not Python's wider set, so a no-break space before "#" stays in the line
-    (the review of #164, pass 2). Known limits: a ` #` inside a quoted value would be cut too;
-    no workflow pinned here has one. A tab is kept, so it fails closed.
-    """
-    lines = path.read_text(encoding="utf-8").split("\n")
-    return [re.sub(r" +#.*$", "", line).rstrip(" ") for line in lines if line.strip(" ") and not line.lstrip(" ").startswith("#")]
 BASELINES = "eval/baselines.json"
 FAST = ".github/workflows/fast.yml"
 BODY = ".github/workflows/pr-body.yml"

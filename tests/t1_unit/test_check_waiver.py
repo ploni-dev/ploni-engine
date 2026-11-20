@@ -36,8 +36,8 @@ Equivalence classes (the parts):
   EC16 `.github/workflows/waiver.yml`: its code lines, comments and blank lines left out,
        exactly as merged, the body in PR_BODY under the run step itself.
        Why: a later workflow-only PR holds no .py file, so the changed-paths check
-       lets an edit through that switches this check off; a list of patterns let 18 such
-       edits through (the review of #164, finding 1: a checkout of another ref, a BASH_ENV, a
+       lets an edit through that switches this check off; the pin built from patterns let
+       most such edits through (#166, measured: a checkout of another ref, a BASH_ENV, a
        second `- run :` step, a push trigger, more permissions). Not refused: a comment.
   EC13 covers(): an exact path; a folder ending in "/"; `*` within one folder; `**` across
        folders; several entries separated by commas, with spaces and backquotes
@@ -100,7 +100,7 @@ from pathlib import Path
 import pytest
 
 from scripts import check_waiver as check
-from tests.t1_unit.test_check_changed_paths import code_lines
+from tests.workflow_lines import code_lines
 
 # The code lines of waiver.yml as #128 merged them (code_lines()); any other line or one more
 # changes how the check runs.

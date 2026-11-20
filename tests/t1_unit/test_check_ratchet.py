@@ -56,12 +56,14 @@ Equivalence classes (the parts):
   EC13 is_test_file(): tests/**/test_*.py and tests/**/*_test.py, the files pytest collects
        by default
   EC15 decreases() and ceiling() on their own
-  EC16 `.github/workflows/ratchet.yml`: its code lines, comments and blank lines left out,
+  EC16 `.github/workflows/ratchet.yml` (issue #136): its code lines, comments and blank lines left out,
        exactly as merged, the body in PR_BODY under the run step itself.
        Why: a later workflow-only PR holds no .py file, so the changed-paths check
-       lets an edit through that switches this check off; a list of patterns let 18 such
-       edits through (the review of #164, finding 1: a checkout of another ref, a BASH_ENV, a
-       second `- run :` step, a push trigger, more permissions). Not refused: a comment.
+       lets an edit through that switches this check off; the pin built from patterns let
+       most such edits through (#166, measured: a checkout of another ref, a BASH_ENV, a
+       second `- run :` step, a push trigger, more permissions). The first pin of it: the review of #134,
+       finding 2; Achia's option of 2026-11-20: "A test then pins it, as for the other
+       two." Not refused: a comment.
 
 Boundaries:
   B1  an override with the wrong delta (-2 for -1)    the decrease, and "names no decrease"
@@ -95,7 +97,7 @@ from typing import cast
 
 from scripts import check_ratchet as check
 from scripts.check_ratchet import Counts
-from tests.t1_unit.test_check_changed_paths import code_lines
+from tests.workflow_lines import code_lines
 
 # The code lines of ratchet.yml as #134 merged them (code_lines()); any other line or one more
 # changes how the check runs.
