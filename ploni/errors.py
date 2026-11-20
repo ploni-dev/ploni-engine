@@ -14,6 +14,8 @@ first raises them. Not every error is a `PloniError`: `safety.tempfiles.NotRemov
 `OSError`, and the safety helpers raise `TypeError` or `ValueError` when they are misused.
 """
 
+# Bad PR 7 of the closing test (#30): a code change beside a baseline change.
+
 
 class PloniError(Exception):
     """The base of the errors that the public API raises on purpose.
