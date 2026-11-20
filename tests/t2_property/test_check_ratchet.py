@@ -19,6 +19,8 @@ from itertools import product
 from scripts import check_ratchet as check
 from scripts.check_ratchet import Counts
 
+from tests.sizes import INVARIANT_FULL, full
+
 FILE = "tests/t1_unit/test_a.py"
 LEVELS = range(3)
 OVERRIDES = [[], [1], [2], [1, 2]]
@@ -36,7 +38,7 @@ def run(case: tuple[int, int, int, int, int, bool]) -> tuple[list[str], list[tup
 
 
 def test_the_sample_is_over_500() -> None:
-    assert len(CASES) == 648
+    assert len(CASES) == (INVARIANT_FULL if full() else 648)
 
 
 def test_i1_empty_exactly_when_every_decrease_is_covered() -> None:

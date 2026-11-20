@@ -21,6 +21,8 @@ from itertools import combinations
 
 from scripts import check_changed_paths as check
 
+from tests.sizes import INVARIANT_FULL, full
+
 CODE = ["ploni/a.py", "tests/t1_unit/test_b.py", "x.PY", "experiments/e6/run.py"]
 PROTECTED = ["eval/baselines.json", ".github/workflows/fast.yml", ".github/workflows/pr-body.yml"]
 OTHER = ["docs/STATUS.md", "eval/baselines.json.bak", ".github/actions/a/action.yml"]
@@ -34,7 +36,7 @@ def named(lines: list[str]) -> list[str]:
 
 
 def test_the_sample_is_over_500() -> None:
-    assert len(SUBSETS) == 1024
+    assert len(SUBSETS) == (8192 if full() else 1024)
 
 
 def test_i1_i2_the_answer_follows_the_labels() -> None:

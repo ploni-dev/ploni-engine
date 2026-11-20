@@ -21,6 +21,7 @@ from datetime import date
 from itertools import combinations
 
 from scripts import check_waiver as check
+from tests.sizes import full
 from tests.t1_unit.test_check_waiver import STATUS, WAIVERS
 
 DAYS = [date(2026, 11, 17), date(2026, 11, 19)]
@@ -51,7 +52,7 @@ def body(ids: list[str]) -> str:
 
 
 def test_the_sample_is_over_500() -> None:
-    assert len(CASES) == 512
+    assert len(CASES) == (6144 if full() else 512)
 
 
 def test_i1_no_citation_no_problem() -> None:
