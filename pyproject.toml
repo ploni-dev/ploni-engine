@@ -1,6 +1,32 @@
 # The one ruff and one mypy configuration (PROCESS.md section 4.5), and how pytest finds the code.
 # A change to a limit in this file needs a decision of Achia's (PROMOTION.md, Level 3 list).
 
+# The installed `ploni` command (build-plan.md Phase 0, Gate: "`ploni selftest` prints the model
+# inventory and "offline OK""). Achia, 2026-11-20: "Add a project section to pyproject.toml with a
+# `ploni` command, so `ploni selftest` works as the Phase 0 gate words it (today only `python -m
+# ploni selftest` works). Adds one build tool, setuptools, pinned with its hash."
+# Install, so that the build tool too is the hashed one of requirements-dev.txt:
+#   python -m pip install --require-hashes -r requirements-dev.txt
+#   python -m pip install --no-build-isolation --no-deps -e .
+[build-system]
+requires = ["setuptools==84.2.1"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ploni"
+version = "0.0.0"
+# build-plan.md Phase 0: Python 3.13 (Achia, 2026-11-13).
+requires-python = ">=3.13"
+# None: ploni/ uses the standard library only, as requirements.txt says.
+dependencies = []
+
+[project.scripts]
+ploni = "ploni.__main__:main"
+
+[tool.setuptools.packages.find]
+# The product only: not tests/, scripts/, eval/ or experiments/.
+include = ["ploni", "ploni.*"]
+
 [tool.ruff]
 # build-plan.md Phase 0: Python 3.13 (Achia, 2026-11-13).
 target-version = "py313"

@@ -2,5 +2,8 @@ models/
 __pycache__/
 *.pyc
 .venv/
+# What building the installed command leaves (pyproject.toml).
+*.egg-info/
+build/
 .env
 *.ploni

@@ -110,12 +110,14 @@ def selftest(models: Path, out: TextIO) -> int:
     return 0
 
 
-def main(argv: list[str]) -> int:
+def main(argv: list[str] | None = None) -> int:
     """Run one command; return its exit code.
 
-    Why: the one entry point of the command line, so that a test can call it.
+    Why: the one entry point of the command line, so that a test can call it, and the function
+    the installed `ploni` command calls (pyproject.toml).
 
-    Contract: `argv` without the program name. Raises SystemExit(2) for no command, an
+    Contract: `argv` without the program name; None, as the installed command calls it, reads
+    the arguments of the process (argparse's own default). Raises SystemExit(2) for no command, an
     unknown one, or an argument a command does not take, and SystemExit(0) for `--help`, as
     argparse does. The output stream writes a character it cannot encode as an escape, so
     that a Hebrew folder name does not stop `selftest` on a console of another code page.
