@@ -39,12 +39,13 @@ Adversarial:
       separators, both quotes, upper case, a dict and a JSON key, a .env line   found
   A7  a key in a file written as UTF-16, with and without a byte order mark    found
   A8  a .env line with a Windows line end, as text and from UTF-16                found
-  A9  a .env file with a byte order mark (UTF-8, UTF-16) and the key on its first line   found
+  A9  a .env file with a byte order mark (UTF-8, UTF-16 of either byte order) and the key on its
+      first line                                                           found
   B4  a model's special token, a template expression, `risk-` and `self_hf_` before a long
       word (the word boundaries of `sk-` and `hf_`), a name and its value on two lines   not found
 
-Sample size (CLAUDE.md, Tests: detectors 40 positive and 40 negative): EC1, A1, A5, A6, A7 and A8
-give 83 positive cases, EC2, B1, B2 and B4 give 54 negative ones.
+Sample size (CLAUDE.md, Tests: detectors 40 positive and 40 negative): EC1, A1, A5, A6, A7, A8
+and A9 give 88 positive cases, EC2, B1, B2 and B4 give 56 negative ones.
 
 Not applicable: the Hebrew axes of the test-matrix skill but one (EC2 holds Hebrew text, so that
 the scan is shown not to break on it), and the document axes: no document is handled.
@@ -386,3 +387,8 @@ def test_a8_a_env_line_with_a_windows_line_end() -> None:
 def test_a9_a_env_file_with_a_byte_order_mark(encoding: str) -> None:
     line = "DB_PASSWORD=" + _fake("", MIXED, 18, 6)
     assert secrets_in(readable(f"{line}\r\n".encode(encoding))) == ["1: env"]
+
+
+def test_a9_a_big_endian_utf_16_file_with_its_byte_order_mark() -> None:
+    line = "DB_PASSWORD=" + _fake("", MIXED, 18, 7)
+    assert secrets_in(readable(b"\xfe\xff" + f"{line}\r\n".encode("utf-16-be"))) == ["1: env"]
