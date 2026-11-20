@@ -8,7 +8,8 @@ Invariants:
       by delta, and no override line stands in a PR that changes ploni/.
   I2  every decrease that is not covered is named, with its counter and its delta.
 
-Sample: test functions and assertions before and after, each 0 to 2 (81 pairs of counts),
+Sample: test functions and assertions before and after, each 0 to 2 (81 pairs of counts; 0 to 6
+in the full suite, tests/sizes.py: 19,208 cases, I2 8,085 with a drop),
 times four sets of override lines, times whether the PR changes ploni/: 648 cases.
 
 Known limits: one file per case; several files are covered by the unit tests.
@@ -19,8 +20,12 @@ from itertools import product
 from scripts import check_ratchet as check
 from scripts.check_ratchet import Counts
 
+from tests.sizes import INVARIANT_FULL, full
+
 FILE = "tests/t1_unit/test_a.py"
-LEVELS = range(3)
+# Seven levels in the full suite: 7 ** 4 * 4 * 2 = 19,208 cases, 8,085 of them with a drop that
+# I2 must see named (six levels would give I2 only 4,275).
+LEVELS = range(7 if full() else 3)
 OVERRIDES = [[], [1], [2], [1, 2]]
 CASES = list(product(LEVELS, LEVELS, LEVELS, LEVELS, range(len(OVERRIDES)), [False, True]))
 
@@ -36,7 +41,10 @@ def run(case: tuple[int, int, int, int, int, bool]) -> tuple[list[str], list[tup
 
 
 def test_the_sample_is_over_500() -> None:
-    assert len(CASES) == 648
+    assert len(CASES) == (19208 if full() else 648)
+    named = [case for case in CASES if case[5] or not OVERRIDES[case[4]]]
+    with_a_drop = [case for case in named if run(case)[1]]
+    assert len(with_a_drop) >= (INVARIANT_FULL if full() else 225)
 
 
 def test_i1_empty_exactly_when_every_decrease_is_covered() -> None:

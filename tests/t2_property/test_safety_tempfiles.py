@@ -10,12 +10,13 @@ The invariant, for every tree a block can make inside its private folder:
   - a folder outside, which the tree links to in every way this system has, is as it was:
     every byte, and the read-only mark of its read-only file.
 
-Generated input: TREES are 500 trees from a seeded generator. A tree is 1 to 6 entries, each
+Generated input: TREES are 500 trees from a seeded generator (5,000 in the full suite,
+tests/sizes.py). A tree is 1 to 6 entries, each
 one of: a file in the folder or up to three folders deep, with a name in Hebrew, in Latin
 letters or with spaces, of 0 to 3,000 bytes, read-only or not; an empty folder, read-only or
 not; a second name for an earlier file, inside the folder; a second name, inside, for a file
 outside; a symbolic link to a file or a folder outside; on Windows a junction to a folder
-outside. One test runs all 500, so that the cost of the file system is paid once.
+outside. One test runs all of them, so that the cost of the file system is paid once.
 
 Not covered: a file that is open when the block ends, which the unit tests and the canary
 cover for both kinds of system.
@@ -30,12 +31,13 @@ from pathlib import Path
 import pytest
 
 from ploni.safety import tempfiles
+from tests.sizes import INVARIANT_FULL, full
 
 if sys.platform == "win32":
     import _winapi
 
 # CLAUDE.md, Tests: an invariant is held over 500 generated cases.
-TREES = 500
+TREES = INVARIANT_FULL if full() else 500
 TEXT = "יעקב כהן / John Smith ".encode()
 NAMES = ("page", "חוזה שכירות", "two words", "a.b.c", "יעקב-כהן", "x")
 KINDS = ["file", "file", "file", "folder", "second name", "name of an outside file", "link to a file", "link to a folder"]
@@ -129,3 +131,8 @@ def test_whatever_tree_a_block_makes_nothing_is_left_and_nothing_outside_is_touc
     assert still_text == []
     # Without this, a generator that never made a link would let the invariant pass for nothing.
     assert made == set(KINDS)
+
+
+def test_the_sample_is_over_500() -> None:
+    # CLAUDE.md, Tests: an invariant is held over 500 generated cases, 5,000 at phase close.
+    assert TREES == (INVARIANT_FULL if full() else 500)

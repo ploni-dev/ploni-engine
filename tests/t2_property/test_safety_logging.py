@@ -10,7 +10,8 @@ The invariant: for every way a text can reach the logging system, the line that 
 the same for every text, once the numbers in it are masked (the time, the line number, the
 length of a string). And the text itself is not in the line.
 
-Generated input: TEXTS are 640 texts: 600 from a seeded generator, Hebrew, Latin, digits and
+Generated input (in the full suite, tests/sizes.py: 5,000 generated, 5,040 texts, 100,800
+cases): TEXTS are 640 texts: 600 from a seeded generator, Hebrew, Latin, digits and
 punctuation in runs of 4 to 40 characters, and 40 of special shapes. WAYS are 20 ways a text
 can reach the logging system through a call that takes a text; most are ways of the canary
 test, which also has ways that take none (a warning, a record built by hand, a logger that
@@ -33,6 +34,7 @@ import pytest
 
 from ploni.safety import logging as safe
 from tests import logging_state
+from tests.sizes import INVARIANT_FULL, full
 
 HEBREW = "אבגדהוזחטיכלמנסעפצקרשתךםןףץ"
 LATIN = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -44,7 +46,7 @@ SPECIAL = [
     "__name__", "raised=KeyError", " ",
 ]  # fmt: skip
 # CLAUDE.md, Tests: an invariant is held over 500 generated cases.
-GENERATED = 600
+GENERATED = INVARIANT_FULL if full() else 600
 
 
 def texts() -> list[str]:
@@ -157,5 +159,6 @@ def test_the_text_is_not_in_what_is_written(logging_restored: None, name: str) -
 def test_the_sample_is_over_the_minimum_for_an_invariant() -> None:
     # CLAUDE.md, Tests: an invariant is held over 500 generated cases.
     assert len(TEXTS) >= 500
+    assert len(TEXTS) - len(SPECIAL) == (INVARIANT_FULL if full() else 600)
     assert len(set(TEXTS)) >= 500
     assert len(TEXTS) * len(WAYS) >= 5000
