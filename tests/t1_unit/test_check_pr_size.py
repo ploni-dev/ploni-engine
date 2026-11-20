@@ -179,5 +179,9 @@ def test_ec11_within_the_limits(monkeypatch: pytest.MonkeyPatch, capsys: pytest.
 
 def test_ec14_the_workflow() -> None:
     text = WORKFLOW.read_text(encoding="utf-8")
-    code = [re.sub(r"\s+#.*$", "", line).rstrip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    # YAML's whitespace is the space (and tab) and its line break LF, not Python's wider sets: with
+    # \s or splitlines(), a no-break space before "#|| true" would read as a comment here and as
+    # part of the run line to GitHub (the review of #164, pass 2, finding 5).
+    lines = text.split("\n")
+    code = [re.sub(r" +#.*$", "", line).rstrip(" ") for line in lines if line.strip(" ") and not line.lstrip(" ").startswith("#")]
     assert code == EXPECTED
