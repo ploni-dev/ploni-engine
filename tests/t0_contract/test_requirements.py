@@ -38,8 +38,11 @@ Known limits:
   - The hashes are read, not checked against the files they name: that is what an install with
     `--require-hashes` does. The hashes under `experiments/` are PyPI's for the pinned versions,
     read from its metadata on 2026-11-20; no install with them has been run since.
-  - Only files named `requirements*.txt` are read. `pyproject.toml` declares no dependency yet;
-    when it does, this check is widened in the same PR.
+  - Only files named `requirements*.txt` are read, and `-r` may name only such a file, so that
+    every file an install reads is read here. `pyproject.toml` declares no dependency yet; when
+    it does, this check is widened in the same PR.
+  - Refused though pip would take them, as none of this repository's files needs them: an
+    option line other than `-r`, `--require-hashes` and `--only-binary :all:`.
 """
 
 import re
@@ -50,7 +53,7 @@ from pathlib import Path
 import pytest
 
 ROOT = Path(__file__).resolve().parents[2]
-# The file names the rule reads (pip's own convention).
+# The file names the rule reads (the usual names; pip itself reads any file it is given).
 NAME = re.compile(r"requirements[^/]*\.txt")
 # git from PATH, as a full path, as in CI; the seconds a git command may take.
 GIT = shutil.which("git") or "git"
@@ -58,20 +61,27 @@ GIT_TIMEOUT_SECONDS = 60
 
 
 def _git(*args: str) -> bytes:
-    """Run one git command and return what it printed."""
+    """Return what one git command printed."""
     return subprocess.run(  # noqa: S603 fixed argv, no shell
         [GIT, *args], capture_output=True, check=True, timeout=GIT_TIMEOUT_SECONDS
     ).stdout
 
 
-# A requirement pinned to one version: a name, `==`, a version with no wildcard, and an optional
-# environment marker (PEP 508); then the options pip reads after it.
+# A requirement pinned to one version: a name with optional extras, `==`, a version with no
+# wildcard, and an optional environment marker (PEP 508); then the options pip reads after it.
 PINNED = re.compile(
-    r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==(?P<version>[A-Za-z0-9._+!-]+)"
+    r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)(?:\[[A-Za-z0-9,._ -]+\])?\s*==\s*(?P<version>[A-Za-z0-9._+!-]+)"
     r"(?:\s*;(?P<marker>.*?))?(?:\s+(?P<options>--.*))?"
 )
-HASHED = re.compile(r"--hash=sha256:[0-9a-f]{64}(?![0-9A-Za-z])")
+# One hash option: sha256, 64 lower-case hex digits, as pip writes and reads it.
+HASH_OPTION = re.compile(r"--hash=sha256:[0-9a-f]{64}")
 INCLUDE = re.compile(r"-r\s+(?P<path>\S+)")
+# The option lines that only make an install stricter: hashes required, wheels only.
+STRICTER = re.compile(r"--require-hashes|--only-binary(?:=|\s+):all:")
+# A comment, as pip cuts it: `#` at the start of a line or after white space (pip's COMMENT_RE).
+COMMENT = re.compile(r"(^|\s+)#.*$")
+# How much of a line a problem prints, so that a hash on it is never printed in full.
+SHOWN = 30
 
 
 def _logical(text: str) -> list[tuple[int, str]]:
@@ -83,26 +93,31 @@ def _logical(text: str) -> list[tuple[int, str]]:
     found: list[tuple[int, str]] = []
     start, parts = 0, []
     for number, raw in enumerate(text.splitlines(), start=1):
-        line = raw.split(" #", 1)[0].strip() if not raw.lstrip().startswith("#") else ""
+        line = COMMENT.sub("", raw).strip()
         if not parts:
             start = number
         parts.append(line.removesuffix("\\").strip())
         if not line.endswith("\\"):
-            joined = " ".join(part for part in parts if part)
-            if joined:
-                found.append((start, joined))
+            found.append((start, " ".join(part for part in parts if part)))
             parts = []
-    return found
+    if parts:
+        found.append((start, " ".join(part for part in parts if part)))
+    return [(number, line) for number, line in found if line]
 
 
 def _judge(line: str, folder: Path) -> str | None:
     """Say what is wrong with one logical line of a requirements file, or None."""
+    if STRICTER.fullmatch(line):
+        return None
     if include := INCLUDE.fullmatch(line):
-        return None if (folder / include["path"]).is_file() else f"{line}: no such file"
+        target = folder / include["path"]
+        if not NAME.fullmatch(target.name):
+            return f"{line[:SHOWN]}: not a requirements file the rule reads"
+        return None if target.is_file() else f"{line[:SHOWN]}: no such file"
     pinned = PINNED.fullmatch(line)
     if pinned is None:
-        return f"{line.split()[0]}: not pinned to one version"
-    if not HASHED.search(pinned["options"] or ""):
+        return f"{line.split()[0][:SHOWN]}: not pinned to one version"
+    if not any(HASH_OPTION.fullmatch(word) for word in line.split()):
         return f"{pinned['name']}: no sha256 hash"
     return None
 
@@ -196,6 +211,7 @@ def test_ec5_an_include(tmp_path: Path) -> None:
     assert problems("-r base.txt\n", tmp_path) == ["1: -r base.txt: not a requirements file the rule reads"]
     assert problems("-r pyproject.toml\n", ROOT) == ["1: -r pyproject.toml: not a requirements file the rule reads"]
     assert problems("-e requirements-base.txt\n", tmp_path) == ["1: -e: not pinned to one version"]
+    assert problems("-r requirements-base.txt more\n", tmp_path) == ["1: -r: not pinned to one version"]
     assert problems("-r ../missing/requirements.txt\n", tmp_path) == ["1: -r ../missing/requirements.txt: no such file"]
 
 
