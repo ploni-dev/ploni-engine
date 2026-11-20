@@ -56,16 +56,14 @@ Equivalence classes (the parts):
   EC13 is_test_file(): tests/**/test_*.py and tests/**/*_test.py, the files pytest collects
        by default
   EC15 decreases() and ceiling() on their own
-  EC16 `.github/workflows/ratchet.yml` (issue #136): the four pull_request types, fetch-depth 2
-       (every PR calls git here, so depth 1 would make every run red), exactly one run line,
-       `python -m scripts.check_ratchet HEAD^1 HEAD`, the file ending (comment lines aside)
-       with that step and its env holding PR_BODY, `${{` nowhere else, both actions pinned by
-       a 40-character hash, read-only permissions, and none of the keys that switch a step,
-       a job or the workflow off, in any YAML spelling (the patterns of EC11 of the
-       changed-paths test). Why: a later workflow-only PR holds no .py file, so the
-       changed-paths check lets an edit through that switches the ratchet off (the review of
-       #134, finding 2; Achia's option of 2026-11-20: "A test then pins it, as for the other
-       two."). Not refused: a `uses:` line swapped for another action pinned by a hash.
+  EC16 `.github/workflows/ratchet.yml` (issue #136): its code lines, comments and blank lines left out,
+       exactly as merged, the body in PR_BODY under the run step itself.
+       Why: a later workflow-only PR holds no .py file, so the changed-paths check
+       lets an edit through that switches this check off; the pin built from patterns let
+       most such edits through (#166, measured: a checkout of another ref, a BASH_ENV, a
+       second `- run :` step, a push trigger, more permissions). The first pin of it: the review of #134,
+       finding 2; Achia's option of 2026-11-20: "A test then pins it, as for the other
+       two." Not refused: a comment.
 
 Boundaries:
   B1  an override with the wrong delta (-2 for -1)    the decrease, and "names no decrease"
@@ -99,7 +97,32 @@ from typing import cast
 
 from scripts import check_ratchet as check
 from scripts.check_ratchet import Counts
-from tests.t1_unit.test_check_changed_paths import PINNED, SWITCHES_OFF
+from tests.workflow_lines import code_lines
+
+# The code lines of ratchet.yml as #134 merged them (code_lines()); any other line or one more
+# changes how the check runs.
+EXPECTED_WORKFLOW = [
+    'name: ratchet',
+    'on:',
+    '  pull_request:',
+    '    types: [opened, edited, synchronize, reopened]',
+    'permissions:',
+    '  contents: read',
+    'jobs:',
+    '  ratchet:',
+    '    runs-on: ubuntu-24.04',
+    '    timeout-minutes: 2',
+    '    steps:',
+    '      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+    '        with:',
+    '          fetch-depth: 2',
+    '      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0',
+    '        with:',
+    '          python-version: "3.13.5"',
+    '      - run: python -m scripts.check_ratchet HEAD^1 HEAD',
+    '        env:',
+    '          PR_BODY: ${{ github.event.pull_request.body }}',
+]
 
 ROOT = Path(__file__).resolve().parents[2]
 FILE = "tests/t1_unit/test_a.py"
@@ -410,23 +433,7 @@ def test_a2_what_is_under_ploni(other: str, refused: bool) -> None:
 
 
 def test_ec16_the_workflow() -> None:
-    text = (ROOT / ".github" / "workflows" / "ratchet.yml").read_text(encoding="utf-8")
-    lines = [line.strip() for line in text.splitlines()]
-    # A step's env reaches that step only: the body must sit under the run step itself.
-    code = [line for line in text.splitlines() if not line.strip().startswith("#")]
-    assert code[-3:] == [
-        "      - run: python -m scripts.check_ratchet HEAD^1 HEAD",
-        "        env:",
-        "          PR_BODY: ${{ github.event.pull_request.body }}",
-    ]
-    assert "pull_request:" in lines and "types: [opened, edited, synchronize, reopened]" in lines
-    assert "fetch-depth: 2" in lines
-    assert [line for line in lines if line.startswith(("- run:", "run:"))] == ["- run: python -m scripts.check_ratchet HEAD^1 HEAD"]
-    assert [line for line in lines if "${{" in line] == ["PR_BODY: ${{ github.event.pull_request.body }}"]
-    uses = [line for line in lines if line.startswith(("- uses:", "uses:"))]
-    assert len(uses) == 2 and all(PINNED.search(line) for line in uses)
-    assert "permissions:" in lines and "contents: read" in lines
-    assert not [line for line in lines if SWITCHES_OFF.match(line)]
+    assert code_lines(ROOT / ".github" / "workflows" / "ratchet.yml") == EXPECTED_WORKFLOW
 
 
 def test_a3_a_renamed_test_is_not_seen() -> None:

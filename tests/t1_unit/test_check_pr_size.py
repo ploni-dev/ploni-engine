@@ -39,12 +39,12 @@ Not applicable: the Hebrew axes and the document axes: the input is git's paths 
 Hebrew file name is a path like any other (t4).
 """
 
-import re
 from pathlib import Path
 
 import pytest
 
 from scripts import check_pr_size as check
+from tests.workflow_lines import code_lines
 
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "pr-size.yml"
 # The workflow's code lines as #163 merged them, comments and blank lines left out, indentation
@@ -178,10 +178,4 @@ def test_ec11_within_the_limits(monkeypatch: pytest.MonkeyPatch, capsys: pytest.
 
 
 def test_ec14_the_workflow() -> None:
-    text = WORKFLOW.read_text(encoding="utf-8")
-    # YAML's whitespace is the space (and tab) and its line break LF, not Python's wider sets: with
-    # \s or splitlines(), a no-break space before "#|| true" would read as a comment here and as
-    # part of the run line to GitHub (the review of #164, pass 2, finding 5).
-    lines = text.split("\n")
-    code = [re.sub(r" +#.*$", "", line).rstrip(" ") for line in lines if line.strip(" ") and not line.lstrip(" ").startswith("#")]
-    assert code == EXPECTED
+    assert code_lines(WORKFLOW) == EXPECTED

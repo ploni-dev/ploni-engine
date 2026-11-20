@@ -17,8 +17,12 @@ Equivalence classes:
   EC6  main: a good body / a bad one / no PR_BODY at all (GitHub gives no body for a PR opened
        with an empty description)    0 / 1, each line on the error stream / 1, both missing
   EC7  the repository's own template, unfilled    both sections are there, and all is empty
-  EC8  the workflow: on pull_request (opened, edited, synchronize, reopened); actions pinned by
-       a full commit hash; the body reaches the script only through the environment
+  EC8  `.github/workflows/pr-body.yml`: its code lines, comments and blank lines left out,
+       exactly as merged; the body reaches the script only through the environment.
+       Why: a later workflow-only PR holds no .py file, so the changed-paths check
+       lets an edit through that switches this check off; the pin built from patterns let
+       most such edits through (#166, measured: a checkout of another ref, a BASH_ENV, a
+       second `- run :` step, a push trigger, more permissions). Not refused: a comment.
   EC9  heading_of(), section(), labelled(), filled() each on its own; problems() without a template file
        raises FileNotFoundError
 
@@ -55,9 +59,32 @@ from pathlib import Path
 import pytest
 
 from scripts import check_pr_body
+from tests.workflow_lines import code_lines
 
 ROOT = Path(__file__).resolve().parents[2]
 WORKFLOW = ROOT / ".github" / "workflows" / "pr-body.yml"
+# The code lines of pr-body.yml as #108 merged them (code_lines()); any other line or one more
+# changes how the check runs.
+EXPECTED_WORKFLOW = [
+    'name: pr-body',
+    'on:',
+    '  pull_request:',
+    '    types: [opened, edited, synchronize, reopened]',
+    'permissions:',
+    '  contents: read',
+    'jobs:',
+    '  pr-body:',
+    '    runs-on: ubuntu-24.04',
+    '    timeout-minutes: 2',
+    '    steps:',
+    '      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+    '      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0',
+    '        with:',
+    '          python-version: "3.13.5"',
+    '      - run: python scripts/check_pr_body.py',
+    '        env:',
+    '          PR_BODY: ${{ github.event.pull_request.body }}',
+]
 EMPTY_ORIENTATION = [
     "empty: ## Orientation, Goal:",
     "empty: ## Orientation, Deliverable:",
@@ -119,14 +146,7 @@ def test_ec7_the_template_unfilled() -> None:
 
 
 def test_ec8_the_workflow() -> None:
-    text = WORKFLOW.read_text(encoding="utf-8")
-    assert "pull_request:" in text and "types: [opened, edited, synchronize, reopened]" in text
-    uses = [line.split("uses:")[1].strip() for line in text.splitlines() if "uses:" in line]
-    assert uses and all(len(ref.split("@")[1].split()[0]) == 40 for ref in uses)
-    assert "PR_BODY: ${{ github.event.pull_request.body }}" in text
-    runs = [line for line in text.splitlines() if line.strip().startswith("- run:") or line.strip().startswith("run:")]
-    assert runs and not any("${{" in line for line in runs)
-    assert "scripts/check_pr_body.py" in text
+    assert code_lines(WORKFLOW) == EXPECTED_WORKFLOW
 
 
 def test_ec9_section_on_its_own() -> None:
