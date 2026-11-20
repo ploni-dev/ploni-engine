@@ -27,6 +27,9 @@ Boundaries:
 Adversarial:
   A1  a key inside a longer word or a URL                              found
   A2  a key in a binary file (bytes around it that are not UTF-8)      found
+  A3  a GitHub key of the fine-grained form (`github_pat_`)           found
+  A4  two keys of one kind in a text, and keys of two kinds out of the order of PATTERNS
+                                                                       each found, by line
 
 Sample size (CLAUDE.md, Tests: detectors 40 positive and 40 negative): EC1 and A1 give 45
 positive cases, EC2, B1 and B2 give 43 negative ones.
@@ -81,13 +84,32 @@ def _git(*args: str) -> bytes:
 
 
 def secrets_in(text: str) -> list[str]:
-    """Name each match of PATTERNS in a text, as "<line>: <kind>", in order."""
-    return [kind for kind in COMPILED if not kind]
+    """Name each match of PATTERNS in a text, as "<line>: <kind>", in order.
+
+    Why: the rule of this file, apart from where the text comes from.
+
+    Contract: a line is counted from 1; a match that spans lines (none of PATTERNS does) is
+    named at its first line. Each match is named once, with its kind, and no part of the
+    value, so that a failing test does not print the secret.
+    """
+    found = [
+        (text.count("\n", 0, match.start()) + 1, kind)
+        for kind, pattern in COMPILED.items()
+        for match in pattern.finditer(text)
+    ]
+    return [f"{line}: {kind}" for line, kind in sorted(found)]
 
 
 def tracked(root: Path) -> list[Path]:
-    """Return the files git lists for a repository, in order."""
-    return [root for _ in _git("-C", str(root), "ls-files", "-z").split(b"\0") if not _]
+    """Return the files git lists for a repository, in order.
+
+    Why: the scan reads what would be pushed, not what lies ignored in the folder.
+
+    Contract: the paths git's index holds, as paths under `root`, in git's order (sorted by
+    path). Raises subprocess.CalledProcessError when `root` is no git repository.
+    """
+    listed = _git("-C", str(root), "ls-files", "-z").decode("utf-8").split("\0")
+    return [root / name for name in listed if name]
 
 
 def _fake(prefix: str, alphabet: str, length: int, seed: int) -> str:
@@ -209,10 +231,19 @@ def test_a1_inside_a_word_or_a_url(kind: str) -> None:
 
 def test_a2_in_a_binary_file(tmp_path: Path) -> None:
     data = b"\x89PNG\r\n\x1a\n\xff\xfe" + MAKERS["aws"](4).encode() + b"\x00\x81"
-    assert secrets_in(data.decode("utf-8", "replace")) == ["2: aws"]
+    assert secrets_in(data.decode("utf-8", "replace")) == ["3: aws"]
 
 
 def test_the_patterns_find_each_other_kind_not() -> None:
     for kind, make in MAKERS.items():
         found = {line.split(": ", 1)[1] for line in secrets_in(make(0) + "\n")}
         assert found == {kind}
+
+
+def test_a3_a_fine_grained_github_key() -> None:
+    assert secrets_in(_fake("github" + "_pat_", MIXED + "_", 40, 5) + "\n") == ["1: github"]
+
+
+def test_a4_two_keys_of_one_kind_and_keys_out_of_order() -> None:
+    assert secrets_in(MAKERS["aws"](6) + "\n" + MAKERS["aws"](7) + "\n") == ["1: aws", "2: aws"]
+    assert secrets_in(MAKERS["hugging face"](6) + "\n" + MAKERS["aws"](6) + "\n") == ["1: hugging face", "2: aws"]
