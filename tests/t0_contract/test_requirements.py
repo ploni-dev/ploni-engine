@@ -7,9 +7,11 @@ and `PROCESS.md` section 12 item 8 asks for "Hashes in every requirements file, 
 something no one reviewed; a file without hashes installs whatever the index serves today.
 
 The rule: in every tracked file named `requirements*.txt`, each requirement is `name==version`,
-with an optional environment marker, and at least one `--hash=sha256:` of 64 hex digits; the
-only other line is `-r` of another requirements file that exists. No other option (`-e`, an
-index URL, `-f`), no URL or path as a requirement, no wildcard version.
+with optional extras, spaces around `==` and an environment marker, and at least one
+`--hash=sha256:` of 64 hex digits among its words. The only other lines are `-r` of another
+requirements file that exists, `--require-hashes` and `--only-binary :all:`, each alone on its
+line. No other option (`-e`, an index URL, `-f`), no URL or path as a requirement, no wildcard
+version. Lines are joined and comments cut as pip does it.
 
 Test matrix:
 
@@ -18,10 +20,17 @@ Equivalence classes:
   EC2  a version that floats: none, `>=`, `~=`, `!=`, `<`, `==1.*`, `===`    a line
   EC3  a pinned requirement with no hash, or a hash that is not sha256 of 64 hex digits   a line
   EC4  a line that installs from elsewhere: `-e`, a URL, a path, `--index-url`,
-       `--extra-index-url`, `-f`, `--trusted-host`                         a line
-  EC5  `-r` of a file that exists, and of one that does not                 no line, a line
+       `--extra-index-url`, `-f`, `--trusted-host`, one of them after a stricter option,
+       `--only-binary :none:`, a hash with more glued to it                 a line
+  EC5  `-r` of a requirements file that exists; of one that does not, of a file the rule does
+       not read, `-r` followed by more, `-e` of a requirements file      no line; a line each
   EC6  comments, blank lines, Windows line ends                            no line
   EC7  the repository: every tracked requirements file                      no line
+  EC8  a continued line at the end of a file, with and without a last line break   a line
+  EC9  a comment after a tab that holds the only hash                       a line
+  EC10 an inline comment after a hashed requirement                         no line
+  EC11 a marker with no space, extras, spaces around `==`, `--require-hashes`,
+       `--only-binary :all:` in both forms                                 no line
 
 Boundaries:
   B1  a hash of 63 and of 65 hex digits                                     a line
@@ -29,7 +38,12 @@ Boundaries:
 
 Adversarial:
   A1  `--hash` with no value, and a hash with upper-case hex                 a line
-  A2  a requirement split over continued lines with its hash on a comment line   a line
+  A2  a hash on a comment line under a requirement                          a line
+  A3  a hash inside a marker string                                         a line
+  A4  a continued requirement with its hash on a comment line               a line
+
+And for the parts on their own: `_logical` names each logical line at its first line, and a
+problem never prints a hash in full.
 
 Not applicable: the Hebrew axes and the document axes of the test-matrix skill: the input is
 a requirements file.
@@ -198,6 +212,10 @@ def test_ec3_no_hash_or_a_hash_of_another_kind(text: str) -> None:
         "--extra-index-url https://example.invalid/simple\n",
         "-f https://example.invalid/wheels\n",
         "--trusted-host example.invalid\n",
+        "--require-hashes --index-url https://example.invalid/simple\n",
+        "--only-binary :all: -f https://example.invalid\n",
+        "--only-binary :none:\n",
+        f"x==1 --hash=sha256:{HASH}#x\n",
     ],
 )
 def test_ec4_a_line_that_installs_from_elsewhere(text: str) -> None:
