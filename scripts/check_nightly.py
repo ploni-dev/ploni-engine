@@ -29,6 +29,7 @@ option says "the next night's run then clears the block for everyone":
   re-run that passes does not show the night's failure fixed, and while it runs the night
   before is not read in its place (the review of #178, finding 1).
 - A cancelled or timed-out night counts as failed: only success is green.
+Readings of his words that neither narrow nor widen:
 - A first attempt not yet finished has no verdict; the night before is read.
 - No nightly run at all (before the first night) is failed=false.
 """
@@ -74,10 +75,11 @@ def attempt(run: dict[str, Any]) -> int:
 
     Why: GitHub keeps a re-run as a new attempt of the same run, with the same event and date.
 
-    Contract: the run's `run_attempt`; 1 when the field is missing or not a number.
+    Contract: the run's `run_attempt`; 1 when the field is missing. Raises ValueError or
+    TypeError when it is not a number, so the check is red rather than read a garbled re-run as
+    a first attempt.
     """
-    value = run.get("run_attempt", 1)
-    return value if isinstance(value, int) else 1
+    return int(run.get("run_attempt", 1))
 
 
 def failed(run: dict[str, Any] | None) -> str | None:
