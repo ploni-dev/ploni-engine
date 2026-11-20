@@ -9,8 +9,7 @@ chose on 2026-11-20 "Build the check first (Recommended)": "A small test that pr
 outside ploni/safety/ never sets up its own log handler or log config." This is that test.
 
 The rule: a file judged names none of the setup names (SETUP_NAMES), no name ending in
-`Handler`, holds no string that is one of them, and imports neither `logging.config` nor
-`logging.handlers`. A name is refused wherever it stands, read or written, called or not:
+`Handler`, holds no string that is one of them, and does not import `logging.config`. A name is refused wherever it stands, read or written, called or not:
 product code has no use for any of them, and the sanctioned call is `event`.
 
 Test matrix:
@@ -63,10 +62,8 @@ from tests.project_imports import imported
 ROOT = Path(__file__).resolve().parents[2]
 # The calls and attributes by which logging is set up or taken apart (the logging module's
 # own API), and the attribute by which the warnings module prints (ploni/safety/logging.py,
-# Known limits).
+# Known limits). `addHandler` and `removeHandler` are refused by HANDLER_SUFFIX.
 SETUP_NAMES = (
-    "addHandler",
-    "removeHandler",
     "basicConfig",
     "dictConfig",
     "fileConfig",
@@ -81,18 +78,52 @@ SETUP_NAMES = (
     "showwarning",
 )
 HANDLER_SUFFIX = "Handler"
-# The two modules of the logging package that only set logging up.
-SETUP_MODULES = ("logging.config", "logging.handlers")
+# The module of the logging package that only sets logging up. Its other one, `logging.handlers`,
+# is refused by its name, `handlers`, in SETUP_NAMES.
+SETUP_MODULES = ("logging.config",)
+
+
+def _is_setup(name: str) -> bool:
+    """Say whether a name is a setup name or the name of a handler."""
+    return name in SETUP_NAMES or name.endswith(HANDLER_SUFFIX)
+
+
+def _names(node: ast.AST) -> list[str]:
+    """Return the names a node holds where code names a thing, and the text of a string."""
+    if isinstance(node, ast.Name):
+        return [node.id]
+    if isinstance(node, ast.Attribute):
+        return [node.attr]
+    if isinstance(node, ast.alias):
+        return [node.name.rsplit(".", 1)[-1]]
+    if isinstance(node, ast.Constant) and isinstance(node.value, str):
+        return [node.value]
+    return []
 
 
 def setups(source: str, importer: str = "ploni.mod") -> list[str]:
-    """Name each line of a source text that sets up logging, as "<line>: <what>"."""
-    return []
+    """Name each line of a source text that sets up logging, as "<line>: <what>".
+
+    Why: the rule of this file, apart from where the source comes from.
+
+    Contract: `importer` is the dotted name of the module, for a relative import. A line
+    holding several setups is named once for each; the lines are in order.
+    """
+    found = [
+        (node.lineno, f"names {name}")
+        for node in ast.walk(ast.parse(source))
+        for name in _names(node)
+        if _is_setup(name)
+    ]
+    found += [(line, f"imports {module}") for line, module in imported(source, importer) if module in SETUP_MODULES]
+    return [f"{line}: {what}" for line, what in sorted(found)]
 
 
 def judged(root: Path) -> list[Path]:
     """Return the files under ploni/ that the rule judges: all but those under ploni/safety/."""
-    return []
+    return sorted(
+        path for path in (root / "ploni").rglob("*.py") if path.relative_to(root).parts[:2] != ("ploni", "safety")
+    )
 
 
 def lines(source: str) -> list[int]:
