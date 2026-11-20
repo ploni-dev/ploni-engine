@@ -19,7 +19,7 @@ staged files do not decide it):
       that exits 3, and one that exits 0  the hook ends as it ends: it starts that python
   M11 the hook in a worktree with no .venv of its own   it starts the main checkout's
   M12 no .venv anywhere                  it says so on the error stream and starts python on PATH
-  M14 no .venv and no python on PATH    the hook fails: the commit is not made
+  M14 no .venv and no python on PATH    the hook fails with 127: the commit is not made
   M13 a step that runs out of time (the real timeout, made one second)   it fails, "timed out"
   M4  the hook file                        LF line ends in the repository and on checkout
                                            (`.gitattributes`), a shell shebang, and it runs
@@ -121,7 +121,7 @@ def _stand_in(folder: Path, name: str, code: int) -> None:
 
 
 def _repository(folder: Path) -> Path:
-    """Return a git repository with one commit and this branch's hook in .githooks/."""
+    """Make a git repository with one commit and this branch's hook in .githooks/; return that folder."""
     git(folder, "init", "-q", "-b", "main")
     (folder / "a.txt").write_text("x\n", encoding="utf-8")
     git(folder, "add", "a.txt")
@@ -174,4 +174,5 @@ def test_m14_with_no_python_at_all_the_hook_fails(tmp_path: Path) -> None:
     hooks = _repository(tmp_path)
     empty = tmp_path / "empty"
     empty.mkdir()
-    assert _hook(tmp_path, hooks, {**os.environ, "PATH": str(empty)}) != 0
+    # 127: the shell found no python to start (exec: python: not found), not some other failure.
+    assert _hook(tmp_path, hooks, {**os.environ, "PATH": str(empty)}) == 127
