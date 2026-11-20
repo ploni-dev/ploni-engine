@@ -190,9 +190,12 @@ def test_ec4_a_line_that_installs_from_elsewhere(text: str) -> None:
 
 
 def test_ec5_an_include(tmp_path: Path) -> None:
-    (tmp_path / "base.txt").write_text(f"x==1.0 --hash=sha256:{HASH}\n", encoding="utf-8")
-    assert problems("-r base.txt\n", tmp_path) == []
-    assert problems("-e base.txt\n", tmp_path) == ["1: -e: not pinned to one version"]
+    (tmp_path / "requirements-base.txt").write_text(f"x==1.0 --hash=sha256:{HASH}\n", encoding="utf-8")
+    (tmp_path / "base.txt").write_text("requests\n", encoding="utf-8")
+    assert problems("-r requirements-base.txt\n", tmp_path) == []
+    assert problems("-r base.txt\n", tmp_path) == ["1: -r base.txt: not a requirements file the rule reads"]
+    assert problems("-r pyproject.toml\n", ROOT) == ["1: -r pyproject.toml: not a requirements file the rule reads"]
+    assert problems("-e requirements-base.txt\n", tmp_path) == ["1: -e: not pinned to one version"]
     assert problems("-r ../missing/requirements.txt\n", tmp_path) == ["1: -r ../missing/requirements.txt: no such file"]
 
 
@@ -252,3 +255,50 @@ def test_the_file_names_read(tmp_path: Path) -> None:
     _git("-C", str(tmp_path), "add", *names)
     found = [path.relative_to(tmp_path).as_posix() for path in requirement_files(tmp_path)]
     assert found == ["requirements-dev.txt", "requirements.txt", "x/requirements.txt"]
+
+
+def test_ec8_a_continued_line_at_the_end_of_the_file() -> None:
+    assert _lines("pytest \\\n") == [1]
+    assert _lines("pytest \\") == [1]
+
+
+def test_ec9_a_comment_after_a_tab_holds_no_hash() -> None:
+    assert _lines(f"pytest==9.2.0 --config-settings=a=b\t# --hash=sha256:{HASH}\n") == [1]
+
+
+def test_ec10_an_inline_comment_after_a_hashed_requirement() -> None:
+    assert problems(f"pytest==9.2.0 --hash=sha256:{HASH}  # the test runner\n", ROOT) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        f'x==1;sys_platform=="win32" --hash=sha256:{HASH}\n',
+        f"pydantic[email]==2.14.3 --hash=sha256:{HASH}\n",
+        f"pytest == 9.2.0 --hash=sha256:{HASH}\n",
+        "--require-hashes\n",
+        "--only-binary :all:\n",
+        "--only-binary=:all:\n",
+    ],
+)
+def test_ec11_markers_extras_spaces_and_the_stricter_options(text: str) -> None:
+    assert problems(text, ROOT) == []
+
+
+def test_a3_a_hash_inside_a_marker_string() -> None:
+    assert _lines(f'x==1 ; extra=="--hash=sha256:{HASH}"\n') == [1]
+
+
+def test_a4_a_continued_requirement_with_its_hash_on_a_comment_line() -> None:
+    assert _lines(f"pytest==9.2.0 \\\n# --hash=sha256:{HASH}\n") == [1]
+
+
+def test_logical_lines_each_at_its_first_line() -> None:
+    text = f"# head\n\npytest \\\n    ==9.2.0 \\\n    --hash=sha256:{HASH}\nruff==0.17.5  # why\n"
+    assert _logical(text) == [(3, f"pytest ==9.2.0 --hash=sha256:{HASH}"), (6, "ruff==0.17.5")]
+    assert problems("x = \\\n  y\n", ROOT) == ["1: x: not pinned to one version"]
+
+
+def test_a_problem_never_prints_a_hash_in_full() -> None:
+    [found] = problems(f"--hash=sha256:{HASH}\n", ROOT)
+    assert HASH not in found
