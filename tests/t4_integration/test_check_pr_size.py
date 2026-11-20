@@ -7,10 +7,12 @@ rename counted on both sides, a binary file, a Hebrew file name.
 Matrix (a repository made in a temporary folder; `main` run in it):
   M1  a PR within the limits                         exit 0, nothing written
   M2  a PR of 16 product files                       exit 1, the files line
-  M3  a PR of 401 net product lines                  exit 0, a warning line
+  M3  a PR of 401 changed product lines                  exit 0, a warning line
   M4  what the base gained after the branch was cut  not counted
   M5  a product file renamed                         counted (git's --no-renames: a deletion and an addition)
   M6  a binary product file, and one with a Hebrew name    counted as files
+  M7  a rewrite in place of 1,000 product lines (1,000 added, 1,000 deleted)    exit 1
+  M8  a base git does not know                        CalledProcessError, so the run is red
 """
 
 import shutil
@@ -74,7 +76,7 @@ def test_m2_sixteen_product_files(repo: Path, capsys: pytest.CaptureFixture[str]
 def test_m3_four_hundred_and_one_net_lines(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
     commit(repo, {"ui/server.py": "y = 2\n" * 401})
     assert check.main(["main", "pr"]) == 0
-    assert capsys.readouterr().out == "::warning::401 net product lines, over the soft limit of 400\n"
+    assert capsys.readouterr().out == "::warning::401 changed product lines, over the soft limit of 400\n"
 
 
 def test_m4_what_the_base_gained_later_is_not_counted(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
@@ -89,9 +91,24 @@ def test_m4_what_the_base_gained_later_is_not_counted(repo: Path, capsys: pytest
 def test_m5_a_renamed_product_file(repo: Path) -> None:
     git(repo, "mv", "ploni/base.py", "ploni/moved.py")
     git(repo, "commit", "-q", "-m", "rename")
-    assert check.measure(check.numstat("main", "pr", repo)) == (2, 0)
+    assert check.measure(check.numstat("main", "pr", repo)) == (2, 2, [])
 
 
 def test_m6_a_binary_file_and_a_hebrew_name(repo: Path) -> None:
     commit(repo, {"ploni/weights.bin": bytes(range(256)), "ploni/שמות.py": "y = 2\n"})
-    assert check.measure(check.numstat("main", "pr", repo)) == (2, 1)
+    assert check.measure(check.numstat("main", "pr", repo)) == (2, 1, ["ploni/weights.bin"])
+
+
+def test_m7_a_rewrite_in_place(repo: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    git(repo, "checkout", "-q", "main")
+    commit(repo, {"ploni/big.py": "".join(f"old = {n}\n" for n in range(1000))})
+    git(repo, "checkout", "-q", "-B", "pr")
+    git(repo, "branch", "-f", "main")
+    commit(repo, {"ploni/big.py": "".join(f"new = {n}\n" for n in range(1000))})
+    assert check.main(["main", "pr"]) == 1
+    assert capsys.readouterr().err == "2000 changed product lines, over the hard limit of 800\n"
+
+
+def test_m8_a_base_git_does_not_know(repo: Path) -> None:
+    with pytest.raises(subprocess.CalledProcessError):
+        check.main(["no-such-branch", "pr"])
