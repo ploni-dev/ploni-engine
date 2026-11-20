@@ -27,12 +27,26 @@ from tests.t1_unit.test_check_waiver import STATUS, WAIVERS
 DAYS = [date(2026, 11, 17), date(2026, 11, 19)]
 IDS = ["WAIVER-003", "WAIVER-005", "WAIVER-002", "WAIVER-999"]
 PATHS = ["ploni/resolve/a.py", "tests/t2_property/test_projection.py", "ploni/x.py", "docs/a.md"]
-# By hand, from the fixture: 003 is in force on both days (Phase 3 is open); 005 expires on
-# 2026-11-18; 002 is under Expired; 999 is not in the file.
-IN_FORCE = {"WAIVER-003": set(DAYS), "WAIVER-005": {date(2026, 11, 17)}, "WAIVER-002": set(), "WAIVER-999": set()}
+if full():
+    # A third day, a waiver with a file pattern and a date, two more paths: 32 * 64 * 3 = 6,144.
+    DAYS = [*DAYS, date(2026, 11, 20)]
+    IDS = [*IDS, "WAIVER-004"]
+    PATHS = [*PATHS, "ploni/resolve/b/c.py", "README.md"]
+# By hand, from the fixture: 003 is in force on every day (Phase 3 is open); 005 expires on
+# 2026-11-18; 004 on 2026-11-19, in force on that day; 002 is under Expired; 999 is not in the file.
+IN_FORCE = {
+    "WAIVER-003": set(DAYS),
+    "WAIVER-005": {date(2026, 11, 17)},
+    "WAIVER-004": {date(2026, 11, 17), date(2026, 11, 19)},
+    "WAIVER-002": set(),
+    "WAIVER-999": set(),
+}
+# By hand, from the scopes: 003 "tests/t2_property/test_projection.py, ploni/resolve/"; 005
+# "ploni/"; 004 "ploni/*.py", one folder deep only.
 COVERS = {
-    "WAIVER-003": {"ploni/resolve/a.py", "tests/t2_property/test_projection.py"},
-    "WAIVER-005": {"ploni/resolve/a.py", "ploni/x.py"},
+    "WAIVER-003": {"ploni/resolve/a.py", "tests/t2_property/test_projection.py", "ploni/resolve/b/c.py"},
+    "WAIVER-005": {"ploni/resolve/a.py", "ploni/x.py", "ploni/resolve/b/c.py"},
+    "WAIVER-004": {"ploni/x.py"},
     "WAIVER-002": set(),
     "WAIVER-999": set(),
 }

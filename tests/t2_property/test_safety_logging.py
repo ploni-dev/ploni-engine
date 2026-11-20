@@ -33,6 +33,7 @@ import pytest
 
 from ploni.safety import logging as safe
 from tests import logging_state
+from tests.sizes import INVARIANT_FULL, full
 
 HEBREW = "אבגדהוזחטיכלמנסעפצקרשתךםןףץ"
 LATIN = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ"
@@ -44,7 +45,7 @@ SPECIAL = [
     "__name__", "raised=KeyError", " ",
 ]  # fmt: skip
 # CLAUDE.md, Tests: an invariant is held over 500 generated cases.
-GENERATED = 600
+GENERATED = INVARIANT_FULL if full() else 600
 
 
 def texts() -> list[str]:

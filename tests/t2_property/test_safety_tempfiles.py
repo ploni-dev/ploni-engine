@@ -30,12 +30,13 @@ from pathlib import Path
 import pytest
 
 from ploni.safety import tempfiles
+from tests.sizes import INVARIANT_FULL, full
 
 if sys.platform == "win32":
     import _winapi
 
 # CLAUDE.md, Tests: an invariant is held over 500 generated cases.
-TREES = 500
+TREES = INVARIANT_FULL if full() else 500
 TEXT = "יעקב כהן / John Smith ".encode()
 NAMES = ("page", "חוזה שכירות", "two words", "a.b.c", "יעקב-כהן", "x")
 KINDS = ["file", "file", "file", "folder", "second name", "name of an outside file", "link to a file", "link to a folder"]

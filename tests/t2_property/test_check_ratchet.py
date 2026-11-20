@@ -22,7 +22,8 @@ from scripts.check_ratchet import Counts
 from tests.sizes import INVARIANT_FULL, full
 
 FILE = "tests/t1_unit/test_a.py"
-LEVELS = range(3)
+# Five levels in the full suite: 5 ** 4 * 4 * 2 = 5,000 cases.
+LEVELS = range(5 if full() else 3)
 OVERRIDES = [[], [1], [2], [1, 2]]
 CASES = list(product(LEVELS, LEVELS, LEVELS, LEVELS, range(len(OVERRIDES)), [False, True]))
 

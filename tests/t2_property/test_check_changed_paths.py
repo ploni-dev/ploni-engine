@@ -21,11 +21,16 @@ from itertools import combinations
 
 from scripts import check_changed_paths as check
 
-from tests.sizes import INVARIANT_FULL, full
+from tests.sizes import full
 
 CODE = ["ploni/a.py", "tests/t1_unit/test_b.py", "x.PY", "experiments/e6/run.py"]
 PROTECTED = ["eval/baselines.json", ".github/workflows/fast.yml", ".github/workflows/pr-body.yml"]
 OTHER = ["docs/STATUS.md", "eval/baselines.json.bak", ".github/actions/a/action.yml"]
+if full():
+    # One more path of each kind: 13 paths, 8,192 subsets.
+    CODE = [*CODE, "ploni/detect/c.py"]
+    PROTECTED = [*PROTECTED, ".github/workflows/full.yml"]
+    OTHER = [*OTHER, "README.md"]
 POOL = CODE + PROTECTED + OTHER
 SUBSETS = [list(chosen) for size in range(len(POOL) + 1) for chosen in combinations(POOL, size)]
 
