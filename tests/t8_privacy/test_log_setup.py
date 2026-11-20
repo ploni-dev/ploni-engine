@@ -21,7 +21,7 @@ name read past an allowed one (`install.__globals__`, `Event.__init__`), `getatt
 name that is `logging` or a dunder, and the attribute `logging` of any module a file imports
 (`concurrent.futures._base.logging`, also bound by a from-import), but for a module of the
 project's own outside ploni/safety/ (`settings.logging`), which cannot import `logging` under
-this rule. So is any of three names that lead from any object to every other
+this rule. So is any of the names that lead from any object to every other
 (`object.__subclasses__`, `f.__globals__`, a frame's `f_locals`; ESCAPES), as an attribute or by
 `getattr`. The files judged are the product's two folders, ploni/ and ui/ (build-plan.md section
 4.7), but ploni/safety/. What that leaves open is under Known limits.
