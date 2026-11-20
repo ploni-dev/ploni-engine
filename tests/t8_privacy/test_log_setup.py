@@ -207,7 +207,11 @@ def lines(source: str, importer: str = "ploni.mod") -> list[int]:
 # The names each module allows, written out here and not taken from ALLOWED, so that a name
 # dropped from ALLOWED, or added to it, turns a case red.
 LEVELS = ("CRITICAL", "FATAL", "ERROR", "WARNING", "WARN", "INFO", "DEBUG", "NOTSET")
-EXPECTED_ALLOWED = {"logging": LEVELS, "warnings": ("warn",), "ploni.safety.logging": ("Event", "event", "install")}
+EXPECTED_ALLOWED = {
+    "logging": LEVELS,
+    "warnings": ("warn", "filterwarnings", "simplefilter"),
+    "ploni.safety.logging": ("Event", "event", "install"),
+}
 MODULES = {"logging": logging, "warnings": warnings, "ploni.safety.logging": ploni.safety.logging}
 
 
@@ -271,6 +275,9 @@ def test_ec2_a_submodule_of_logging(source: str) -> None:
         ("from importlib import import_module\n\nimport_module('logging.config')\n", [3]),
         ("from importlib import import_module\n\nimport_module('ploni.safety')\n", [3]),
         ("from importlib import import_module\n\nimport_module('json')\n", []),
+        ("import importlib\n\nimportlib.import_module(name='logging')\n", [3]),
+        ("__import__(name='logging')\n", [1]),
+        ("import importlib\n\nimportlib.import_module('.logging', 'ploni.safety')\n", [3]),
     ],
 )
 def test_ec3_imported_by_a_call(source: str, found: list[int]) -> None:
@@ -347,6 +354,11 @@ def test_ec7_the_lines_in_order() -> None:
         "import warnings\n\nwarnings.warn('a fixed text', UserWarning, stacklevel=2)\n",
         "from ploni.safety import logging\n\nlogging.install\n",
         "from ploni import errors, types\n",
+        "import sys\n\nfrom ploni.safety.logging import install\n\ninstall(sys.stderr)\n",
+        "from ploni.safety import logging\n\nlogging.event(logging.Event.DONE)\n",
+        "from ploni.safety.logging import Event\n\n\nclass DetectEvent(Event):\n    DONE = 1\n",
+        "import warnings\n\nwarnings.filterwarnings('ignore', category=FutureWarning)\n",
+        "import warnings\n\nwarnings.simplefilter('ignore')\n",
     ],
 )
 def test_b1_the_allowed_names(source: str) -> None:
@@ -427,3 +439,47 @@ def test_a2_the_ways_the_review_ran(source: str, found: list[int]) -> None:
 )
 def test_a3_anywhere_in_the_file(source: str) -> None:
     assert lines(source) == [source.count("\n")]
+
+
+@pytest.mark.parametrize(
+    ("source", "found"),
+    [
+        ("from ploni.safety.logging import install\n\ninstall.__globals__\n", [3]),
+        ("from ploni.safety.logging import event\n\ngetattr(event, '__globals__')\n", [3]),
+        ("from ploni.safety.logging import install\n\nf = install\n", [3]),
+        ("from ploni.safety.logging import event\n\nevent.__globals__['Redacting'].format = str\n", [3]),
+        ("from ploni.safety.logging import Event\n\nEvent.__init__.__globals__\n", [3]),
+        ("from ploni.safety import logging\n\nlogging.install.__globals__\n", [3]),
+        ("from ploni.safety import logging\n\nrun = logging.event\n", [3]),
+    ],
+)
+def test_a4_the_filter_functions_only_called_and_no_dunder(source: str, found: list[int]) -> None:
+    assert lines(source) == found
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "import concurrent.futures._base as b\n\nb.logging.StreamHandler\n",
+        "import concurrent.futures\n\nconcurrent.futures._base.logging\n",
+        "from concurrent.futures import _base\n\n_base.logging.getLogger\n",
+    ],
+)
+def test_a5_the_logging_attribute_of_another_module(source: str) -> None:
+    assert lines(source) == [3]
+
+
+@pytest.mark.parametrize(
+    ("source", "importer"),
+    [
+        ("from .safety import logging as m\nm.Redacting\n", "ploni"),
+        ("from ..safety import logging as m\nm.Redacting\n", "ploni.detect"),
+    ],
+)
+def test_ec8_a_package_own_file(source: str, importer: str) -> None:
+    assert setups(source, importer, True) == ["2: uses ploni.safety.logging.Redacting"]
+
+
+def test_ec8_the_dotted_name_of_a_file() -> None:
+    assert _module(ROOT / "ploni" / "detect" / "__init__.py") == ("ploni.detect", True)
+    assert _module(ROOT / "ploni" / "errors.py") == ("ploni.errors", False)
