@@ -28,12 +28,12 @@ main. Equivalence classes:
   EC10 a PR over a soft limit only                                   a GitHub warning line on the
                                                                      output, exit 0
   EC11 a PR within the limits                                        nothing, exit 0
-
-The workflow. Equivalence classes:
-  EC14 .github/workflows/pr-size.yml    on every pull request event, depth 2, the one run line,
-       two actions pinned by hash, read-only, no ${{ }}, no key that switches it off
   EC13 a binary product file                                         a GitHub warning naming it,
                                                                      as its lines are not counted
+
+The workflow. Equivalence classes:
+  EC14 .github/workflows/pr-size.yml    its code lines, comments and blank lines left out, exactly
+       as merged in #163: any changed or added line is red, a comment is not
 
 Not applicable: the Hebrew axes and the document axes: the input is git's paths and counts. A
 Hebrew file name is a path like any other (t4).
@@ -47,14 +47,29 @@ import pytest
 from scripts import check_pr_size as check
 
 WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "pr-size.yml"
-# An action pinned by a full commit hash, not a tag (CLAUDE.md, Hard constraints: pin every version).
-PINNED = re.compile(r"@[0-9a-f]{40}(\s|$)")
-# Keys that skip the step or the job, turn a failure green, swap the shell, or keep the
-# workflow from running at all; the workflow needs none of them. YAML also takes a key in
-# quotes and with spaces before its colon, so those spellings are matched too.
-SWITCHES_OFF = re.compile(
-    r"""(- )?(["']?)(if|continue-on-error|shell|paths|paths-ignore|branches|branches-ignore)\2\s*:"""
-)
+# The workflow's code lines as #163 merged them, comments and blank lines left out, indentation
+# kept. Any other line, or one more, is a change to how the check runs: a key spelled to slip past
+# a pattern, a checkout of another ref, an env that runs first, a second step, another trigger.
+EXPECTED = [
+    'name: pr-size',
+    'on:',
+    '  pull_request:',
+    '    types: [opened, edited, synchronize, reopened]',
+    'permissions:',
+    '  contents: read',
+    'jobs:',
+    '  pr-size:',
+    '    runs-on: ubuntu-24.04',
+    '    timeout-minutes: 2',
+    '    steps:',
+    '      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
+    '        with:',
+    '          fetch-depth: 2',
+    '      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0',
+    '        with:',
+    '          python-version: "3.13.5"',
+    '      - run: python -m scripts.check_pr_size HEAD^1 HEAD',
+]
 
 
 @pytest.mark.parametrize("path", ["ploni/a.py", "ploni/detect/b/c.py", "ui/server.py", "ui/static/app.js"])
@@ -163,12 +178,6 @@ def test_ec11_within_the_limits(monkeypatch: pytest.MonkeyPatch, capsys: pytest.
 
 
 def test_ec14_the_workflow() -> None:
-    lines = [line.strip() for line in WORKFLOW.read_text(encoding="utf-8").splitlines()]
-    assert "pull_request:" in lines and "types: [opened, edited, synchronize, reopened]" in lines
-    assert "fetch-depth: 2" in lines
-    assert [line for line in lines if line.startswith(("- run:", "run:"))] == ["- run: python -m scripts.check_pr_size HEAD^1 HEAD"]
-    uses = [line for line in lines if line.startswith(("- uses:", "uses:"))]
-    assert len(uses) == 2 and all(PINNED.search(line) for line in uses)
-    assert "permissions:" in lines and "contents: read" in lines
-    assert not any("${{" in line for line in lines)
-    assert not [line for line in lines if SWITCHES_OFF.match(line)]
+    text = WORKFLOW.read_text(encoding="utf-8")
+    code = [re.sub(r"\s+#.*$", "", line).rstrip() for line in text.splitlines() if line.strip() and not line.lstrip().startswith("#")]
+    assert code == EXPECTED
