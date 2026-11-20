@@ -414,6 +414,7 @@ def test_ec7_the_lines_in_order() -> None:
         "from ploni.safety.logging import Event\n\n\nclass DetectEvent(Event):\n    DONE = 1\n",
         "import warnings\n\nwarnings.filterwarnings('ignore', category=FutureWarning)\n",
         "import warnings\n\nwarnings.simplefilter('ignore')\n",
+        "import sys\n\nfrom ploni.safety.logging import install\n\ninstall(sys.stderr)\n",
     ],
 )
 def test_b1_the_allowed_names(source: str) -> None:
@@ -432,6 +433,8 @@ def test_b1_the_allowed_names(source: str) -> None:
         "def listen() -> None:\n    pass\n",
         '"""This module never calls logging.basicConfig."""\n',
         "import json\n\njson.dumps({})\n",
+        "from ploni import settings\n\nsettings.logging.level\n",
+        "settings = {}\n\ngetattr(settings, 'get')\n",
     ],
 )
 def test_b2_words_that_only_look_like_logging(source: str) -> None:
@@ -506,6 +509,13 @@ def test_a3_anywhere_in_the_file(source: str) -> None:
         ("from ploni.safety.logging import Event\n\nEvent.__init__.__globals__\n", [3]),
         ("from ploni.safety import logging\n\nlogging.install.__globals__\n", [3]),
         ("from ploni.safety import logging\n\nrun = logging.event\n", [3]),
+        ("import sys\n\nfrom ploni.safety.logging import install\n\nhandler = install(sys.stderr)\n", [5]),
+        ("import sys\n\nfrom ploni.safety.logging import install\n\ninstall(sys.stderr).formatter\n", [5]),
+        ("from ploni.safety.logging import Event, event\n\nx = event(Event.DONE)\n", [3]),
+        ("from ploni.safety.logging import Event\n\nEvent.__init__\n", [3]),
+        ("import logging\n\nlogging.INFO.__class__\n", [3]),
+        ("import warnings\n\nwarnings.warn.__self__\n", [3]),
+        ("from ploni.safety.logging import Event\n\ngetattr(Event, '__init__')\n", [3]),
     ],
 )
 def test_a4_the_filter_functions_only_called_and_no_dunder(source: str, found: list[int]) -> None:
@@ -518,6 +528,8 @@ def test_a4_the_filter_functions_only_called_and_no_dunder(source: str, found: l
         "import concurrent.futures._base as b\n\nb.logging.StreamHandler\n",
         "import concurrent.futures\n\nconcurrent.futures._base.logging\n",
         "from concurrent.futures import _base\n\n_base.logging.getLogger\n",
+        "from concurrent.futures._base import logging as lg\n\nlg.getLogger\n",
+        "import concurrent.futures\n\ngetattr(concurrent.futures, 'logging')\n",
     ],
 )
 def test_a5_the_logging_attribute_of_another_module(source: str) -> None:
