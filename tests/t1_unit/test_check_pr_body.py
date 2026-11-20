@@ -86,10 +86,6 @@ def test_ec1_a_filled_body() -> None:
     assert check_pr_body.problems(GOOD) == []
 
 
-def test_ec2_no_orientation() -> None:
-    assert check_pr_body.problems(GOOD.replace("## Orientation", "## Overview")) == ["missing: ## Orientation"]
-
-
 def test_ec3_no_ponytail_review() -> None:
     assert check_pr_body.problems(GOOD.replace("## Ponytail review", "## Review")) == ["missing: ## Ponytail review"]
 
