@@ -45,8 +45,11 @@ Equivalence classes (the parts):
        swapped for a nested function is a drop.
   EC18 collected() on its own: the class-name prefix is "Test", case and all ("Tester" yes;
        "Thing", "testlower", "Tes" no); a Test* class that pytest refuses (it defines
-       __init__ or __new__, or sets __test__ = False) counts nothing, so switching a class
-       off is a drop.
+       __init__ or __new__ anywhere in its body, or sets __test__ to a false value, also
+       None, 0 or with a type annotation) counts nothing, so switching a class off is a drop;
+       an ordinary attribute set to False does not refuse
+  EC19 a module that sets __test__ to a false value at its top level: pytest collects none
+       of its tests, so its test functions count 0 (its assertions still count)
   EC12 overrides(): a line read whole; in backquotes; spaces; Hebrew in the reason
   EC13 is_test_file(): tests/**/test_*.py and tests/**/*_test.py, the files pytest collects
        by default
@@ -286,6 +289,31 @@ def test_ec18_collected_on_its_own() -> None:
     switched_on = "class TestOn:\n    __test__ = True\n\n    def test_e(self): pass\n"
     assert check.collected(ast.parse(switched_on).body) == 1
     assert check.collected(ast.parse(REFUSED_CLASSES).body) == 0
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "class TestA:\n    __test__ = None\n\n    def test_a(self): pass\n",
+        "class TestA:\n    __test__ = 0\n\n    def test_a(self): pass\n",
+        "class TestA:\n    __test__: bool = False\n\n    def test_a(self): pass\n",
+        "class TestA:\n    def test_a(self): pass\n\n    def __init__(self): pass\n",
+        "class TestA:\n    def test_a(self): pass\n\n    __test__ = False\n",
+    ],
+)
+def test_ec18_every_way_pytest_refuses_a_class(source: str) -> None:
+    assert check.collected(ast.parse(source).body) == 0
+
+
+def test_ec18_an_attribute_set_to_false_does_not_refuse() -> None:
+    source = "class TestA:\n    flag = False\n\n    def test_a(self): pass\n"
+    assert check.collected(ast.parse(source).body) == 1
+
+
+@pytest.mark.parametrize("line", ["__test__ = False", "__test__: bool = False", "__test__ = None"])
+def test_ec19_a_module_switched_off_counts_no_test(line: str) -> None:
+    source = f"{line}\n\n\ndef test_a():\n    assert 1\n\n\nclass TestB:\n    def test_b(self):\n        assert 2\n"
+    assert check.count(source) == Counts(test_functions=0, assertions=2)
 
 
 def test_ec18_a_class_switched_off_is_a_drop() -> None:
