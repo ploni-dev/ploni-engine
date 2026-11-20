@@ -107,7 +107,8 @@ def count(source: str) -> Counts:
     Contract: raises SyntaxError when the source does not parse.
     """
     tree = ast.parse(source)
-    return Counts(collected(tree.body), sum(isinstance(node, ast.Assert) for node in ast.walk(tree)))
+    functions = 0 if switched_off(tree.body) else collected(tree.body)
+    return Counts(functions, sum(isinstance(node, ast.Assert) for node in ast.walk(tree)))
 
 
 def collected(body: list[ast.stmt]) -> int:
@@ -138,20 +139,39 @@ def collected(body: list[ast.stmt]) -> int:
 
 
 def refused(test_class: ast.ClassDef) -> bool:
-    """Say whether pytest refuses to collect a Test* class, with a warning only.
+    """Say whether pytest refuses to collect a Test* class.
 
     Why: a test class switched off this way runs none of its tests while the suite stays
     green, so its tests must not count.
 
-    Contract: True when the class body defines `__init__` or `__new__`, or assigns
-    `__test__ = False`, as pytest checks them.
+    Contract: True when the class body defines `__init__` or `__new__` (pytest warns), or
+    sets `__test__` to a false value (pytest is silent), anywhere in the body.
+
+    Known limits: read from the class's own body only (measured in the review of this
+    change): an `__init__` inherited from a base class, `__init__` bound to another
+    function, an `__init__` under an `if`, an abstract Test* class, or a function given
+    `.__test__ = False` after it are still counted; a class not named Test* with
+    `__test__ = True` is not.
     """
-    for node in test_class.body:
-        if isinstance(node, ast.FunctionDef) and node.name in ("__init__", "__new__"):
+    constructor = any(isinstance(node, ast.FunctionDef) and node.name in ("__init__", "__new__") for node in test_class.body)
+    return constructor or switched_off(test_class.body)
+
+
+def switched_off(body: list[ast.stmt]) -> bool:
+    """Say whether a module's or a class's body sets `__test__` to a false value.
+
+    Why: pytest reads `__test__` on a module and on a class by its truth: `False`, `None`
+    or `0` there switches off every test inside, silently.
+
+    Contract: reads plain and annotated assignments of a constant to the name `__test__`,
+    standing directly in `body`.
+    """
+    for node in body:
+        targets = node.targets if isinstance(node, ast.Assign) else [node.target] if isinstance(node, ast.AnnAssign) else []
+        value = getattr(node, "value", None)
+        named = any(isinstance(target, ast.Name) and target.id == "__test__" for target in targets)
+        if named and isinstance(value, ast.Constant) and not value.value:
             return True
-        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and node.value.value is False:
-            if any(isinstance(target, ast.Name) and target.id == "__test__" for target in node.targets):
-                return True
     return False
 
 
