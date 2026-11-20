@@ -12,19 +12,21 @@ This is that test.
 The rule, an allow-list (ALLOWED): a file judged may use the standard `logging` module only for
 its level constants, the `warnings` module only for `warn`, `filterwarnings` and `simplefilter`,
 and `ploni.safety.logging` only for `Event`, `event` and `install`, with `event` and `install`
-only called. Every other name of the three is refused, however it is reached: an attribute
+only called, each as a statement of its own, so that what they return is never read. Every other name of the three is refused, however it is reached: an attribute
 (`logging.getLogger`), a name imported from it, a submodule (`logging.config`), a module
 imported by a call (`importlib.import_module("logging")`, by keyword or relative name too), or
 the module itself handed on as a value (`getattr(logging, name)`, `x = logging`). So is a dunder
-name read past an allowed one (`install.__globals__`, `Event.__init__`), and the attribute
-`logging` of any module a file imports (`concurrent.futures._base.logging`). What that leaves
-open is under Known limits.
+name read past an allowed one (`install.__globals__`, `Event.__init__`), `getattr` with a literal
+name that is `logging` or a dunder, and the attribute `logging` of any module a file imports
+(`concurrent.futures._base.logging`, also bound by a from-import), but for a module of the
+project's own outside ploni/safety/ (`settings.logging`), which cannot import `logging` under
+this rule. What that leaves open is under Known limits.
 
 That is narrower than the option's words, and each narrowing is Claude's and only narrows what
 product code may do: a plain logging call is refused too (before `install` runs, the logging
 module's last-resort handler prints the message of a WARNING or worse); the warnings module is
 held to three names (its `catch_warnings` and `showwarning` take warnings around the filter);
-only three names of the filter may be used, `event` and `install` only called; a package above
+only three names of the filter may be used, `event` and `install` only called as statements; a package above
 a guarded module may not be used as a value; one of the modules may not be imported by a call;
 a name bound to one of the modules and bound again is still judged as that module. Some code to
 come is refused by them: `warnings.catch_warnings()` around a model load, `@warnings.deprecated`,
@@ -70,6 +72,11 @@ Not applicable: the Hebrew axes and the document axes of the test-matrix skill, 
 is Python source and no document is handled.
 
 Known limits:
+  - A check over the names in a source text cannot close every route Python has to an object. This
+    one refuses the routes that the closing test (#150) and three passes of its review found, and
+    each is a case below; a route found later is a new case, or a line here.
+  - A warning's text is written as it is until `install` has run: `warnings.warn` is allowed, so
+    product code warns only with fixed text, never with text from a document.
   - Names that code reaches some other way are not seen: code given to `exec`, a module found
     through `sys.modules`, a fresh copy of the logging module made by the loader
     (`importlib.util.find_spec("logging")` then `module_from_spec`), a package above
@@ -78,7 +85,9 @@ Known limits:
   - Another module's own logger object is not refused: a module that keeps one in an attribute
     under another name (`concurrent.futures._base.LOGGER`) gives a file a logger to set up. So
     is another library's own helper that sets logging up for its caller (a third-party
-    `enable_default_handler()`): only the three modules, and the attribute `logging`, are judged.
+    `enable_default_handler()`, or `multiprocessing.log_to_stderr()`, which the worker process
+    of build-plan.md section 4.6 could reach): only the three modules, and the attribute
+    `logging`, are judged.
   - Writing to the standard streams (`sys.stderr.write`) is not logging and is not refused here;
     `print` is banned under ploni/ by ruff (T201).
   - A name that a file binds to one of the three modules and then binds again to something else
@@ -96,6 +105,8 @@ from pathlib import Path
 import pytest
 
 import ploni.safety.logging
+# The reader of import calls that tests/t8_privacy/test_imports.py tests: one reading of them for
+# every rule about imports, private to the tests.
 from tests.project_imports import _called
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -107,10 +118,22 @@ ALLOWED = {
     "warnings": ("warn", "filterwarnings", "simplefilter"),
     "ploni.safety.logging": ("Event", "event", "install"),
 }
-# The two functions of the filter that a file may only call: handed on, they carry the filter's globals.
+# The two functions of the filter that a file may only call, as a statement of its own: handed on,
+# they carry the filter's globals, and `install` returns the filter's own handler.
 CALLED_ONLY = ("ploni.safety.logging.event", "ploni.safety.logging.install")
 # The attribute by which a module that imports logging hands it on (`concurrent.futures._base.logging`).
 LOGGING_ATTRIBUTE = "logging"
+# The project's own modules, whose attribute `logging` is their own (they cannot import the module
+# under this rule), and the folder of the filter, which can.
+PROJECT = "ploni."
+SAFETY = "ploni.safety."
+# The function that reads an attribute by a name given as text.
+GETATTR = "getattr"
+
+
+def _package(importer: str, is_package: bool) -> str:
+    """Return the package a relative import of a file starts from."""
+    return importer if is_package else importer.rpartition(".")[0]
 
 
 def _base(node: ast.ImportFrom, importer: str, is_package: bool) -> str:
@@ -120,8 +143,7 @@ def _base(node: ast.ImportFrom, importer: str, is_package: bool) -> str:
     """
     if not node.level:
         return node.module or ""
-    package = importer if is_package else importer.rpartition(".")[0]
-    return resolve_name("." * node.level + (node.module or ""), package)
+    return resolve_name("." * node.level + (node.module or ""), _package(importer, is_package))
 
 
 def _bindings(tree: ast.AST, importer: str, is_package: bool) -> dict[str, str]:
@@ -165,7 +187,7 @@ def _chain(name: ast.Name, parents: dict[ast.AST, ast.AST]) -> tuple[list[str], 
 
 
 def _imports(tree: ast.AST, importer: str, is_package: bool) -> list[tuple[int, str]]:
-    """Return the lines whose import statement, or import call with a literal name, is refused."""
+    """Return the lines whose import, import call or getattr with a literal name is refused."""
     found = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Import):
@@ -174,20 +196,29 @@ def _imports(tree: ast.AST, importer: str, is_package: bool) -> list[tuple[int, 
             base = _base(node, importer, is_package)
             found += [(node.lineno, why) for alias in node.names if (why := _refused(f"{base}.{alias.name}"))]
         elif isinstance(node, ast.Call):
-            package = importer if is_package else importer.rpartition(".")[0]
-            module = _called(node, package)
+            module = _called(node, _package(importer, is_package))
             if module is not None and (_guarded_or_above(module) or _refused(module)):
                 found.append((node.lineno, f"imports {module} by a call"))
+            if (name := _getattr_name(node)) and (name == LOGGING_ATTRIBUTE or name.startswith("__")):
+                found.append((node.lineno, f"reads {name} by getattr"))
     return found
 
 
-def _judge(dotted: str, attributes: list[str], called: bool) -> str | None:
+def _getattr_name(node: ast.Call) -> str | None:
+    """Return the name a call of getattr reads, when it is written as a literal, or None."""
+    if not (isinstance(node.func, ast.Name) and node.func.id == GETATTR and len(node.args) > 1):
+        return None
+    name = node.args[1]
+    return name.value if isinstance(name, ast.Constant) and isinstance(name.value, str) else None
+
+
+def _judge(dotted: str, stated: bool) -> str | None:
     """Say what a dotted name that a file reaches through an imported name uses past ALLOWED, or None.
 
     Why: one judgement for every way a name is reached, apart from how the chain was read.
 
-    Contract: `attributes` are the names read after the imported name; `called` says whether
-    the chain is the function of a call.
+    Contract: `stated` says whether the chain is the function of a call that stands as a
+    statement of its own.
     """
     if why := _refused(dotted):
         return why
@@ -195,11 +226,12 @@ def _judge(dotted: str, attributes: list[str], called: bool) -> str | None:
         return f"uses {dotted} as a value"
     module = next((name for name in ALLOWED if dotted.startswith(f"{name}.")), None)
     if module is None:
-        return f"uses {dotted}" if LOGGING_ATTRIBUTE in attributes else None
+        own = dotted.startswith(PROJECT) and not dotted.startswith(SAFETY)
+        return f"uses {dotted}" if LOGGING_ATTRIBUTE in dotted.split(".")[1:] and not own else None
     if any(part.startswith("__") for part in dotted[len(module) + 1 :].split(".")):
         return f"uses {dotted}"
-    if dotted in CALLED_ONLY and not called:
-        return f"uses {dotted} other than in a call"
+    if dotted in CALLED_ONLY and not stated:
+        return f"uses {dotted} other than as a call statement"
     return None
 
 
@@ -211,8 +243,8 @@ def _uses(tree: ast.AST, bound: dict[str, str]) -> list[tuple[int, str]]:
         if isinstance(node, ast.Name) and node.id in bound:
             attributes, outer = _chain(node, parents)
             call = parents.get(outer)
-            called = isinstance(call, ast.Call) and call.func is outer
-            if why := _judge(".".join([bound[node.id], *attributes]), attributes, called):
+            stated = isinstance(call, ast.Call) and call.func is outer and isinstance(parents.get(call), ast.Expr)
+            if why := _judge(".".join([bound[node.id], *attributes]), stated):
                 found.append((node.lineno, why))
     return found
 
@@ -512,6 +544,7 @@ def test_a3_anywhere_in_the_file(source: str) -> None:
         ("import sys\n\nfrom ploni.safety.logging import install\n\nhandler = install(sys.stderr)\n", [5]),
         ("import sys\n\nfrom ploni.safety.logging import install\n\ninstall(sys.stderr).formatter\n", [5]),
         ("from ploni.safety.logging import Event, event\n\nx = event(Event.DONE)\n", [3]),
+        ("from ploni.safety.logging import event\n\nprint(event)\n", [3]),
         ("from ploni.safety.logging import Event\n\nEvent.__init__\n", [3]),
         ("import logging\n\nlogging.INFO.__class__\n", [3]),
         ("import warnings\n\nwarnings.warn.__self__\n", [3]),
@@ -530,6 +563,8 @@ def test_a4_the_filter_functions_only_called_and_no_dunder(source: str, found: l
         "from concurrent.futures import _base\n\n_base.logging.getLogger\n",
         "from concurrent.futures._base import logging as lg\n\nlg.getLogger\n",
         "import concurrent.futures\n\ngetattr(concurrent.futures, 'logging')\n",
+        "import somepackage.logging as lg\n\nlg.getLogger\n",
+        "from ploni.safety import atomic\n\natomic.logging.getLogger\n",
     ],
 )
 def test_a5_the_logging_attribute_of_another_module(source: str) -> None:
