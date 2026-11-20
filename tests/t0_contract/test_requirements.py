@@ -64,14 +64,71 @@ def _git(*args: str) -> bytes:
     ).stdout
 
 
+# A requirement pinned to one version: a name, `==`, a version with no wildcard, and an optional
+# environment marker (PEP 508); then the options pip reads after it.
+PINNED = re.compile(
+    r"(?P<name>[A-Za-z0-9][A-Za-z0-9._-]*)==(?P<version>[A-Za-z0-9._+!-]+)"
+    r"(?:\s*;(?P<marker>.*?))?(?:\s+(?P<options>--.*))?"
+)
+HASHED = re.compile(r"--hash=sha256:[0-9a-f]{64}(?![0-9A-Za-z])")
+INCLUDE = re.compile(r"-r\s+(?P<path>\S+)")
+
+
+def _logical(text: str) -> list[tuple[int, str]]:
+    """Return the logical lines of a requirements file, each with the number of its first line.
+
+    A line that ends in a backslash goes on with the next, as pip reads it; a comment, a blank
+    line and the end of a line are dropped.
+    """
+    found: list[tuple[int, str]] = []
+    start, parts = 0, []
+    for number, raw in enumerate(text.splitlines(), start=1):
+        line = raw.split(" #", 1)[0].strip() if not raw.lstrip().startswith("#") else ""
+        if not parts:
+            start = number
+        parts.append(line.removesuffix("\\").strip())
+        if not line.endswith("\\"):
+            joined = " ".join(part for part in parts if part)
+            if joined:
+                found.append((start, joined))
+            parts = []
+    return found
+
+
+def _judge(line: str, folder: Path) -> str | None:
+    """Say what is wrong with one logical line of a requirements file, or None."""
+    if include := INCLUDE.fullmatch(line):
+        return None if (folder / include["path"]).is_file() else f"{line}: no such file"
+    pinned = PINNED.fullmatch(line)
+    if pinned is None:
+        return f"{line.split()[0]}: not pinned to one version"
+    if not HASHED.search(pinned["options"] or ""):
+        return f"{pinned['name']}: no sha256 hash"
+    return None
+
+
 def problems(text: str, folder: Path) -> list[str]:
-    """Name each requirement of a requirements file that is not pinned and hashed, as "<line>: <what>"."""
-    return []
+    """Name each requirement of a requirements file that is not pinned and hashed, as "<line>: <what>".
+
+    Why: the rule of this file, apart from where the text comes from.
+
+    Contract: `folder` is the folder of the file, against which `-r` paths are read. A logical
+    line is named at its first line. Each problem names the requirement or the line, never a
+    hash in full.
+    """
+    return [f"{number}: {why}" for number, line in _logical(text) if (why := _judge(line, folder))]
 
 
 def requirement_files(root: Path) -> list[Path]:
-    """Return the tracked requirements files of a repository, in git's order."""
-    return []
+    """Return the tracked requirements files of a repository, in git's order.
+
+    Why: the rule reads what would be pushed, every requirements file of every folder.
+
+    Contract: the files git's index holds whose name matches NAME. Raises
+    subprocess.CalledProcessError when `root` is no git repository.
+    """
+    listed = _git("-C", str(root), "ls-files", "-z").decode("utf-8").split("\0")
+    return [root / name for name in listed if NAME.fullmatch(name.rsplit("/", 1)[-1])]
 
 
 def _lines(text: str) -> list[int]:
@@ -108,6 +165,7 @@ def test_ec2_a_version_that_floats(spec: str) -> None:
         "pytest==9.2.0\n",
         "pytest==9.2.0 --hash=md5:0123456789abcdef0123456789abcdef\n",
         f"pytest==9.2.0 --hash=sha512:{HASH}{HASH}\n",
+        f"pytest==9.2.0 --hash=sha1:{HASH}\n",
     ],
 )
 def test_ec3_no_hash_or_a_hash_of_another_kind(text: str) -> None:
@@ -134,6 +192,7 @@ def test_ec4_a_line_that_installs_from_elsewhere(text: str) -> None:
 def test_ec5_an_include(tmp_path: Path) -> None:
     (tmp_path / "base.txt").write_text(f"x==1.0 --hash=sha256:{HASH}\n", encoding="utf-8")
     assert problems("-r base.txt\n", tmp_path) == []
+    assert problems("-e base.txt\n", tmp_path) == ["1: -e: not pinned to one version"]
     assert problems("-r ../missing/requirements.txt\n", tmp_path) == ["1: -r ../missing/requirements.txt: no such file"]
 
 
@@ -178,7 +237,15 @@ def test_a2_a_hash_on_a_comment_line() -> None:
 
 def test_the_file_names_read(tmp_path: Path) -> None:
     _git("init", "-q", str(tmp_path))
-    names = ("requirements.txt", "requirements-dev.txt", "x/requirements.txt", "constraints.txt", "requirements.in", "notes.txt")
+    names = (
+        "requirements.txt",
+        "requirements-dev.txt",
+        "x/requirements.txt",
+        "constraints.txt",
+        "requirements.in",
+        "requirements.txt.orig",
+        "notes.txt",
+    )
     for name in names:
         (tmp_path / name).parent.mkdir(parents=True, exist_ok=True)
         (tmp_path / name).write_text("\n", encoding="utf-8")
