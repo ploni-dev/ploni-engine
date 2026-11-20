@@ -10,17 +10,27 @@ test that product code outside ploni/safety/ never sets up its own log handler o
 This is that test.
 
 The rule, an allow-list (ALLOWED): a file judged may use the standard `logging` module only for
-its level constants, the `warnings` module only for `warn`, and `ploni.safety.logging` only for
-`Event`, `event` and `install`. Every other name of the three is refused, however it is reached:
-an attribute (`logging.getLogger`), a name imported from it, a submodule (`logging.config`), a
-module imported by a call (`importlib.import_module("logging")`), or the module itself handed on
-as a value (`getattr(logging, name)`, `x = logging`). Without a logger, a handler class, the
-logging module's internals or the filter's own classes, a file has nothing to set up.
+its level constants, the `warnings` module only for `warn`, `filterwarnings` and `simplefilter`,
+and `ploni.safety.logging` only for `Event`, `event` and `install`, with `event` and `install`
+only called. Every other name of the three is refused, however it is reached: an attribute
+(`logging.getLogger`), a name imported from it, a submodule (`logging.config`), a module
+imported by a call (`importlib.import_module("logging")`, by keyword or relative name too), or
+the module itself handed on as a value (`getattr(logging, name)`, `x = logging`). So is a dunder
+name read past an allowed one (`install.__globals__`, `Event.__init__`), and the attribute
+`logging` of any module a file imports (`concurrent.futures._base.logging`). What that leaves
+open is under Known limits.
 
-That is narrower than the option's words, and each narrowing is Claude's: a plain logging call
-is refused too (before `install` runs, the logging module's last-resort handler prints the
-message of a WARNING or worse), and the warnings module is held to `warn` (its `catch_warnings`
-and `showwarning` take warnings around the filter).
+That is narrower than the option's words, and each narrowing is Claude's and only narrows what
+product code may do: a plain logging call is refused too (before `install` runs, the logging
+module's last-resort handler prints the message of a WARNING or worse); the warnings module is
+held to three names (its `catch_warnings` and `showwarning` take warnings around the filter);
+only three names of the filter may be used, `event` and `install` only called; a package above
+a guarded module may not be used as a value; one of the modules may not be imported by a call;
+a name bound to one of the modules and bound again is still judged as that module. Some code to
+come is refused by them: `warnings.catch_warnings()` around a model load, `@warnings.deprecated`,
+a local name `warnings` in a file that imports the module. Silence a library's warnings with
+`warnings.filterwarnings` and its `module` argument; a need beyond that is a helper under
+ploni/safety/, not a wider ALLOWED.
 
 Test matrix:
 
@@ -28,16 +38,19 @@ Equivalence classes:
   EC1  each name of each of the three modules (from `dir` of the module itself), in each way to
        reach it: an attribute of the module imported plain, of the module imported under another
        name, a name imported from it; and for `ploni.safety.logging` also from its package, and
-       relative. Refused unless the name is allowed (the literal lists below)    ~600 cases
+       relative. Refused unless the name is allowed (the literal lists below)    659 cases
   EC2  a submodule of `logging`, imported in every form                     a line
-  EC3  one of the modules imported by a call with a literal name           a line
+  EC3  one of the modules imported by a call, its name given by position, by keyword, or
+       relative with a package                                             a line
   EC4  one of the modules, or a package above it, used as a value         a line
   EC5  the scope: every file under ploni/ but those under ploni/safety/
   EC6  the repository                                                      no line
   EC7  the order of the lines `setups` gives                                by line
+  EC8  a package's own file (`__init__.py`) with a relative import         resolved from the package
 
 Boundaries:
-  B1  the allowed names: a level constant given to `event`, `warnings.warn`    no line
+  B1  the allowed names: a level constant given to `event`, `install` called, a subclass of
+      `Event`, `warnings.warn`, `filterwarnings`, `simplefilter`           no line
   B2  words that only look like logging (`handlers = {...}`, `propagate = True`, a class named
       `MessageHandler`, `ContentHandler` from `xml.sax.handler`, `self.listen()`)    no line
   B3  ploni/safety.py and ploni/detect/safety/x.py are judged: only the folder ploni/safety/ is not
@@ -49,17 +62,23 @@ Adversarial:
       `Redacting.format`, `logging._handlerList`, a subclass of `logging.Logger`; and
       `logging.Logger.handle`, `logging.Logger.manager`                   refused
   A3  the names inside a function, a class, under `if` and `try`             found
+  A4  the ways pass 2 of the review ran: the globals of `install` or `event`, either function
+      handed on as a value, a dunder read past `Event`                     refused
+  A5  the attribute `logging` of another module (`concurrent.futures._base.logging`)    refused
 
 Not applicable: the Hebrew axes and the document axes of the test-matrix skill, as the input
 is Python source and no document is handled.
 
 Known limits:
   - Names that code reaches some other way are not seen: code given to `exec`, a module found
-    through `sys.modules`, a package above ploni.safety.logging handed on through a name bound
-    by assignment. An import whose name is not a literal is reported by
-    tests/t8_privacy/test_imports.py.
-  - Another library's own helper that sets logging up for its caller (a third-party
-    `enable_default_handler()`) is not refused: only the three modules are judged.
+    through `sys.modules`, a fresh copy of the logging module made by the loader
+    (`importlib.util.find_spec("logging")` then `module_from_spec`), a package above
+    ploni.safety.logging handed on through a name bound by assignment. An import whose name is
+    not a literal is reported by tests/t8_privacy/test_imports.py.
+  - Another module's own logger object is not refused: a module that keeps one in an attribute
+    under another name (`concurrent.futures._base.LOGGER`) gives a file a logger to set up. So
+    is another library's own helper that sets logging up for its caller (a third-party
+    `enable_default_handler()`): only the three modules, and the attribute `logging`, are judged.
   - Writing to the standard streams (`sys.stderr.write`) is not logging and is not refused here;
     `print` is banned under ploni/ by ruff (T201).
   - A name that a file binds to one of the three modules and then binds again to something else
@@ -77,6 +96,7 @@ from pathlib import Path
 import pytest
 
 import ploni.safety.logging
+from tests.project_imports import _called
 
 ROOT = Path(__file__).resolve().parents[2]
 # What a file judged may use of each module: the level constants of the logging module (its
@@ -84,11 +104,13 @@ ROOT = Path(__file__).resolve().parents[2]
 # three names of ploni/safety/logging.py that product code calls.
 ALLOWED = {
     "logging": ("CRITICAL", "FATAL", "ERROR", "WARNING", "WARN", "INFO", "DEBUG", "NOTSET"),
-    "warnings": ("warn",),
+    "warnings": ("warn", "filterwarnings", "simplefilter"),
     "ploni.safety.logging": ("Event", "event", "install"),
 }
-# The functions that import a module named by their first argument (as tests/project_imports.py).
-IMPORT_CALLS = ("import_module", "__import__")
+# The two functions of the filter that a file may only call: handed on, they carry the filter's globals.
+CALLED_ONLY = ("ploni.safety.logging.event", "ploni.safety.logging.install")
+# The attribute by which a module that imports logging hands it on (`concurrent.futures._base.logging`).
+LOGGING_ATTRIBUTE = "logging"
 
 
 def _base(node: ast.ImportFrom, importer: str, is_package: bool) -> str:
@@ -151,12 +173,34 @@ def _imports(tree: ast.AST, importer: str, is_package: bool) -> list[tuple[int, 
         elif isinstance(node, ast.ImportFrom):
             base = _base(node, importer, is_package)
             found += [(node.lineno, why) for alias in node.names if (why := _refused(f"{base}.{alias.name}"))]
-        elif isinstance(node, ast.Call) and getattr(node.func, "id", getattr(node.func, "attr", None)) in IMPORT_CALLS:
-            first = node.args[0] if node.args else None
-            if isinstance(first, ast.Constant) and isinstance(first.value, str):
-                if _guarded_or_above(first.value) or _refused(first.value):
-                    found.append((node.lineno, f"imports {first.value} by a call"))
+        elif isinstance(node, ast.Call):
+            package = importer if is_package else importer.rpartition(".")[0]
+            module = _called(node, package)
+            if module is not None and (_guarded_or_above(module) or _refused(module)):
+                found.append((node.lineno, f"imports {module} by a call"))
     return found
+
+
+def _judge(dotted: str, attributes: list[str], called: bool) -> str | None:
+    """Say what a dotted name that a file reaches through an imported name uses past ALLOWED, or None.
+
+    Why: one judgement for every way a name is reached, apart from how the chain was read.
+
+    Contract: `attributes` are the names read after the imported name; `called` says whether
+    the chain is the function of a call.
+    """
+    if why := _refused(dotted):
+        return why
+    if _guarded_or_above(dotted):
+        return f"uses {dotted} as a value"
+    module = next((name for name in ALLOWED if dotted.startswith(f"{name}.")), None)
+    if module is None:
+        return f"uses {dotted}" if LOGGING_ATTRIBUTE in attributes else None
+    if any(part.startswith("__") for part in dotted[len(module) + 1 :].split(".")):
+        return f"uses {dotted}"
+    if dotted in CALLED_ONLY and not called:
+        return f"uses {dotted} other than in a call"
+    return None
 
 
 def _uses(tree: ast.AST, bound: dict[str, str]) -> list[tuple[int, str]]:
@@ -166,11 +210,10 @@ def _uses(tree: ast.AST, bound: dict[str, str]) -> list[tuple[int, str]]:
     for node in ast.walk(tree):
         if isinstance(node, ast.Name) and node.id in bound:
             attributes, outer = _chain(node, parents)
-            dotted = ".".join([bound[node.id], *attributes])
-            if why := _refused(dotted):
+            call = parents.get(outer)
+            called = isinstance(call, ast.Call) and call.func is outer
+            if why := _judge(".".join([bound[node.id], *attributes]), attributes, called):
                 found.append((node.lineno, why))
-            elif _guarded_or_above(dotted):
-                found.append((node.lineno, f"uses {dotted} as a value"))
     return found
 
 
@@ -213,20 +256,30 @@ EXPECTED_ALLOWED = {
     "ploni.safety.logging": ("Event", "event", "install"),
 }
 MODULES = {"logging": logging, "warnings": warnings, "ploni.safety.logging": ploni.safety.logging}
+# The two names of the filter that a file may only call, written out here and not taken from CALLED_ONLY.
+EXPECTED_CALLED_ONLY = ("event", "install")
 
 
 def forms(module: str, name: str) -> list[tuple[str, int]]:
-    """Return the ways to reach a name of a module, each as (source, the line that reaches it)."""
+    """Return the ways to reach a name of a module, each as (source, the line that reaches it).
+
+    Why: EC1 crosses every name of each module with every way to reach it.
+
+    Contract: the module's dotted name and one of its names; the sources are Python text, read
+    with the importer `ploni.detect.fusion`.
+    """
     alias = "m"
+    # A name the filter allows only in a call is reached by a call; A4 holds the other uses.
+    reach = f"{name}()" if module == "ploni.safety.logging" and name in EXPECTED_CALLED_ONLY else name
     found = [
-        (f"import {module} as {alias}\n{alias}.{name}\n", 2),
-        (f"import {module}\n{module}.{name}\n", 2),
+        (f"import {module} as {alias}\n{alias}.{reach}\n", 2),
+        (f"import {module}\n{module}.{reach}\n", 2),
         (f"from {module} import {name}\n", 1),
     ]
     if module == "ploni.safety.logging":
         found += [
-            (f"from ploni.safety import logging\nlogging.{name}\n", 2),
-            (f"from ..safety import logging as {alias}\n{alias}.{name}\n", 2),
+            (f"from ploni.safety import logging\nlogging.{reach}\n", 2),
+            (f"from ..safety import logging as {alias}\n{alias}.{reach}\n", 2),
         ]
     return found
 
@@ -245,6 +298,7 @@ def test_ec1_each_name_of_each_module_in_each_form(source: str, line: int, allow
 
 
 def test_ec1_the_cases_are_many_and_every_allowed_name_exists() -> None:
+    # CLAUDE.md, Tests: invariants 500 generated cases.
     assert len(CASES) >= 500
     for module, names in EXPECTED_ALLOWED.items():
         assert set(names) <= set(dir(MODULES[module]))
@@ -278,6 +332,7 @@ def test_ec2_a_submodule_of_logging(source: str) -> None:
         ("import importlib\n\nimportlib.import_module(name='logging')\n", [3]),
         ("__import__(name='logging')\n", [1]),
         ("import importlib\n\nimportlib.import_module('.logging', 'ploni.safety')\n", [3]),
+        ("import importlib\n\nimportlib.import_module('.safety.logging', __package__)\n", [3]),
     ],
 )
 def test_ec3_imported_by_a_call(source: str, found: list[int]) -> None:
@@ -322,7 +377,7 @@ def test_ec5_the_scope(tmp_path: Path) -> None:
 
 
 def _module(path: Path) -> tuple[str, bool]:
-    """Return the dotted name of a file of the repository, and whether it is a package's own."""
+    """Return the importer of a file of the repository: its dotted name, and is_package."""
     parts = path.relative_to(ROOT).with_suffix("").parts
     return (".".join(parts[:-1]), True) if parts[-1] == "__init__" else (".".join(parts), False)
 
@@ -352,7 +407,7 @@ def test_ec7_the_lines_in_order() -> None:
         "import logging\n\nfrom ploni.safety.logging import Event, event\n\nevent(Event.DONE, level=logging.WARNING)\n",
         "from logging import WARNING\n",
         "import warnings\n\nwarnings.warn('a fixed text', UserWarning, stacklevel=2)\n",
-        "from ploni.safety import logging\n\nlogging.install\n",
+        "from ploni.safety import logging\n\nlogging.install(stream)\n",
         "from ploni import errors, types\n",
         "import sys\n\nfrom ploni.safety.logging import install\n\ninstall(sys.stderr)\n",
         "from ploni.safety import logging\n\nlogging.event(logging.Event.DONE)\n",
