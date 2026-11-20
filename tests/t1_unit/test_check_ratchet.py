@@ -283,6 +283,8 @@ class TestOff:
 def test_ec18_collected_on_its_own() -> None:
     names = "class Tester:\n    def test_a(self): pass\nclass Thing:\n    def test_b(self): pass\nclass testlower:\n    def test_c(self): pass\nclass Tes:\n    def test_d(self): pass\n"
     assert check.collected(ast.parse(names).body) == 1
+    switched_on = "class TestOn:\n    __test__ = True\n\n    def test_e(self): pass\n"
+    assert check.collected(ast.parse(switched_on).body) == 1
     assert check.collected(ast.parse(REFUSED_CLASSES).body) == 0
 
 

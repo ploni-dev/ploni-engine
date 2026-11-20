@@ -27,6 +27,8 @@ traceback and a non-zero exit.
 Known limits:
 - Functions are counted, not named, and parametrized cases are not counted: a renamed test
   and a shorter parameter list are not seen; assertions catch part of the second.
+- Test functions are counted as pytest collects them only as far as the source shows it:
+  `collected()` lists the shapes where the two differ, none of which a test file here uses.
 - A test file renamed counts as one file gone and one new: the old one's counters fall to
   zero and need override lines.
 - A suppression is a `#`, spaces, an optional `ruff:`, `flake8:` or `mypy:`, then `noqa`,
@@ -71,9 +73,10 @@ class Counts(NamedTuple):
 
     Why: `PROMOTION.md` section 6 names these two per test file.
 
-    Contract: test_functions counts the test functions pytest collects (`collected()`):
-    module-level `test*` functions and `test*` methods of `Test*` classes; assertions counts
-    `assert` statements anywhere in the file.
+    Contract: test_functions counts the test functions pytest collects, as far as the
+    source shows it (`collected()`, with its Known limits): module-level `test*` functions
+    and `test*` methods of `Test*` classes, nested Test* classes too, not of a class pytest
+    refuses; assertions counts `assert` statements anywhere in the file.
     """
 
     test_functions: int
@@ -114,17 +117,42 @@ def collected(body: list[ast.stmt]) -> int:
     for a function pytest never runs must show as a drop.
 
     Contract: counts `test*` functions (sync or async) standing directly in `body`, and,
-    recursively, those of each `Test*` class standing directly in it. A function nested in
-    a function, a method of a class whose name does not start with Test, or a class inside a
-    function is not counted.
+    recursively, those of each `Test*` class standing directly in it that pytest does not
+    refuse (`refused()`). A function nested in a function, a method of a class whose name
+    does not start with Test, or a class inside a function is not counted.
+
+    Known limits: read from the source alone, so it differs from pytest's own collection in
+    shapes no test file here uses (measured in the review of this change): tests under a
+    module-level `if` or `try`, methods a Test* class inherits, a test function imported
+    into the file, a `unittest.TestCase` subclass not named Test*, and a lambda bound to a
+    test* name are not counted; a `@pytest.fixture` named test*, and a name defined twice
+    (ruff F811 refuses that), are counted.
     """
     found = 0
     for node in body:
         if isinstance(node, ast.FunctionDef | ast.AsyncFunctionDef) and node.name.startswith("test"):
             found += 1
-        elif isinstance(node, ast.ClassDef) and node.name.startswith("Test"):
+        elif isinstance(node, ast.ClassDef) and node.name.startswith("Test") and not refused(node):
             found += collected(node.body)
     return found
+
+
+def refused(test_class: ast.ClassDef) -> bool:
+    """Say whether pytest refuses to collect a Test* class, with a warning only.
+
+    Why: a test class switched off this way runs none of its tests while the suite stays
+    green, so its tests must not count.
+
+    Contract: True when the class body defines `__init__` or `__new__`, or assigns
+    `__test__ = False`, as pytest checks them.
+    """
+    for node in test_class.body:
+        if isinstance(node, ast.FunctionDef) and node.name in ("__init__", "__new__"):
+            return True
+        if isinstance(node, ast.Assign) and isinstance(node.value, ast.Constant) and node.value.value is False:
+            if any(isinstance(target, ast.Name) and target.id == "__test__" for target in node.targets):
+                return True
+    return False
 
 
 def overrides(body: str) -> tuple[list[tuple[str, int]], list[str]]:
