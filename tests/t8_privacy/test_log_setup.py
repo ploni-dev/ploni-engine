@@ -630,6 +630,9 @@ def test_ec8_the_dotted_name_of_a_file() -> None:
         "x = 1\n\ngetattr(object, '__subclasses__')\n",
         "from ploni.obs import emit\n\nemit.__globals__\n",
         "def run() -> None:\n    pass\nrun.__builtins__\n",
+        "import sys\n\nsys._getframe(1).f_locals\n",
+        "x = 1\n\nerror.__traceback__.tb_frame\n",
+        "import sys\n\nsys._getframe().f_globals\n",
     ],
 )
 def test_a6_an_escape_from_any_object(source: str) -> None:
