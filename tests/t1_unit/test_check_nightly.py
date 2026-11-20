@@ -15,7 +15,7 @@ last_run(), equivalence classes:
   L7 a by-hand run (workflow_dispatch) on main, newer            not counted: only the nightly result
   L8 a night re-run by hand (run_attempt above 1), not finished  counted, so the night before is not read
 attempt(), equivalence classes:
-  T1 no run_attempt field: 1; T2 a number: that number; T3 not a number: ValueError, so the
+  T1 no run_attempt field: 1; T2 a number: that number; T3 not a number: ValueError or TypeError, so the
      check is red and a garbled re-run is never read as a first attempt (the review of #178, pass 2)
 failed(), equivalence classes:
   F1 no run                                                      None
