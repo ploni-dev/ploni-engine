@@ -396,58 +396,75 @@ def test_b4_no_check_at_all_is_one_reason_for_each_required_check(checks: list[d
     assert guard.red(checks) == [f"there is no {name} check on the last commit" for name in guard.REQUIRED_CHECKS]
 
 
-def _job_ids(text: str) -> tuple[set[str], set[str]]:
-    """Return a workflow's job ids, and the ids of jobs that set a `name:` of their own.
+KEY = re.compile(r"(\s*)([\w-]+):[ \t]*(.*?)\s*(#.*)?")
 
-    Why: GitHub names a job's check by its id unless the job sets `name:`; EC35 compares those
-    ids with REQUIRED_CHECKS. Contract: text, a workflow file. Returns (ids, ids with `name:`).
-    Known limits: a workflow in YAML flow style (`jobs: {a: ...}`) is not read; none here is.
+
+def _check_names(text: str) -> dict[str, str]:
+    """Return the check name of each job of a workflow, by job id.
+
+    Why: GitHub names a job's check by its id, or by the job's own `name:` when it sets one; EC35
+    compares those names with REQUIRED_CHECKS (the reviews of #187, passes 1 and 2).
+    Contract: text, a workflow file. Returns {job id: its check name}: the job's own `name:` read
+    at the job's key level, quotes taken off, else the id. A `name:` deeper down (a step's, one
+    under `with:` or `env:`) is not the job's. Raises ValueError when no line is `jobs:` (with or
+    without a comment after it).
+    Known limits: YAML flow style (`jobs: {a: ...}`) and a `name:` set by an expression are not
+    read as GitHub would; no workflow here has either.
     """
     lines = text.splitlines()
-    below = lines[lines.index("jobs:") + 1 :]
-    keys = [m for m in (re.fullmatch(r"(\s+)([\w-]+):\s*(#.*)?", line) for line in below) if m]
+    starts = [i for i, line in enumerate(lines) if re.fullmatch(r"jobs:\s*(#.*)?", line)]
+    if not starts:
+        raise ValueError("no jobs: line")
+    below = [line for line in lines[starts[0] + 1 :] if line.strip() and not line.lstrip().startswith("#")]
+    keys = [(len(m.group(1)), m) for m in map(KEY.fullmatch, below) if m]
     if not keys:
-        return set(), set()
-    indent = len(keys[0].group(1))
-    ids, named, current = set(), set(), ""
-    for line in below:
-        key = re.fullmatch(r"(\s*)([\w-]+):.*", line)
-        if key and line.strip() and not line.lstrip().startswith("#"):
-            if len(key.group(1)) == indent:
-                current = key.group(2)
-                ids.add(current)
-            elif key.group(2) == "name" and current:
-                named.add(current)
-    return ids, named
+        return {}
+    job_level = keys[0][0]
+    names: dict[str, str] = {}
+    current, own_level = "", None
+    for indent, key in keys:
+        if indent == job_level:
+            current, own_level = key.group(2), None
+            names[current] = current
+        elif current and indent > job_level:
+            own_level = indent if own_level is None else own_level
+            if indent == own_level and key.group(2) == "name":
+                names[current] = key.group(3).strip("'\"")
+    return names
 
 
 def test_ec35_the_required_checks_are_the_jobs_that_run_on_every_pull_request() -> None:
     # full-suite starts on a label only, so it is on no PR by default. GitHub runs .yml and .yaml.
-    jobs, named = set(), set()
+    names: set[str] = set()
     folder = REPOSITORY / ".github" / "workflows"
     for workflow in sorted([*folder.glob("*.yml"), *folder.glob("*.yaml")]):
-        ids, with_name = _job_ids(workflow.read_text(encoding="utf-8"))
-        jobs |= ids
-        named |= with_name
-    assert jobs - {"full-suite"} == set(guard.REQUIRED_CHECKS)
-    assert named == set(), "a job with a name: of its own is checked under that name, not its id"
+        names |= set(_check_names(workflow.read_text(encoding="utf-8")).values())
+    assert names - {"full-suite"} == set(guard.REQUIRED_CHECKS)
 
 
 @pytest.mark.parametrize(
-    ("text", "ids"),
+    ("text", "names"),
     [
-        ("jobs:\n  a:\n    runs-on: x\n  b:\n    runs-on: y\n", {"a", "b"}),
-        ("jobs:\n  lint: # the linter\n    runs-on: x\n", {"lint"}),
-        ("jobs:\n    deep:\n      runs-on: x\n", {"deep"}),
-        ("jobs:\n  # a comment: here\n  a:\n    steps:\n      - name: x\n", {"a"}),
+        ("jobs:\n  a:\n    runs-on: x\n  b:\n    runs-on: y\n", {"a": "a", "b": "b"}),
+        ("jobs:\n  lint: # the linter\n    runs-on: x\n", {"lint": "lint"}),
+        ("jobs:\n    deep:\n      runs-on: x\n", {"deep": "deep"}),
+        ("jobs: # the jobs\n  a:\n    runs-on: x\n", {"a": "a"}),
+        ("jobs:\n  # a comment: here\n  a:\n    steps:\n      - name: x\n", {"a": "a"}),
+        # A job's own name: is its check's name; one deeper down is not.
+        ("jobs:\n  a:\n    name: Lint\n    runs-on: x\n", {"a": "Lint"}),
+        ("jobs:\n  a:\n    name: 'Lint it' # quoted\n", {"a": "Lint it"}),
+        ("jobs:\n  a:\n    steps:\n      - uses: x\n        with:\n          name: results\n", {"a": "a"}),
+        ("jobs:\n  a:\n    steps:\n      - run: x\n        name: second line\n", {"a": "a"}),
+        ("jobs:\n  a:\n    env:\n      name: x\n    runs-on: y\n", {"a": "a"}),
     ],
 )
-def test_ec35_job_ids_are_read_in_each_shape(text: str, ids: set[str]) -> None:
-    assert _job_ids(text)[0] == ids
+def test_ec35_check_names_are_read_in_each_shape(text: str, names: dict[str, str]) -> None:
+    assert _check_names(text) == names
 
 
-def test_ec35_a_job_with_a_name_of_its_own_is_seen() -> None:
-    assert _job_ids("jobs:\n  a:\n    name: Lint\n    runs-on: x\n") == ({"a"}, {"a"})
+def test_ec35_a_workflow_with_no_jobs_line_raises() -> None:
+    with pytest.raises(ValueError):
+        _check_names("on: push\n")
 
 
 def test_red_raises_attributeerror_for_an_entry_that_is_no_mapping() -> None:
