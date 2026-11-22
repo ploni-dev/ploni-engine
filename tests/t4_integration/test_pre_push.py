@@ -10,7 +10,7 @@ for the environment's python that exits with a chosen code.
 Matrix (a repository in a temporary folder, the hook committed in its .githooks/):
   P1  the hook file: LF line ends, a sh script, runs `scripts/check.py`, LF on checkout too
   P2  the environment's python exits 0 or 3                   the hook exits the same
-  P3  in a worktree with no .venv of its own                   the main checkout's python runs
+  P3  in a worktree with no .venv and a commit of its own      the main checkout's python runs, on the worktree
   P4  no .venv anywhere                                         a line on the error stream, python on PATH runs
   P5  no .venv and no python on PATH                            127: the push is not made
   P6  a real `git push` to a bare repository, the suite red     refused: the remote has no new commit
@@ -165,6 +165,10 @@ def test_p3_in_a_worktree_the_main_checkout_s_python(tmp_path: Path) -> None:
     hooks = _repository(tmp_path / "main")
     record = _stand_in(tmp_path / "main" / VENV_PYTHON.parent, VENV_PYTHON.name, 4)
     _git(tmp_path / "main", "worktree", "add", "-q", str(tmp_path / "wt"))
+    # A commit of the worktree's own, so its HEAD is not the main checkout's.
+    (tmp_path / "wt" / "b.txt").write_text("y\n", encoding="utf-8")
+    _git(tmp_path / "wt", "add", "b.txt")
+    _git(tmp_path / "wt", "commit", "-q", "-m", "worktree")
     assert _hook(tmp_path / "wt", hooks) == 4
     assert record.read_text(encoding="utf-8").splitlines() == [_top(tmp_path / "wt"), "scripts/check.py"]
 
