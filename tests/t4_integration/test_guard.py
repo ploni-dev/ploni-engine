@@ -21,6 +21,8 @@ a fixed exit code, so no test reaches GitHub):
   M12 Hebrew text in the payload              read as UTF-8: a harmless command is let
                                               through, and a refusal names a Hebrew
                                               repository letter for letter, in ASCII
+  M13 a merge, every check green but one required check missing    exit code 2, stderr
+                                              names the missing check (issue #180)
 
 Every refusal is told from a script that never ran by its stderr: each line starts with
 `guard: `. Python itself ends with 2 when it cannot open the script.
@@ -42,6 +44,11 @@ SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "guard.py"
 MERGE = "gh pr merge 80 -R o/r --squash"
 GREEN = {"__typename": "CheckRun", "name": "fast-suite", "status": "COMPLETED", "conclusion": "SUCCESS"}
 RED = {"__typename": "CheckRun", "name": "lint", "status": "COMPLETED", "conclusion": "FAILURE"}
+# One green run of each check the gate asks for (scripts/guard.py, REQUIRED_CHECKS; issue #180),
+# written out here so that the program is tested against the list, not against itself.
+EVERY = [
+    {**GREEN, "name": name} for name in ("changed-paths", "fast-suite", "nightly", "pr-body", "pr-size", "ratchet", "waiver")
+]
 
 
 def stand_in_gh(folder: Path, answer: str, exit_code: int = 0) -> None:
@@ -87,7 +94,7 @@ def refused(done: subprocess.CompletedProcess[bytes]) -> bytes:
 
 
 def test_m1_a_merge_with_every_check_green_is_let_through(tmp_path: Path) -> None:
-    stand_in_gh(tmp_path, rollup(GREEN, GREEN))
+    stand_in_gh(tmp_path, rollup(*EVERY, GREEN))
     done = hook(payload("Bash", command=MERGE), tmp_path)
     assert done.returncode == 0
     assert done.stderr == b""
@@ -96,7 +103,7 @@ def test_m1_a_merge_with_every_check_green_is_let_through(tmp_path: Path) -> Non
 
 @pytest.mark.parametrize("tool", ["Bash", "PowerShell"])  # M2, M6
 def test_m2_a_merge_with_a_red_check_is_refused(tmp_path: Path, tool: str) -> None:
-    stand_in_gh(tmp_path, rollup(GREEN, RED))
+    stand_in_gh(tmp_path, rollup(*EVERY, RED))
     stderr = refused(hook(payload(tool, command=MERGE), tmp_path))
     assert b"PR 80 of o/r: check lint is FAILURE" in stderr
 
@@ -108,6 +115,12 @@ def test_m2_a_merge_with_a_red_check_is_refused(tmp_path: Path, tool: str) -> No
 def test_a_merge_is_refused_when_gh_does_not_show_green_checks(tmp_path: Path, answer: str, exit_code: int) -> None:
     stand_in_gh(tmp_path, answer, exit_code)
     assert b"PR 80 of o/r" in refused(hook(payload("Bash", command=MERGE), tmp_path))
+
+
+def test_m13_a_merge_with_a_required_check_missing_is_refused(tmp_path: Path) -> None:
+    stand_in_gh(tmp_path, rollup(*[check for check in EVERY if check["name"] != "waiver"]))
+    stderr = refused(hook(payload("Bash", command=MERGE), tmp_path))
+    assert b"PR 80 of o/r: there is no waiver check on the last commit" in stderr
 
 
 def test_m7_a_command_that_is_no_merge_does_not_start_gh(tmp_path: Path) -> None:
@@ -143,7 +156,7 @@ def test_m12_a_command_with_hebrew_text_is_read_as_utf8(tmp_path: Path) -> None:
 
 
 def test_m12_a_refusal_names_a_hebrew_repository_letter_for_letter(tmp_path: Path) -> None:
-    stand_in_gh(tmp_path, rollup(GREEN, RED))
+    stand_in_gh(tmp_path, rollup(*EVERY, RED))
     repository = "פלוני/r"
     stderr = refused(hook(payload("Bash", command=f"gh pr merge 80 -R {repository} --squash"), tmp_path))
     written = repository.encode("ascii", "backslashreplace")

@@ -10,8 +10,8 @@ Contract: Claude Code starts the script before a Bash, PowerShell, Monitor, Edit
 writes the hook payload to stdin as JSON. Exit code 0 lets the call run. Exit code 2
 refuses it, and stderr gives one line for each reason. Refused are:
   - `gh pr merge`, unless it names the PR by number and one repository with -R, every
-    check on that PR's last commit has finished as SUCCESS, and a workflow job named
-    fast-suite is one of them;
+    check on that PR's last commit has finished as SUCCESS, and a workflow job of each
+    name in REQUIRED_CHECKS is among them;
   - `--no-verify` on any command, and `git commit -n`;
   - `git push` that names main, names no branch, or pushes every branch;
   - an edit of one of the PROTECTED files.
@@ -64,8 +64,10 @@ from collections.abc import Callable
 Check = dict[str, object]
 Fetch = Callable[[str, str], list[Check] | None]
 
-# The job of .github/workflows/fast.yml that CLAUDE.md, "Merging", asks for by name.
-GATE_CHECK = "fast-suite"
+# The jobs every PR must carry: each workflow job that runs on every pull request; full-suite
+# starts on a label only. Achia, 2026-11-22, "Yes, name all seven (Recommended)" (issue #180).
+# fast-suite is the one CLAUDE.md, "Merging", asks for by name.
+REQUIRED_CHECKS = ("changed-paths", "fast-suite", "nightly", "pr-body", "pr-size", "ratchet", "waiver")
 # Under the 40 seconds that .claude/settings.json gives the hook, so that a slow GitHub
 # is as a rule a refusal with a reason. A hook that is cut off all the same refuses too
 # (`onFailure` in the settings file), without a reason.
@@ -265,24 +267,25 @@ def red(checks: list[Check] | None) -> list[str]:
     """Return why the checks of a PR's last commit do not allow a merge.
 
     Why: this is the rule of CLAUDE.md, "Merging", point 1, in one place: every check
-    finished and green, the fast-suite check among them, and a missing, pending or
-    skipped check counts as red.
+    finished and green, each of REQUIRED_CHECKS among them, and a missing, pending or
+    skipped check counts as red (PROMOTION.md section 11, "What it is").
 
     Contract:
         Args: checks, the `statusCheckRollup` list of `gh pr view --json`, or None.
         Returns: one line for each check that is not a finished SUCCESS (a workflow job)
-            or not in state SUCCESS (a commit status), and one more when no workflow job
-            is named fast-suite. Empty when the merge is allowed.
+            or not in state SUCCESS (a commit status), and one more for each name of
+            REQUIRED_CHECKS that no workflow job has. Empty when the merge is allowed.
         Raises: AttributeError when an entry is not a mapping.
 
-    Known limits: a commit status named fast-suite does not count as the fast-suite
-    check, because a status can be set by hand and a workflow job cannot. The job is
-    known by its name only, not by the workflow file it comes from.
+    Known limits: a commit status with a required name does not count as that check,
+    because a status can be set by hand and a workflow job cannot. A job is known by its
+    name only, not by the workflow file it comes from. A workflow added or renamed needs
+    REQUIRED_CHECKS changed with it; tests/t1_unit/test_guard.py EC35 goes red until then.
     """
     checks = checks or []
     reasons = [f"check {name} is {state}" for name, state in map(_state, checks) if state != "SUCCESS"]
-    if not any(check.get("__typename") == "CheckRun" and check.get("name") == GATE_CHECK for check in checks):
-        reasons.append(f"there is no {GATE_CHECK} check on the last commit")
+    jobs = {check.get("name") for check in checks if check.get("__typename") == "CheckRun"}
+    reasons += [f"there is no {name} check on the last commit" for name in REQUIRED_CHECKS if name not in jobs]
     return reasons
 
 
