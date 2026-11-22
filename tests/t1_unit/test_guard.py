@@ -82,6 +82,34 @@ run of each of REQUIRED_CHECKS (Achia, 2026-11-22, "Yes, name all seven (Recomme
   A6    a required check only as a commit status, which can be set by hand    red
   A7    one of two fast-suite runs red              red
   A8    an entry with no known shape                red
+  EC36  a check red, then green again on the same trigger    green: only the newest run
+                                                    counts (issue #137)
+
+newest(checks): of each check, the runs that count. Achia, 2026-11-22, "Gate reads newest run
+(Recommended)": only the newest run of each check for each trigger counts (issue #137).
+  EC37  a check red, then green on the same trigger    the green run only
+  EC38  a check green, then red on the same trigger    the red run only
+  EC39  fast-suite red on push, green on pull_request  both: each trigger counts by its own runs
+  EC40  two checks of different names on one trigger  both
+  EC41  the runs listed newest first                  the same result
+  EC42  commit statuses, two of the same context, also with an event and a start time   all of them
+  B6    no entry                                      nothing
+  B7    two runs of one check started in the same second, one red    both
+  A14   a run with no event, an event that is no text, or with no name    kept, judged as now
+  A15   startedAt missing, no text, in another spelling, or GitHub's zero time of a run that
+        has not started    kept: a re-run that waits after a green run is red
+  A16   an older green run and a newer one in progress    the one in progress
+  E4    an entry that is no mapping                   AttributeError
+
+_with_events(checks, runs): the trigger of each workflow job, from the runs of the commit.
+  EC43  a job whose detailsUrl names a listed run      that run's event added, nothing else
+                                                    changed, the given entry left as it was
+  EC44  a run that is not listed, no detailsUrl, one that is no text, a link that is not a
+        job of a run, a commit status    unchanged
+  A17   run ids where one starts the other (runs/12 and runs/123)    each gets its own event
+  B8    no checks                                     nothing
+  E5    a listed run with no id or no event           KeyError
+  E6    a listed run that is no mapping               TypeError
 
 push_refusals(command): a push that reaches main, or that does not say what it reaches.
   EC13  a push that names its branches, none of them main    let through
@@ -111,9 +139,19 @@ refusals(payload, fetch): one hook payload.
   B5    a payload without tool_input                refused
 
 rollup(number, repository):
-  EC30  gh is installed                             it is asked for the rollup of that PR in
-                                                    that repository, with the time limit, and
-                                                    its answer is read as UTF-8
+  EC30  gh is installed                             it is asked for the last commit and the
+                                                    rollup of that PR in that repository, then
+                                                    for the runs of that commit; the two time
+                                                    limits together are within GH_TIMEOUT_SECONDS;
+                                                    the checks come back with their events
+  E2    gh is not installed                         OSError
+  E7    the second call fails, the first answer has no commit, the second no runs    the
+                                                    error passes out, and the merge is refused
+                                                    with what gh wrote
+
+_gh(words, timeout):
+  EC45  gh is installed                             started with the words and that time limit,
+                                                    no shell, its answer read as UTF-8 JSON
   E2    gh is not installed                         OSError
 
 main(), with stdin swapped:
@@ -139,6 +177,7 @@ import re
 import subprocess
 import time
 import types
+from typing import Any
 from pathlib import Path
 
 import pytest
@@ -168,6 +207,24 @@ def every_check(but: str = "") -> list[dict[str, str]]:
 def never_asked(number: str, repository: str) -> list[dict[str, str]]:
     """Stand in for GitHub in a test where GitHub must not be asked."""
     raise AssertionError(f"GitHub was asked about {number} in {repository}")
+
+
+# The start times of PR #135's two ratchet runs (2026-11-19).
+EARLY = "2026-11-19T23:20:30Z"
+LATE = "2026-11-19T23:21:47Z"
+# A list whose entry is no mapping, as a broken answer of GitHub could hold.
+NO_MAPPING: list[Any] = ["ratchet"]
+
+
+def timed_run(
+    conclusion: str = "SUCCESS",
+    started: str = EARLY,
+    name: str = "ratchet",
+    event: str = "pull_request",
+    status: str = "COMPLETED",
+) -> dict[str, object]:
+    """Return a workflow job with its start time and, as `rollup` adds it, its trigger."""
+    return {**check_run(conclusion, status, name), "startedAt": started, "event": event}
 
 
 @pytest.mark.parametrize(
@@ -384,6 +441,162 @@ def test_ec11_a_commit_status_that_is_not_a_success_is_red(state: str) -> None:
 )
 def test_red_gives_one_reason_for_each_of_these(checks: list[dict[str, str]] | None) -> None:
     assert len(guard.red(checks)) == 1
+
+
+def test_ec36_a_check_red_then_green_again_on_the_same_trigger_is_green() -> None:
+    checks = [*every_check("ratchet"), timed_run("FAILURE", EARLY), timed_run("SUCCESS", LATE)]
+    assert guard.red(checks) == []
+
+
+def test_ec37_of_a_check_red_then_green_on_one_trigger_the_green_run_counts() -> None:
+    old, new = timed_run("FAILURE", EARLY), timed_run("SUCCESS", LATE)
+    assert guard.newest([old, new]) == [new]
+
+
+def test_ec38_of_a_check_green_then_red_on_one_trigger_the_red_run_counts() -> None:
+    old, new = timed_run("SUCCESS", EARLY), timed_run("FAILURE", LATE)
+    assert guard.newest([old, new]) == [new]
+    assert guard.red([*every_check("ratchet"), old, new]) == ["check ratchet is FAILURE"]
+
+
+def test_ec39_fast_suite_counts_by_the_newest_run_of_each_trigger() -> None:
+    push = timed_run("FAILURE", EARLY, "fast-suite", "push")
+    pull_request = timed_run("SUCCESS", LATE, "fast-suite", "pull_request")
+    assert guard.newest([push, pull_request]) == [push, pull_request]
+    assert guard.red([*every_check("fast-suite"), push, pull_request]) == ["check fast-suite is FAILURE"]
+
+
+def test_ec40_checks_of_different_names_count_each_by_itself() -> None:
+    checks = [timed_run("FAILURE", EARLY, "ratchet"), timed_run("SUCCESS", LATE, "waiver")]
+    assert guard.newest(checks) == checks
+
+
+def test_ec41_the_order_of_the_runs_does_not_matter() -> None:
+    old, new = timed_run("FAILURE", EARLY), timed_run("SUCCESS", LATE)
+    assert guard.newest([new, old]) == [new]
+
+
+def test_ec42_every_commit_status_counts() -> None:
+    old = {**commit_status("FAILURE", "ci"), "startedAt": EARLY, "event": "push"}
+    new = {**commit_status("SUCCESS", "ci"), "startedAt": LATE, "event": "push"}
+    assert guard.newest([old, new]) == [old, new]
+    assert len(guard.red([*every_check(), old, new])) == 1
+
+
+def test_b6_newest_of_nothing_is_nothing() -> None:
+    assert guard.newest([]) == []
+
+
+def test_b7_two_runs_started_in_the_same_second_both_count() -> None:
+    checks = [timed_run("FAILURE", EARLY), timed_run("SUCCESS", EARLY)]
+    assert guard.newest(checks) == checks
+
+
+@pytest.mark.parametrize(
+    "old",
+    [
+        {key: value for key, value in timed_run("FAILURE", EARLY).items() if key != "event"},
+        {**timed_run("FAILURE", EARLY), "event": None},
+        {**timed_run("FAILURE", EARLY), "event": 1},
+    ],
+)
+def test_a14_a_run_whose_trigger_cannot_be_read_is_kept(old: dict[str, object]) -> None:
+    new = timed_run("SUCCESS", LATE)
+    assert guard.newest([old, new]) == [old, new]
+    assert guard.red([*every_check("ratchet"), old, new]) == ["check ratchet is FAILURE"]
+
+
+def test_a14_runs_with_no_name_are_kept() -> None:
+    def unnamed(conclusion: str, started: str) -> dict[str, object]:
+        return {key: value for key, value in timed_run(conclusion, started).items() if key != "name"}
+
+    checks = [unnamed("FAILURE", EARLY), unnamed("SUCCESS", LATE)]
+    assert guard.newest(checks) == checks
+
+
+@pytest.mark.parametrize(
+    "started",
+    [None, 1, "", "2026-11-19 23:20:30", "2026-11-19T23:20:30.5Z", "2026-11-19T23:20:30+00:00", "later"],
+)
+def test_a15_a_run_whose_start_cannot_be_read_is_kept(started: object) -> None:
+    old = {**timed_run("FAILURE", EARLY), "startedAt": started}
+    new = timed_run("SUCCESS", LATE)
+    assert guard.newest([old, new]) == [old, new]
+    assert guard.red([*every_check("ratchet"), old, new]) == ["check ratchet is FAILURE"]
+
+
+def test_a15_a_run_with_no_start_time_is_kept() -> None:
+    old = {key: value for key, value in timed_run("FAILURE", EARLY).items() if key != "startedAt"}
+    new = timed_run("SUCCESS", LATE)
+    assert guard.newest([old, new]) == [old, new]
+
+
+def test_a15_a_re_run_that_has_not_started_after_a_green_run_is_red() -> None:
+    green = timed_run("SUCCESS", LATE)
+    waiting = timed_run("", "0001-01-01T00:00:00Z", status="QUEUED")
+    assert guard.newest([green, waiting]) == [green, waiting]
+    assert guard.red([*every_check("ratchet"), green, waiting]) == ["check ratchet is QUEUED"]
+
+
+def test_a16_a_newer_run_in_progress_counts_over_an_older_green_one() -> None:
+    old, new = timed_run("SUCCESS", EARLY), timed_run("", LATE, status="IN_PROGRESS")
+    assert guard.newest([old, new]) == [new]
+    assert guard.red([*every_check("ratchet"), old, new]) == ["check ratchet is IN_PROGRESS"]
+
+
+def test_e4_newest_raises_attributeerror_for_an_entry_that_is_no_mapping() -> None:
+    with pytest.raises(AttributeError):
+        guard.newest(NO_MAPPING)
+
+
+JOB_URL = "https://github.com/o/r/actions/runs/{}/job/9"
+
+
+def test_ec43_a_job_of_a_listed_run_gets_the_event_of_that_run() -> None:
+    job = {**check_run(), "detailsUrl": JOB_URL.format(7)}
+    given = [job]
+    assert guard._with_events(given, [{"id": 8, "event": "push"}, {"id": 7, "event": "pull_request"}]) == [
+        {**job, "event": "pull_request"}
+    ]
+    assert given == [job]
+    assert "event" not in job
+
+
+@pytest.mark.parametrize(
+    "check",
+    [
+        {**check_run(), "detailsUrl": JOB_URL.format(8)},
+        check_run(),
+        {**check_run(), "detailsUrl": None},
+        {**check_run(), "detailsUrl": 7},
+        {**check_run(), "detailsUrl": "https://github.com/o/r/actions/runs/7"},
+        {**check_run(), "detailsUrl": "https://example.com/build/7/job/9"},
+        {**commit_status("SUCCESS"), "targetUrl": JOB_URL.format(7)},
+    ],
+)
+def test_ec44_an_entry_of_no_listed_run_is_unchanged(check: dict[str, object]) -> None:
+    assert guard._with_events([check], [{"id": 7, "event": "push"}]) == [check]
+
+
+def test_a17_run_ids_that_start_one_another_each_get_their_own_event() -> None:
+    short, long = {**check_run(), "detailsUrl": JOB_URL.format(12)}, {**check_run(), "detailsUrl": JOB_URL.format(123)}
+    found = guard._with_events([short, long], [{"id": 123, "event": "pull_request"}, {"id": 12, "event": "push"}])
+    assert [check["event"] for check in found] == ["push", "pull_request"]
+
+
+def test_b8_with_events_of_no_checks_is_nothing() -> None:
+    assert guard._with_events([], [{"id": 7, "event": "push"}]) == []
+
+
+@pytest.mark.parametrize("run", [{"event": "push"}, {"id": 7}])
+def test_e5_a_listed_run_with_no_id_or_no_event_raises_keyerror(run: dict[str, object]) -> None:
+    with pytest.raises(KeyError):
+        guard._with_events([{**check_run(), "detailsUrl": JOB_URL.format(7)}], [run])
+
+
+def test_e6_a_listed_run_that_is_no_mapping_raises_typeerror() -> None:
+    with pytest.raises(TypeError):
+        guard._with_events([check_run()], NO_MAPPING)
 
 
 def test_ec34_each_required_check_that_is_missing_is_named() -> None:
@@ -874,24 +1087,85 @@ def test_e2_rollup_raises_oserror_when_gh_is_not_installed(monkeypatch: pytest.M
         guard.rollup("80", "o/r")
 
 
-def test_rollup_asks_gh_for_the_checks_of_that_pr_with_a_time_limit(monkeypatch: pytest.MonkeyPatch) -> None:
-    calls = []
+SHA = "64785f9cf09d42e0e296ab8400bab181b6977055"
+VIEW = json.dumps(
+    {
+        "headRefOid": SHA,
+        "statusCheckRollup": [{"name": "\u05e4", "detailsUrl": JOB_URL.format(7)}, {"name": "b"}],
+    }
+)
+RUNS = json.dumps({"workflow_runs": [{"id": 7, "event": "push"}]})
 
-    def fake_run(argv: list[str], **options: object) -> subprocess.CompletedProcess[str]:
+
+def answering(
+    monkeypatch: pytest.MonkeyPatch, view: str = VIEW, runs: str | Exception = RUNS
+) -> list[tuple[list[str], dict[str, Any]]]:
+    """Stand in for gh: `gh api` answers runs, any other call view. Return the calls made."""
+    calls: list[tuple[list[str], dict[str, Any]]] = []
+
+    def fake_run(argv: list[str], **options: Any) -> subprocess.CompletedProcess[str]:
         calls.append((argv, options))
-        return subprocess.CompletedProcess(argv, 0, stdout='{"statusCheckRollup": [{"name": "\u05e4"}]}')
+        answer = runs if argv[1] == "api" else view
+        if isinstance(answer, Exception):
+            raise answer
+        return subprocess.CompletedProcess(argv, 0, stdout=answer)
 
     monkeypatch.setattr(guard.shutil, "which", lambda name: "X:/tools/gh.exe")
     monkeypatch.setattr(guard.subprocess, "run", fake_run)
-    assert guard.rollup("80", "o/r") == [{"name": "\u05e4"}]
-    ((argv, options),) = calls
-    assert argv == ["X:/tools/gh.exe", "pr", "view", "80", "-R", "o/r", "--json", "statusCheckRollup"]
-    assert options == {
-        "capture_output": True,
-        "encoding": "utf-8",
-        "timeout": guard.GH_TIMEOUT_SECONDS,
-        "check": True,
-    }
+    return calls
+
+
+def test_ec30_rollup_asks_for_the_checks_then_for_the_runs_of_that_commit(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = answering(monkeypatch)
+    found = guard.rollup("80", "o/r")
+    assert found == [{"name": "\u05e4", "detailsUrl": JOB_URL.format(7), "event": "push"}, {"name": "b"}]
+    view, runs = [argv for argv, options in calls]
+    assert view == ["X:/tools/gh.exe", "pr", "view", "80", "-R", "o/r", "--json", "headRefOid,statusCheckRollup"]
+    assert runs == [
+        "X:/tools/gh.exe", "api", "-X", "GET", "repos/o/r/actions/runs", "-f", f"head_sha={SHA}", "-f", "per_page=100"
+    ]
+    timeouts = [options.pop("timeout") for argv, options in calls]
+    assert all(isinstance(timeout, (int, float)) and timeout > 0 for timeout in timeouts)
+    assert sum(timeouts) <= guard.GH_TIMEOUT_SECONDS
+    assert [options for argv, options in calls] == [{"capture_output": True, "encoding": "utf-8", "check": True}] * 2
+
+
+@pytest.mark.parametrize(
+    ("view", "runs", "error"),
+    [
+        (VIEW, subprocess.CalledProcessError(1, ["gh"], stderr="HTTP 403"), subprocess.CalledProcessError),
+        (VIEW, subprocess.TimeoutExpired(["gh"], 15), subprocess.TimeoutExpired),
+        (VIEW, "not json", ValueError),
+        (VIEW, "{}", KeyError),
+        (json.dumps({"statusCheckRollup": []}), RUNS, KeyError),
+    ],
+)
+def test_e7_rollup_lets_out_an_error_of_the_second_call(
+    monkeypatch: pytest.MonkeyPatch, view: str, runs: str | Exception, error: type[Exception]
+) -> None:
+    answering(monkeypatch, view, runs)
+    with pytest.raises(error):
+        guard.rollup("80", "o/r")
+
+
+def test_e7_a_merge_is_refused_with_what_gh_api_wrote(monkeypatch: pytest.MonkeyPatch) -> None:
+    answering(monkeypatch, runs=subprocess.CalledProcessError(1, ["gh"], stderr="HTTP 403\n"))
+    (reason,) = guard.merge_refusals(PLAIN, guard.rollup)
+    assert reason == "merge gate, PR 80 of o/r: the checks could not be read: HTTP 403"
+
+
+def test_ec45_gh_starts_gh_with_the_words_and_the_time_limit(monkeypatch: pytest.MonkeyPatch) -> None:
+    calls = answering(monkeypatch, view='{"a": "\u05e4"}')
+    assert guard._gh(["pr", "x"], 12) == {"a": "\u05e4"}
+    assert calls == [
+        (["X:/tools/gh.exe", "pr", "x"], {"capture_output": True, "encoding": "utf-8", "timeout": 12, "check": True})
+    ]
+
+
+def test_e2_gh_raises_oserror_when_gh_is_not_installed(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(guard.shutil, "which", lambda name: None)
+    with pytest.raises(OSError):
+        guard._gh(["pr", "x"], 12)
 
 
 def stdin_of(monkeypatch: pytest.MonkeyPatch, payload: bytes) -> None:

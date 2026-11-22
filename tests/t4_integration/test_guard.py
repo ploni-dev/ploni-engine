@@ -5,8 +5,9 @@ program: it reads one payload on stdin, may ask `gh`, and answers with its exit 
 Whether those parts fit together shows only when the program runs.
 
 Matrix (each run starts the script as Claude Code does, with the payload on stdin; `gh`
-is a stand-in program that is found first on PATH, prints a fixed answer and ends with
-a fixed exit code, so no test reaches GitHub):
+is a stand-in program that is found first on PATH, answers `gh api` with the runs of the
+commit and every other call with the checks, writes down the words of each call, and ends
+with a fixed exit code, so no test reaches GitHub):
   M1  a merge, every check green              exit code 0, nothing on stderr
   M2  a merge, one check red                  exit code 2, stderr names the PR and the check
   M3  a merge, no check                       exit code 2
@@ -23,6 +24,14 @@ a fixed exit code, so no test reaches GitHub):
                                               repository letter for letter, in ASCII
   M13 a merge, every check green but one required check missing    exit code 2, stderr
                                               names the missing check (issue #180)
+  M14 a check red, then green again on the same trigger (a PR body edit)    exit code 0,
+                                              and gh was asked for the runs of the commit
+                                              that the checks name (issue #137)
+  M15 a check green, then red on the same trigger    exit code 2
+  M16 fast-suite red on push, green on pull_request  exit code 2: each trigger counts
+  M17 the runs cannot be read: gh api ends with an error, or prints no JSON, or no runs
+                                              exit code 2
+  M18 the red run is not among the runs gh api lists  exit code 2: it is kept
 
 Every refusal is told from a script that never ran by its stderr: each line starts with
 `guard: `. Python itself ends with 2 when it cannot open the script.
@@ -44,6 +53,11 @@ SCRIPT = Path(__file__).resolve().parents[2] / "scripts" / "guard.py"
 MERGE = "gh pr merge 80 -R o/r --squash"
 GREEN = {"__typename": "CheckRun", "name": "fast-suite", "status": "COMPLETED", "conclusion": "SUCCESS"}
 RED = {"__typename": "CheckRun", "name": "lint", "status": "COMPLETED", "conclusion": "FAILURE"}
+# The last commit of the PR, and the start times of PR #135's two ratchet runs (2026-11-19).
+SHA = "64785f9cf09d42e0e296ab8400bab181b6977055"
+EARLY = "2026-11-19T23:20:30Z"
+LATE = "2026-11-19T23:21:47Z"
+NO_RUNS = json.dumps({"workflow_runs": []})
 # One green run of each check the gate asks for (scripts/guard.py, REQUIRED_CHECKS; issue #180),
 # written out here so that the program is tested against the list, not against itself.
 EVERY = [
@@ -51,15 +65,29 @@ EVERY = [
 ]
 
 
-def stand_in_gh(folder: Path, answer: str, exit_code: int = 0) -> None:
-    """Write a `gh` into folder that prints answer, leaves a mark and ends with exit_code."""
+def stand_in_gh(folder: Path, answer: str, exit_code: int = 0, runs: str = NO_RUNS, runs_exit: int = 0) -> None:
+    """Write a `gh` into folder that answers each call by its first word and notes its words.
+
+    `gh api` prints runs and ends with runs_exit; every other call prints answer and ends
+    with exit_code. The words of each call go on a line of the file `started`.
+    """
     (folder / "answer.json").write_text(answer, encoding="utf-8")
+    (folder / "runs.json").write_text(runs, encoding="utf-8")
     if os.name == "nt":
-        batch = f'@echo off\r\ntype "%~dp0answer.json"\r\necho x> "%~dp0started"\r\nexit /b {exit_code}\r\n'
+        # The redirection stands first: in `echo ... 100>>file` cmd takes the 0 for a handle.
+        batch = (
+            '@echo off\r\n>>"%~dp0started" echo %*\r\n'
+            f'if "%~1"=="api" (\r\ntype "%~dp0runs.json"\r\nexit /b {runs_exit}\r\n)\r\n'
+            f'type "%~dp0answer.json"\r\nexit /b {exit_code}\r\n'
+        )
         (folder / "gh.cmd").write_text(batch, encoding="utf-8", newline="")
         return
     script = folder / "gh"
-    shell = f'#!/bin/sh\ncat "$(dirname "$0")/answer.json"\ntouch "$(dirname "$0")/started"\nexit {exit_code}\n'
+    shell = (
+        '#!/bin/sh\nhere="$(dirname "$0")"\necho "$*" >> "$here/started"\n'
+        f'if [ "$1" = api ]; then cat "$here/runs.json"; exit {runs_exit}; fi\n'
+        f'cat "$here/answer.json"\nexit {exit_code}\n'
+    )
     script.write_text(shell, encoding="utf-8", newline="\n")
     script.chmod(0o755)
 
@@ -76,8 +104,24 @@ def payload(tool: str, **tool_input: str) -> bytes:
 
 
 def rollup(*checks: dict[str, str]) -> str:
-    """Return what `gh pr view --json statusCheckRollup` prints for these checks."""
-    return json.dumps({"statusCheckRollup": list(checks)})
+    """Return what `gh pr view --json headRefOid,statusCheckRollup` prints for these checks."""
+    return json.dumps({"headRefOid": SHA, "statusCheckRollup": list(checks)})
+
+
+def job(name: str, conclusion: str, started: str, run: int) -> dict[str, str]:
+    """Return a finished workflow job of run, as the rollup lists it."""
+    url = f"https://github.com/o/r/actions/runs/{run}/job/{run + 1000}"
+    return {**GREEN, "name": name, "conclusion": conclusion, "startedAt": started, "detailsUrl": url}
+
+
+def runs(*events: tuple[int, str]) -> str:
+    """Return what `gh api .../actions/runs` prints for runs given as (id, event)."""
+    return json.dumps({"workflow_runs": [{"id": run, "event": event} for run, event in events]})
+
+
+def but(name: str) -> list[dict[str, str]]:
+    """Return EVERY without the check of that name."""
+    return [check for check in EVERY if check["name"] != name]
 
 
 def refused(done: subprocess.CompletedProcess[bytes]) -> bytes:
@@ -162,3 +206,39 @@ def test_m12_a_refusal_names_a_hebrew_repository_letter_for_letter(tmp_path: Pat
     written = repository.encode("ascii", "backslashreplace")
     assert written.isascii()
     assert b"PR 80 of " + written + b": check lint is FAILURE" in stderr
+
+
+def test_m14_a_check_red_then_green_again_on_the_same_trigger_is_let_through(tmp_path: Path) -> None:
+    checks = (job("ratchet", "FAILURE", EARLY, 1), job("ratchet", "SUCCESS", LATE, 2))
+    stand_in_gh(tmp_path, rollup(*but("ratchet"), *checks), runs=runs((1, "pull_request"), (2, "pull_request")))
+    done = hook(payload("Bash", command=MERGE), tmp_path)
+    assert done.stderr == b""
+    assert done.returncode == 0
+    calls = (tmp_path / "started").read_text(encoding="utf-8")
+    assert "pr view 80 -R o/r" in calls
+    assert "repos/o/r/actions/runs" in calls
+    assert f"head_sha={SHA}" in calls
+
+
+def test_m15_a_check_green_then_red_on_the_same_trigger_is_refused(tmp_path: Path) -> None:
+    checks = (job("ratchet", "SUCCESS", EARLY, 1), job("ratchet", "FAILURE", LATE, 2))
+    stand_in_gh(tmp_path, rollup(*but("ratchet"), *checks), runs=runs((1, "pull_request"), (2, "pull_request")))
+    assert b"PR 80 of o/r: check ratchet is FAILURE" in refused(hook(payload("Bash", command=MERGE), tmp_path))
+
+
+def test_m16_fast_suite_counts_by_the_newest_run_of_each_trigger(tmp_path: Path) -> None:
+    checks = (job("fast-suite", "FAILURE", EARLY, 1), job("fast-suite", "SUCCESS", LATE, 2))
+    stand_in_gh(tmp_path, rollup(*but("fast-suite"), *checks), runs=runs((1, "push"), (2, "pull_request")))
+    assert b"PR 80 of o/r: check fast-suite is FAILURE" in refused(hook(payload("Bash", command=MERGE), tmp_path))
+
+
+@pytest.mark.parametrize(("answer", "exit_code"), [(NO_RUNS, 1), ("not json", 0), ("{}", 0)])  # M17
+def test_m17_a_merge_is_refused_when_the_runs_cannot_be_read(tmp_path: Path, answer: str, exit_code: int) -> None:
+    stand_in_gh(tmp_path, rollup(*EVERY), runs=answer, runs_exit=exit_code)
+    assert b"PR 80 of o/r: the checks could not be read" in refused(hook(payload("Bash", command=MERGE), tmp_path))
+
+
+def test_m18_a_red_run_that_gh_api_does_not_list_is_kept(tmp_path: Path) -> None:
+    checks = (job("ratchet", "FAILURE", EARLY, 1), job("ratchet", "SUCCESS", LATE, 2))
+    stand_in_gh(tmp_path, rollup(*but("ratchet"), *checks), runs=runs((2, "pull_request")))
+    assert b"PR 80 of o/r: check ratchet is FAILURE" in refused(hook(payload("Bash", command=MERGE), tmp_path))
