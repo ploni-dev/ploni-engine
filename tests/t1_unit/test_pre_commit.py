@@ -17,7 +17,11 @@ main. Equivalence classes:
   EC9  a step that runs out of time      it fails; the others run
   EC10 the environment git gives a hook  the tools run without any name of git's own list,
        `git rev-parse --local-env-vars` (GIT_DIR, GIT_CONFIG_PARAMETERS, GIT_INDEX_FILE and the
-       rest), so that a test that runs git elsewhere cannot write into this repository (#182)
+       rest), so that a test that runs git elsewhere cannot write into this repository (#182);
+       the names are read from git by the test itself, not from the code under test
+  EC11 git cannot give its list          CalledProcessError, and no check starts: the commit is
+       refused rather than checked with the variables in
+  L1   _local_variables is git's own list, and holds the five names of #182 and #183
   EC7  every step passes                 exit 0, each step's name printed before it runs
   EC8  a step fails                      exit 1, the failing steps named at the end; every step runs
 
@@ -127,7 +131,9 @@ def test_local_variables_are_git_s_own_list() -> None:
 
 
 def test_ec10_the_tools_run_without_any_of_git_s_repository_variables(monkeypatch: pytest.MonkeyPatch) -> None:
-    names = hook._local_variables(Path("."))
+    # git's list, asked of git here: from hook._local_variables, an empty list would set nothing.
+    names = frozenset(hook._run([hook.GIT, "rev-parse", "--local-env-vars"], Path("."), stdout=subprocess.PIPE).stdout.decode().split())
+    assert {"GIT_DIR", "GIT_CONFIG_PARAMETERS", "GIT_INDEX_FILE", "GIT_WORK_TREE", "GIT_COMMON_DIR"} <= names
     for name in names:
         monkeypatch.setenv(name, "set by git")
     monkeypatch.setenv("KEPT", "yes")
@@ -144,4 +150,19 @@ def test_ec10_the_tools_run_without_any_of_git_s_repository_variables(monkeypatc
     assert hook._status(["tool"], Path(".")) == 0
     [env] = seen
     assert env is not None and env["KEPT"] == "yes"
-    assert not names & set(env)
+    assert sorted(names & set(env)) == []
+
+
+def test_ec11_when_git_cannot_give_its_list_no_check_starts(monkeypatch: pytest.MonkeyPatch) -> None:
+    started: list[list[str]] = []
+
+    def broken_git(command: list[str], cwd: Path, *, stdout: int | None = None, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[bytes]:
+        if "--local-env-vars" in command:
+            return subprocess.CompletedProcess(command, 128, b"")
+        started.append(command)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(hook, "_run", broken_git)
+    with pytest.raises(subprocess.CalledProcessError):
+        hook._status(["tool"], Path("."))
+    assert started == []
