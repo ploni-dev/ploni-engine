@@ -5,10 +5,21 @@
 # while the full tests run on it. A PR that does not fix the failure stays red; the one that
 # fixes it goes green and merges; the next night's run then clears the block for everyone."
 # So on every PR scripts/check_nightly.py reads main's last nightly run of full.yml; when it
-# failed, the full suite runs on GitHub's merge of the PR into its base, as full.yml runs it.
-# The script runs from main's copy, so a PR that edits only the script is still read by main's
-# (the review of #178). A PR that edits this file is judged by its own edited copy; against that,
-# only the review and CLAUDE.md stand, until the pin test that follows this PR.
+# failed, pytest runs every tier at full size on GitHub's merge of the PR into its base, as
+# full.yml runs it; ruff and mypy stay with the fast suite, which runs the same two commands on
+# the same merge commit. The script runs from main's copy, so a PR that edits only the script is
+# still read by main's (the review of #178).
+# Known limits:
+# - The night is read when the PR is pushed. A night that fails later leaves an earlier green
+#   check green, and a good night leaves a red one red, until a new push or a re-run of this job.
+# - After a failed night the PR's own tests run: a PR that weakens, skips or deselects the
+#   failing test, or changes tests/sizes.py or the pytest settings, can turn this green. The
+#   ratchet and marker checks and CLAUDE.md ("Merging": Achia's decision) stand against that.
+# - A PR that edits this file is judged by its own edited copy; against that, only the review
+#   and CLAUDE.md stand, until the pin test that follows this PR.
+# - If main's script breaks (an API or permission change), every PR is red, the fix of the
+#   script alone too; the way out is a PR that also edits this file, which needs Achia's decision.
+# - The failed=true path has not run live: no night has failed yet.
 name: nightly
 
 on:
