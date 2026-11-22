@@ -78,6 +78,8 @@ run of each of REQUIRED_CHECKS (Achia, 2026-11-22, "Yes, name all seven (Recomme
   EC35  REQUIRED_CHECKS is every job of the workflows that run on each pull request: all jobs
         but full-suite, which starts on a label only; .yml and .yaml, a job line with a comment,
         any indentation under jobs:; a job with a name: of its own is red (the review of #187)
+        a job named on PENDING_CHECKS (a new check on its way, with its issue) may run on PRs
+        before its name is in REQUIRED_CHECKS, once; a pending name already required is red
   B4    no check at all, or no list                 red, one reason for each of the seven
   A6    a required check only as a commit status, which can be set by hand    red
   A7    one of two fast-suite runs red              red
@@ -437,6 +439,13 @@ def _check_names(text: str) -> dict[str, str]:
     return names
 
 
+# New checks on their way, each with its issue: a job named here may run on PRs before its name is
+# in REQUIRED_CHECKS, as its workflow and the guard patch that names it come in two PRs (the
+# changed-paths check refuses a workflow with a .py file). The guard patch that adds a name takes
+# it off this list. Achia, 2026-11-23, "A short pending list (Recommended)".
+PENDING_CHECKS: dict[str, int] = {}
+
+
 def test_ec35_the_required_checks_are_the_jobs_that_run_on_every_pull_request() -> None:
     # full-suite starts on a label only, so it is on no PR by default. GitHub runs .yml and .yaml.
     # A list, not a set: two jobs under one check name would let one stand in for the other.
@@ -444,7 +453,15 @@ def test_ec35_the_required_checks_are_the_jobs_that_run_on_every_pull_request() 
     folder = REPOSITORY / ".github" / "workflows"
     for workflow in sorted([*folder.glob("*.yml"), *folder.glob("*.yaml")]):
         names += _check_names(workflow.read_text(encoding="utf-8")).values()
-    assert sorted(names) == sorted([*guard.REQUIRED_CHECKS, "full-suite"])
+    pending = [name for name in names if name in PENDING_CHECKS]
+    assert sorted(names) == sorted([*guard.REQUIRED_CHECKS, "full-suite", *pending])
+    assert len(pending) == len(set(pending)), "two jobs under one pending check name"
+
+
+def test_ec35_a_pending_check_is_new() -> None:
+    # A name on the list is not yet in the gate's list, and names an issue.
+    assert not set(PENDING_CHECKS) & {*guard.REQUIRED_CHECKS, "full-suite"}
+    assert all(type(issue) is int and issue > 0 for issue in PENDING_CHECKS.values())
 
 
 @pytest.mark.parametrize(
