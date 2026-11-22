@@ -27,6 +27,10 @@ The commits sent must be the files checked (the review of #183, finding 1): the 
 folder, so a push of anything but the folder's committed HEAD is refused before it runs.
   A3  a change in the folder not committed, the suite green     refused, exit 1, the suite not started
   A4  a real push of a branch that is not checked out           refused: the remote has no new branch
+  A5  a new file not added (untracked), the suite green         refused, exit 1, the suite not started
+  A6  two refs sent, HEAD first and another commit second      refused, exit 1, the suite not started
+  A7  an annotated tag of another commit                        refused, exit 1, the suite not started
+  P9  an annotated tag of HEAD (its object is the tag, not HEAD)    sent: the commit it names is HEAD
 The module's own git commands start without git's repository-local variables, so the module
 run under a hook, or from a shell with GIT_DIR set, cannot write into that repository (finding 3).
 Hebrew and document axes: do not apply; the input is a git push.
@@ -253,3 +257,48 @@ def test_a4_a_branch_not_checked_out_is_refused(tmp_path: Path) -> None:
     _git(tmp_path / "work", "switch", "-q", "main")
     assert not _push(tmp_path / "work", hooks, tmp_path / "remote.git", "other")
     assert _git(tmp_path / "remote.git", "rev-parse", "--verify", "-q", "other").returncode != 0
+
+
+def test_a5_a_file_not_added_is_refused(tmp_path: Path) -> None:
+    hooks = _repository(tmp_path)
+    record = _stand_in(tmp_path / VENV_PYTHON.parent, VENV_PYTHON.name, 0)
+    (tmp_path / "new.txt").write_text("not added\n", encoding="utf-8")
+    assert _hook(tmp_path, hooks) == 1
+    assert not record.exists()
+
+
+def test_a6_every_ref_sent_is_checked_not_only_the_first(tmp_path: Path) -> None:
+    hooks = _repository(tmp_path)
+    record = _stand_in(tmp_path / VENV_PYTHON.parent, VENV_PYTHON.name, 0)
+    head = _head(tmp_path)
+    _git(tmp_path, "commit", "-q", "--allow-empty", "-m", "other")
+    other = _head(tmp_path)
+    _git(tmp_path, "reset", "-q", "--hard", head)
+    lines = f"refs/heads/main {head} refs/heads/main {ZEROS}\nrefs/heads/other {other} refs/heads/other {ZEROS}"
+    assert _hook(tmp_path, hooks, line=lines) == 1
+    assert not record.exists()
+
+
+def _tag(folder: Path, name: str, commit: str) -> str:
+    """Make an annotated tag of `commit`; return the tag object's name, which is not the commit's."""
+    _git(folder, "tag", "-a", "-m", name, name, commit)
+    return _git(folder, "rev-parse", name).stdout.decode().strip()
+
+
+def test_p9_an_annotated_tag_of_head_is_sent(tmp_path: Path) -> None:
+    hooks = _repository(tmp_path)
+    record = _stand_in(tmp_path / VENV_PYTHON.parent, VENV_PYTHON.name, 0)
+    tag = _tag(tmp_path, "v1", _head(tmp_path))
+    assert tag != _head(tmp_path)
+    assert _hook(tmp_path, hooks, line=f"refs/tags/v1 {tag} refs/tags/v1 {ZEROS}") == 0
+    assert record.is_file()
+
+
+def test_a7_an_annotated_tag_of_another_commit_is_refused(tmp_path: Path) -> None:
+    hooks = _repository(tmp_path)
+    record = _stand_in(tmp_path / VENV_PYTHON.parent, VENV_PYTHON.name, 0)
+    base = _head(tmp_path)
+    _git(tmp_path, "commit", "-q", "--allow-empty", "-m", "later")
+    tag = _tag(tmp_path, "v0", base)
+    assert _hook(tmp_path, hooks, line=f"refs/tags/v0 {tag} refs/tags/v0 {ZEROS}") == 1
+    assert not record.exists()
