@@ -160,3 +160,48 @@ Known limits:
 - `actions/setup-python` installs Python 3.13.5 and pip. In the run of 2026-11-16 it first upgraded to the newest pip (26.3) and used that once to install the pinned pip 25.1.1; the twelve packages above that Linux needs were then installed by 25.1.1 with hash checking. Nothing in the workflow asks for that upgrade; the install script inside the Python download does it, and the action runs that script.
 - Python and pip are not in the hashed set. `actions/setup-python` downloads Python 3.13.5 at run time from the repository `actions/python-versions`, found by version through a list on that repository's `main` branch; the log shows no hash check. pip 25.1.1 comes from PyPI by version, and the newest pip (26.3 in that run) with no version at all; neither with a hash. So the tool that checks the hashes is itself not hashed.
 - The two actions run their own code, with what they bundle, at the pinned commit. That code was not read.
+
+## The mutation tester, on the laptop only
+
+Cosmic Ray 8.9.0 and the packages it needs, in `requirements-mutation.txt`, each pinned to one version with the SHA-256 of its wheel for this laptop (Windows, `win_amd64`, CPython 3.13), from PyPI. None is shipped, and no workflow installs them: mutation testing runs on the laptop, as Achia's third answer said, so no Linux file is pinned (the review of #188, finding 4) (`CLAUDE.md`, "Tests": the surviving mutants of a PR that changes `ploni/` go into its body).
+
+Where it comes from: `PROCESS.md` section 12 item 8 asks for "A mutation testing tool that runs on Windows, chosen and pinned" (issue #177). Achia said yes in principle on 2026-11-18, and on 2026-11-22, asked with its name, version and licence, chose "Yes, Cosmic Ray 8.9.0 (Recommended)"; mutmut was not chosen, as it needs `fork`, which Windows lacks. One package, yattag, exists only as source: asked, he chose "Allow yattag as source (Recommended)", and then, as building it would fetch an unpinned build tool, "Separate laptop file (Recommended)". It is installed after `requirements-dev.txt` with `--no-build-isolation`, so the pinned setuptools builds it.
+
+| Package | Version | License, as the package declares it | Why it is there |
+|---|---|---|---|
+| aiohappyeyeballs | 2.7.1 | PSF-2.0 | needed by a dependency of cosmic-ray |
+| aiohttp | 3.14.5 | Apache-2.0 AND MIT | needed by cosmic-ray |
+| aiosignal | 1.4.0 | Apache 2.0 | needed by a dependency of cosmic-ray |
+| anybadge | 1.18.0 | MIT | needed by cosmic-ray |
+| attrs | 26.1.0 | MIT | needed by cosmic-ray |
+| click | 8.5.1 | BSD-3-Clause | needed by cosmic-ray |
+| cosmic-ray | 8.9.0 | MIT License | named by Achia (2026-11-22): the mutation tester |
+| decorator | 5.3.2 | BSD-2-Clause | needed by cosmic-ray |
+| exit-codes | 1.3.0 | MIT | needed by cosmic-ray |
+| frozenlist | 1.8.0 | Apache-2.0 | needed by a dependency of cosmic-ray |
+| gitdb | 4.0.12 | BSD License | needed by a dependency of cosmic-ray |
+| gitpython | 3.2.1 | BSD-3-Clause | needed by cosmic-ray |
+| idna | 3.20 | BSD-3-Clause | needed by a dependency of cosmic-ray |
+| markdown-it-py | 4.3.0 | MIT License | needed by a dependency of cosmic-ray |
+| mdurl | 0.1.2 | MIT License | needed by a dependency of cosmic-ray |
+| multidict | 7.2.1 | Apache-2.0 | needed by a dependency of cosmic-ray |
+| packaging | 26.3 | Apache-2.0 OR BSD-2-Clause | needed by a dependency of cosmic-ray; also in `requirements-dev.txt`, same version |
+| parso | 0.8.7 | MIT | needed by cosmic-ray |
+| propcache | 0.5.4 | Apache-2.0 | needed by a dependency of cosmic-ray |
+| pygments | 2.21.0 | BSD-2-Clause | needed by a dependency of cosmic-ray; also in `requirements-dev.txt`, same version |
+| rich | 15.0.0 | MIT | needed by cosmic-ray |
+| smmap | 5.0.3 | BSD-3-Clause | needed by a dependency of cosmic-ray |
+| sqlalchemy | 2.1.9 | MIT | needed by cosmic-ray |
+| stevedore | 5.10.0 | Apache-2.0 | needed by cosmic-ray |
+| toml | 0.10.2 | MIT | needed by cosmic-ray |
+| typing-extensions | 4.16.0 | PSF-2.0 | needed by a dependency of cosmic-ray; also in `requirements-dev.txt`, same version |
+| yarl | 1.25.1 | Apache-2.0 | needed by a dependency of cosmic-ray |
+| yattag | 1.16.1 | LGPL (classifier: GNU Library or Lesser General Public License) | needed by cosmic-ray, for its HTML report; source only, built here |
+
+None declares GPL or AGPL. yattag declares LGPL; it is a developer tool, installed from its source file with its hash, never shipped, and nothing of it is copied into `ploni/`.
+
+Known limits:
+
+- The licenses are what each package declares in its wheel's metadata (`License-Expression`, else `License`, else a classifier), read on 2026-11-22; for yattag, its classifier on PyPI and the `license/lgpl-2.1.txt` it ships. No license text was read.
+- Cosmic Ray runs the test command as a program found on PATH: the word `python` alone found Windows' store stub, which fails at once with no output, and every mutant was counted killed. Its configuration must name the environment's python by its full path, and `cosmic-ray baseline` must pass before a run is believed (measured 2026-11-22).
+- Cosmic Ray reads the test command's output as UTF-8; pytest's output on this laptop is in the Windows code page, and a byte it cannot decode makes the job INCOMPETENT, which `cr-report` counts as killed (`cosmic_ray/work_item.py`: every outcome but SURVIVED is a kill; the review of #188, pass 2, finding 6). In the trial of 2026-11-22, 36 jobs were INCOMPETENT (logging 35, tempfiles 1), each raised at `cosmic_ray/testing.py` line 77, the branch of a failed test run, so each was a kill. A survivor whose output has such a byte would raise at line 79 and be counted as a kill: count the INCOMPETENT jobs of every run and read the line of each (the review of #188, finding 5). `PYTHONUTF8=1` in the run's environment may avoid it; not measured.
