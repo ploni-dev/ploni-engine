@@ -14,8 +14,12 @@ Equivalence class:
      there, the step id and the two conditions on its output, the hashed install and `pytest
      tests` at full size. Any changed or added line is red; a comment is not.
 Hebrew and document axes: do not apply; the input is a workflow file.
-Known limits: an edit of both this test and the workflow in one PR passes; the review and
-CLAUDE.md ("Merging": a CI workflow needs Achia's decision) stand against that.
+Known limits: a PR that edits this test (or tests/workflow_lines.py) together with the workflow
+is refused by changed-paths, which refuses a workflow with any .py file. A PR that edits the
+workflow together with a non-.py file that keeps this test from running (a `--deselect` in
+pyproject.toml's pytest options, the Makefile's `check` target) passes every check;
+pyproject.toml and that make target are on the Level 3 list (PROMOTION.md section 4), so only
+the review and CLAUDE.md stand against it (the review of #186, finding 1, measured).
 """
 
 from pathlib import Path
