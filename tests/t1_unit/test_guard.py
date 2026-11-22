@@ -76,7 +76,8 @@ run of each of REQUIRED_CHECKS (Achia, 2026-11-22, "Yes, name all seven (Recomme
   EC12  every check green but fast-suite, which is missing  red
   EC34  every check but one of the seven            red, one reason that names the missing one
   EC35  REQUIRED_CHECKS is every job of the workflows that run on each pull request: all jobs
-        but full-suite, which starts on a label only
+        but full-suite, which starts on a label only; .yml and .yaml, a job line with a comment,
+        any indentation under jobs:; a job with a name: of its own is red (the review of #187)
   B4    no check at all, or no list                 red, one reason for each of the seven
   A6    a required check only as a commit status, which can be set by hand    red
   A7    one of two fast-suite runs red              red
@@ -133,6 +134,7 @@ handles commands and paths, no document.
 
 import io
 import json
+import re
 import subprocess
 import time
 import types
@@ -394,15 +396,58 @@ def test_b4_no_check_at_all_is_one_reason_for_each_required_check(checks: list[d
     assert guard.red(checks) == [f"there is no {name} check on the last commit" for name in guard.REQUIRED_CHECKS]
 
 
+def _job_ids(text: str) -> tuple[set[str], set[str]]:
+    """Return a workflow's job ids, and the ids of jobs that set a `name:` of their own.
+
+    Why: GitHub names a job's check by its id unless the job sets `name:`; EC35 compares those
+    ids with REQUIRED_CHECKS. Contract: text, a workflow file. Returns (ids, ids with `name:`).
+    Known limits: a workflow in YAML flow style (`jobs: {a: ...}`) is not read; none here is.
+    """
+    lines = text.splitlines()
+    below = lines[lines.index("jobs:") + 1 :]
+    keys = [m for m in (re.fullmatch(r"(\s+)([\w-]+):\s*(#.*)?", line) for line in below) if m]
+    if not keys:
+        return set(), set()
+    indent = len(keys[0].group(1))
+    ids, named, current = set(), set(), ""
+    for line in below:
+        key = re.fullmatch(r"(\s*)([\w-]+):.*", line)
+        if key and line.strip() and not line.lstrip().startswith("#"):
+            if len(key.group(1)) == indent:
+                current = key.group(2)
+                ids.add(current)
+            elif key.group(2) == "name" and current:
+                named.add(current)
+    return ids, named
+
+
 def test_ec35_the_required_checks_are_the_jobs_that_run_on_every_pull_request() -> None:
-    # A job's check is named by its id, two spaces in under `jobs:`; no workflow here gives a
-    # job a `name:` of its own. full-suite starts on a label only, so it is on no PR by default.
-    jobs = set()
-    for workflow in sorted((REPOSITORY / ".github" / "workflows").glob("*.yml")):
-        lines = workflow.read_text(encoding="utf-8").splitlines()
-        below = lines[lines.index("jobs:") + 1 :]
-        jobs |= {line.strip().rstrip(":") for line in below if line.startswith("  ") and not line.startswith("   ") and line.endswith(":")}
+    # full-suite starts on a label only, so it is on no PR by default. GitHub runs .yml and .yaml.
+    jobs, named = set(), set()
+    folder = REPOSITORY / ".github" / "workflows"
+    for workflow in sorted([*folder.glob("*.yml"), *folder.glob("*.yaml")]):
+        ids, with_name = _job_ids(workflow.read_text(encoding="utf-8"))
+        jobs |= ids
+        named |= with_name
     assert jobs - {"full-suite"} == set(guard.REQUIRED_CHECKS)
+    assert named == set(), "a job with a name: of its own is checked under that name, not its id"
+
+
+@pytest.mark.parametrize(
+    ("text", "ids"),
+    [
+        ("jobs:\n  a:\n    runs-on: x\n  b:\n    runs-on: y\n", {"a", "b"}),
+        ("jobs:\n  lint: # the linter\n    runs-on: x\n", {"lint"}),
+        ("jobs:\n    deep:\n      runs-on: x\n", {"deep"}),
+        ("jobs:\n  # a comment: here\n  a:\n    steps:\n      - name: x\n", {"a"}),
+    ],
+)
+def test_ec35_job_ids_are_read_in_each_shape(text: str, ids: set[str]) -> None:
+    assert _job_ids(text)[0] == ids
+
+
+def test_ec35_a_job_with_a_name_of_its_own_is_seen() -> None:
+    assert _job_ids("jobs:\n  a:\n    name: Lint\n    runs-on: x\n") == ({"a"}, {"a"})
 
 
 def test_red_raises_attributeerror_for_an_entry_that_is_no_mapping() -> None:
