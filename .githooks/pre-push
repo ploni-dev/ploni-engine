@@ -3,13 +3,14 @@
 # suite, scripts/check.py, and a red result stops the push. Git runs it once
 # `git config core.hooksPath .githooks` is set in the clone. The suite reads the files of the
 # checkout it runs in, so the push is refused unless what it sends is what the suite reads: no
-# change not committed, and every ref sent is the checkout's HEAD (a deleted ref sends nothing).
+# change not committed, and every ref sent names the checkout's HEAD: the commit itself, or a tag
+# of it (a deleted ref sends nothing).
 # The project's environment first, as the check before a commit finds it: this folder's .venv,
 # then the .venv of the main checkout, for a worktree.
 # Known limits: a clone without core.hooksPath set runs none of it, and `git push --no-verify`
 # skips it; the merge gate's hook refuses that flag to Claude (scripts/guard.py), and the fast
 # suite in CI runs after the push. A hook is speed, not safety (PROMOTION.md, Level 0). A tag
-# sent with its branch is refused unless it names HEAD itself (an annotated tag never does).
+# of another commit, sent with its branch, is refused: check that commit out and send it alone.
 common="$(git rev-parse --git-common-dir 2>/dev/null)"
 head="$(git rev-parse HEAD)"
 if [ -n "$(git status --porcelain)" ]; then
@@ -18,8 +19,8 @@ if [ -n "$(git status --porcelain)" ]; then
 fi
 while read -r ref sha rest; do
     case "$sha" in
-        *[!0]*) if [ "$sha" != "$head" ]; then
-                echo "check before push: $ref is not the checkout's HEAD; check it out to send it" >&2
+        *[!0]*) if [ "$(git rev-parse -q --verify "$sha^{commit}")" != "$head" ]; then
+                echo "check before push: $ref does not name the checkout's HEAD; check out what it names to send it" >&2
                 exit 1
             fi ;;
     esac
