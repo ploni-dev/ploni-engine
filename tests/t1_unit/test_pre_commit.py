@@ -15,8 +15,9 @@ staged. Equivalence classes:
 
 main. Equivalence classes:
   EC9  a step that runs out of time      it fails; the others run
-  EC10 the environment git gives a hook  the tools run without GIT_INDEX_FILE, GIT_DIR and
-       GIT_WORK_TREE, so that a test that runs git elsewhere cannot write into the commit's index
+  EC10 the environment git gives a hook  the tools run without any name of git's own list,
+       `git rev-parse --local-env-vars` (GIT_DIR, GIT_CONFIG_PARAMETERS, GIT_INDEX_FILE and the
+       rest), so that a test that runs git elsewhere cannot write into this repository (#182)
   EC7  every step passes                 exit 0, each step's name printed before it runs
   EC8  a step fails                      exit 1, the failing steps named at the end; every step runs
 
@@ -115,13 +116,30 @@ def test_ec9_a_step_out_of_time_fails_and_the_others_run(monkeypatch: pytest.Mon
     assert capsys.readouterr().out.splitlines()[-1] == "check before commit: FAILED: ruff"
 
 
-def test_ec10_the_tools_run_without_the_index_git_gives_a_hook(monkeypatch: pytest.MonkeyPatch) -> None:
-    for name in ("GIT_INDEX_FILE", "GIT_DIR", "GIT_WORK_TREE"):
+def test_local_variables_are_git_s_own_list() -> None:
+    names = hook._local_variables(Path("."))
+    # The two that harmed the repository on 2026-11-20 (#183), and the three cleared before (#182).
+    assert {"GIT_DIR", "GIT_CONFIG_PARAMETERS", "GIT_INDEX_FILE", "GIT_WORK_TREE", "GIT_COMMON_DIR"} <= names
+    real = hook._run([hook.GIT, "rev-parse", "--local-env-vars"], Path("."), stdout=subprocess.PIPE)
+    assert names == frozenset(real.stdout.decode().split())
+
+
+def test_ec10_the_tools_run_without_any_of_git_s_repository_variables(monkeypatch: pytest.MonkeyPatch) -> None:
+    names = hook._local_variables(Path("."))
+    for name in names:
         monkeypatch.setenv(name, "set by git")
     monkeypatch.setenv("KEPT", "yes")
     seen: list[dict[str, str] | None] = []
-    monkeypatch.setattr(hook, "_run", lambda command, cwd, *, stdout=None, env=None: seen.append(env) or subprocess.CompletedProcess(command, 0))
+    real = hook._run
+
+    def tool(command: list[str], cwd: Path, *, stdout: int | None = None, env: dict[str, str] | None = None) -> subprocess.CompletedProcess[bytes]:
+        if "--local-env-vars" in command:
+            return real(command, cwd, stdout=stdout, env=env)
+        seen.append(env)
+        return subprocess.CompletedProcess(command, 0)
+
+    monkeypatch.setattr(hook, "_run", tool)
     assert hook._status(["tool"], Path(".")) == 0
     [env] = seen
     assert env is not None and env["KEPT"] == "yes"
-    assert not {"GIT_INDEX_FILE", "GIT_DIR", "GIT_WORK_TREE"} & set(env)
+    assert not names & set(env)
