@@ -26,6 +26,7 @@ Known limits:
   none of it. `git commit --no-verify` skips it; the merge gate's hook refuses that flag to
   Claude (`scripts/guard.py`), and the fast suite in CI runs the same checks after the push.
 - The tests and layers it does not run (unit, property, layering) run in the fast suite.
+- A commit is refused, with git's error and a traceback, when git cannot list its variables.
 """
 
 import os
@@ -80,7 +81,13 @@ def _local_variables(cwd: Path) -> frozenset[str]:
 def _status(command: list[str], cwd: Path) -> int:
     """Return the exit code of one check, its output on the screen; 1 when it runs out of time.
 
-    The check runs without git's repository variables (`_local_variables`).
+    Why: one place where a check starts, so that each starts without git's repository variables
+    (`_local_variables`) and a check out of time fails rather than hangs the commit.
+
+    Contract: command, the check's argv; cwd, the repository root. Returns the check's exit
+    code, or 1 when it runs out of time. Raises CalledProcessError when git cannot list its
+    variables, and TimeoutExpired when that listing runs out of time: the check is then not
+    started, and the commit is refused.
     """
     names = _local_variables(cwd)
     env = {name: value for name, value in os.environ.items() if name not in names}
@@ -132,7 +139,8 @@ def main(cwd: Path) -> int:
 
     Contract: prints "== <name>" before each step; every step runs, and one that runs out of
     time fails; ends with a line naming the failed steps when any failed, and returns 1; else
-    returns 0. Raises CalledProcessError when git cannot say what is staged.
+    returns 0. Raises CalledProcessError when git cannot say what is staged or cannot list its
+    variables (`_local_variables`), and TimeoutExpired when that listing runs out of time.
     """
     failed = []
     for name, command in steps(staged(cwd)):
