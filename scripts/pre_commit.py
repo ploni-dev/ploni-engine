@@ -16,8 +16,9 @@ one pytest run. Each step's name is printed before it runs, every step runs, and
 is 1 when any failed (git then makes no commit), else 0.
 
 Known limits:
-- The checks run without git's hook variables (GIT_HOOK_VARIABLES), so in a worktree and under
-  `git commit -a` they read the repository as the fast suite does, not the commit's own index.
+- The checks run without git's repository variables (`git rev-parse --local-env-vars`), so in a
+  worktree and under `git commit -a` they read the repository as the fast suite does, not the
+  commit's own index.
 - ruff and mypy read the staged files as they are in the folder, not as staged: a file staged
   and then edited again is checked as edited. The scans read every tracked file, as they do in
   the fast suite.
@@ -25,6 +26,7 @@ Known limits:
   none of it. `git commit --no-verify` skips it; the merge gate's hook refuses that flag to
   Claude (`scripts/guard.py`), and the fast suite in CI runs the same checks after the push.
 - The tests and layers it does not run (unit, property, layering) run in the fast suite.
+- A commit is refused, with git's error and a traceback, when git cannot list its variables.
 """
 
 import os
@@ -46,9 +48,6 @@ PRODUCT = "ploni/"
 # 2026-11-20); a step that takes longer fails.
 GIT = shutil.which("git") or "git"
 STEP_TIMEOUT_SECONDS = 300
-# What git sets for a hook and a check tool must not inherit: a test that runs git in a folder of
-# its own would otherwise write into the index of the commit being made.
-GIT_HOOK_VARIABLES = ("GIT_INDEX_FILE", "GIT_DIR", "GIT_WORK_TREE")
 
 
 def _run(
@@ -65,12 +64,33 @@ def _output(command: list[str], cwd: Path) -> bytes:
     return done.stdout
 
 
+def _local_variables(cwd: Path) -> frozenset[str]:
+    """Return the names git lists as a repository's own (`git rev-parse --local-env-vars`).
+
+    Why: what git sets for a hook (GIT_DIR, GIT_INDEX_FILE, GIT_CONFIG_PARAMETERS and the rest) a
+    check tool must not inherit: a test that runs git in a folder of its own would otherwise write
+    into this repository, as one did through the first check before a push on 2026-11-20 (#183,
+    issue #182). git's own list, so a name a later git adds is cleared too.
+
+    Contract: cwd, any folder. Returns the names. Raises subprocess.CalledProcessError when git
+    fails, so the commit is refused rather than checked with them.
+    """
+    return frozenset(_output([GIT, "rev-parse", "--local-env-vars"], cwd).decode().split())
+
+
 def _status(command: list[str], cwd: Path) -> int:
     """Return the exit code of one check, its output on the screen; 1 when it runs out of time.
 
-    The check runs without the variables git sets for a hook (GIT_HOOK_VARIABLES).
+    Why: one place where a check starts, so that each starts without git's repository variables
+    (`_local_variables`) and a check out of time fails rather than hangs the commit.
+
+    Contract: command, the check's argv; cwd, the repository root. Returns the check's exit
+    code, or 1 when it runs out of time. Raises CalledProcessError when git cannot list its
+    variables, and TimeoutExpired when that listing runs out of time: the check is then not
+    started, and the commit is refused.
     """
-    env = {name: value for name, value in os.environ.items() if name not in GIT_HOOK_VARIABLES}
+    names = _local_variables(cwd)
+    env = {name: value for name, value in os.environ.items() if name not in names}
     try:
         return _run(command, cwd, env=env).returncode
     except subprocess.TimeoutExpired:
@@ -119,7 +139,8 @@ def main(cwd: Path) -> int:
 
     Contract: prints "== <name>" before each step; every step runs, and one that runs out of
     time fails; ends with a line naming the failed steps when any failed, and returns 1; else
-    returns 0. Raises CalledProcessError when git cannot say what is staged.
+    returns 0. Raises CalledProcessError when git cannot say what is staged or cannot list its
+    variables (`_local_variables`), and TimeoutExpired when that listing runs out of time.
     """
     failed = []
     for name, command in steps(staged(cwd)):
