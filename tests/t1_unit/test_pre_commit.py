@@ -111,6 +111,8 @@ def test_ec9_a_step_out_of_time_fails_and_the_others_run(monkeypatch: pytest.Mon
         return subprocess.CompletedProcess(command, 0)
 
     monkeypatch.setattr(hook, "staged", lambda cwd: ["ploni/a.py"])
+    # `slow` stands in for every program, git's list of its variables too; EC10 tests that list.
+    monkeypatch.setattr(hook, "_local_variables", lambda cwd: frozenset())
     monkeypatch.setattr(hook, "_run", slow)
     assert hook.main(Path(".")) == 1
     assert capsys.readouterr().out.splitlines()[-1] == "check before commit: FAILED: ruff"
