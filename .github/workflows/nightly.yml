@@ -1,0 +1,49 @@
+# The reader of the nightly full run (issue #167). Achia, 2026-11-20, "A robot blocks the next
+# merge (Recommended)": "I add a small check to every PR that reads the last nightly result on
+# main and goes red if it failed, so nothing more merges until the failure is fixed." Then, "Yes,
+# run the full tests (Recommended)": "After a failed night every PR waits about a minute more
+# while the full tests run on it. A PR that does not fix the failure stays red; the one that
+# fixes it goes green and merges; the next night's run then clears the block for everyone."
+# So on every PR scripts/check_nightly.py reads main's last nightly run of full.yml; when it
+# failed, the full suite runs on GitHub's merge of the PR into its base, as full.yml runs it.
+# The script runs from main's copy, so a PR that edits only the script is still read by main's
+# (the review of #178). A PR that edits this file is judged by its own edited copy; against that,
+# only the review and CLAUDE.md stand, until the pin test that follows this PR.
+name: nightly
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  # The script lists the runs of full.yml through the REST API.
+  actions: read
+
+jobs:
+  nightly:
+    runs-on: ubuntu-24.04
+    # As full.yml: the laptop runs the full property tests in 2.5 to 4.5 minutes; room for the rest.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: main-copy
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          # build-plan.md Phase 0: Python 3.13; the laptop runs 3.13.5.
+          python-version: "3.13.5"
+          # The pip that checks the hashes is pinned too; 25.1.1 is the laptop's.
+          pip-version: "25.1.1"
+      - id: night
+        working-directory: main-copy
+        run: python -m scripts.check_nightly "$GITHUB_REPOSITORY"
+        env:
+          GITHUB_TOKEN: ${{ github.token }}
+      - if: steps.night.outputs.failed == 'true'
+        run: python -m pip install --require-hashes -r requirements-dev.txt
+      - if: steps.night.outputs.failed == 'true'
+        run: python -m pytest tests -q -p no:cacheprovider
+        env:
+          PLONI_FULL_SUITE: "1"
