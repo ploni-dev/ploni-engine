@@ -66,15 +66,19 @@ merges(command): the `gh pr merge` commands in a shell command, as (number, repo
   A7m   a merge in PowerShell curly brackets, or inside "$( )"            found
   A8m   a number with a letter (80x); `merge` before `pr`                 no number; no merge
 
-red(checks): why the checks of a PR's last commit are not green.
-  EC7   two green fast-suite runs                   green
-  EC8   a green fast-suite and a green commit status    green
+red(checks): why the checks of a PR's last commit are not green. "Every check" is one green
+run of each of REQUIRED_CHECKS (Achia, 2026-11-22, "Yes, name all seven (Recommended)", #180).
+  EC7   every check, and a second green fast-suite run    green
+  EC8   every check and a green commit status       green
   EC9   a finished check with any conclusion but SUCCESS    red, named with its conclusion
   EC10  a check that has not finished               red, named with its status
   EC11  a commit status in any state but SUCCESS    red
-  EC12  every check green, none of them fast-suite  red
-  B4    no check at all, or no list                 red
-  A6    fast-suite only as a commit status, which can be set by hand    red
+  EC12  every check green but fast-suite, which is missing  red
+  EC34  every check but one of the seven            red, one reason that names the missing one
+  EC35  REQUIRED_CHECKS is every job of the workflows that run on each pull request: all jobs
+        but full-suite, which starts on a label only
+  B4    no check at all, or no list                 red, one reason for each of the seven
+  A6    a required check only as a commit status, which can be set by hand    red
   A7    one of two fast-suite runs red              red
   A8    an entry with no known shape                red
 
@@ -151,6 +155,11 @@ def check_run(conclusion: str = "SUCCESS", status: str = "COMPLETED", name: str 
 def commit_status(state: str, context: str = "other") -> dict[str, str]:
     """Return a check as the same listing shows a commit status."""
     return {"__typename": "StatusContext", "context": context, "state": state}
+
+
+def every_check(but: str = "") -> list[dict[str, str]]:
+    """Return one green run of each required check, leaving out the one named `but`."""
+    return [check_run(name=name) for name in guard.REQUIRED_CHECKS if name != but]
 
 
 def never_asked(number: str, repository: str) -> list[dict[str, str]]:
@@ -326,9 +335,9 @@ def test_merges_finds_each_merge_command(command: str, found: list[tuple[str, st
 @pytest.mark.parametrize(
     "checks",
     [
-        [check_run(), check_run()],  # EC7
-        [check_run(), commit_status("SUCCESS")],  # EC8
-        [check_run(), check_run(name="lint")],
+        [*every_check(), check_run()],  # EC7
+        [*every_check(), commit_status("SUCCESS")],  # EC8
+        [*every_check(), check_run(name="lint")],
     ],
 )
 def test_red_is_empty_when_every_check_is_green(checks: list[dict[str, str]]) -> None:
@@ -340,7 +349,7 @@ def test_red_is_empty_when_every_check_is_green(checks: list[dict[str, str]]) ->
     ["FAILURE", "CANCELLED", "TIMED_OUT", "ACTION_REQUIRED", "NEUTRAL", "SKIPPED", "STALE", "STARTUP_FAILURE", ""],
 )
 def test_ec9_a_finished_check_that_is_not_a_success_is_red(conclusion: str) -> None:
-    reasons = guard.red([check_run(), check_run(conclusion, name="other")])
+    reasons = guard.red([*every_check(), check_run(conclusion, name="other")])
     assert len(reasons) == 1
     assert "other" in reasons[0]
     assert (conclusion or "UNKNOWN") in reasons[0]
@@ -348,32 +357,52 @@ def test_ec9_a_finished_check_that_is_not_a_success_is_red(conclusion: str) -> N
 
 @pytest.mark.parametrize("status", ["QUEUED", "IN_PROGRESS", "PENDING", "WAITING", "REQUESTED", ""])
 def test_ec10_a_check_that_has_not_finished_is_red_whatever_its_conclusion(status: str) -> None:
-    reasons = guard.red([check_run(), check_run("SUCCESS", status, name="other")])
+    reasons = guard.red([*every_check(), check_run("SUCCESS", status, name="other")])
     assert len(reasons) == 1
     assert (status or "UNKNOWN") in reasons[0]
 
 
 @pytest.mark.parametrize("state", ["PENDING", "FAILURE", "ERROR", "EXPECTED", ""])
 def test_ec11_a_commit_status_that_is_not_a_success_is_red(state: str) -> None:
-    assert len(guard.red([check_run(), commit_status(state)])) == 1
+    assert len(guard.red([*every_check(), commit_status(state)])) == 1
 
 
 @pytest.mark.parametrize(
     "checks",
     [
-        [check_run(name="lint")],  # EC12
-        [check_run(name="fast-suite-2")],
-        [],  # B4
-        None,
-        [commit_status("SUCCESS", context="fast-suite")],  # A6
-        [commit_status("SUCCESS", context="fast-suite"), check_run(name="lint")],
-        [check_run(), check_run("FAILURE")],  # A7
-        [check_run(), {}],  # A8
-        [check_run(), {"__typename": "CheckRun"}],
+        [*every_check("fast-suite"), check_run(name="lint")],  # EC12
+        [*every_check("fast-suite"), check_run(name="fast-suite-2")],
+        [*every_check("fast-suite"), commit_status("SUCCESS", context="fast-suite")],  # A6
+        [*every_check("nightly"), commit_status("SUCCESS", context="nightly")],
+        [*every_check(), check_run("FAILURE")],  # A7
+        [*every_check(), {}],  # A8
+        [*every_check(), {"__typename": "CheckRun"}],
     ],
 )
 def test_red_gives_one_reason_for_each_of_these(checks: list[dict[str, str]] | None) -> None:
     assert len(guard.red(checks)) == 1
+
+
+def test_ec34_each_required_check_that_is_missing_is_named() -> None:
+    assert guard.REQUIRED_CHECKS == ("changed-paths", "fast-suite", "nightly", "pr-body", "pr-size", "ratchet", "waiver")
+    for name in guard.REQUIRED_CHECKS:
+        assert guard.red(every_check(name)) == [f"there is no {name} check on the last commit"]
+
+
+@pytest.mark.parametrize("checks", [[], None])
+def test_b4_no_check_at_all_is_one_reason_for_each_required_check(checks: list[dict[str, str]] | None) -> None:
+    assert guard.red(checks) == [f"there is no {name} check on the last commit" for name in guard.REQUIRED_CHECKS]
+
+
+def test_ec35_the_required_checks_are_the_jobs_that_run_on_every_pull_request() -> None:
+    # A job's check is named by its id, two spaces in under `jobs:`; no workflow here gives a
+    # job a `name:` of its own. full-suite starts on a label only, so it is on no PR by default.
+    jobs = set()
+    for workflow in sorted((REPOSITORY / ".github" / "workflows").glob("*.yml")):
+        lines = workflow.read_text(encoding="utf-8").splitlines()
+        below = lines[lines.index("jobs:") + 1 :]
+        jobs |= {line.strip().rstrip(":") for line in below if line.startswith("  ") and not line.startswith("   ") and line.endswith(":")}
+    assert jobs - {"full-suite"} == set(guard.REQUIRED_CHECKS)
 
 
 def test_red_raises_attributeerror_for_an_entry_that_is_no_mapping() -> None:
@@ -644,11 +673,11 @@ def test_ec25_a_merge_is_let_through_on_green_and_refused_on_red(tool: str) -> N
 
     def green(number: str, repository: str) -> list[dict[str, str]]:
         asked.append((number, repository))
-        return [check_run(), check_run()]
+        return [*every_check(), check_run()]
 
     assert guard.refusals(payload, green) == []
     assert asked == [("80", "o/r")]
-    reasons = guard.refusals(payload, lambda number, repository: [check_run("FAILURE")])
+    reasons = guard.refusals(payload, lambda number, repository: [*every_check(), check_run("FAILURE")])
     assert len(reasons) == 1
     assert "80" in reasons[0]
     assert "FAILURE" in reasons[0]
@@ -679,7 +708,7 @@ def test_merges_reads_a_line_of_a_thousand_pr_merge_pairs_in_time(pair: str) -> 
 
 def test_merge_refusals_judges_each_merge_of_a_command() -> None:
     def by_number(number: str, repository: str) -> list[dict[str, str]]:
-        return [check_run("SUCCESS" if number == "80" else "FAILURE")]
+        return [*every_check(), check_run("SUCCESS" if number == "80" else "FAILURE")]
 
     reasons = guard.merge_refusals("gh pr merge 80 -R o/r && gh pr merge 81 -R o/r", by_number)
     assert len(reasons) == 1
