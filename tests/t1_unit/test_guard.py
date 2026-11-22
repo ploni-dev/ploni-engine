@@ -749,7 +749,7 @@ def test_a_refusal_says_which_words_it_read_as_the_command() -> None:
 
 def test_refusals_gives_every_reason_of_one_command() -> None:
     command = "git push --no-verify origin main && " + PLAIN
-    reasons = guard.refusals({"tool_input": {"command": command}}, lambda number, repository: [])
+    reasons = guard.refusals({"tool_input": {"command": command}}, lambda number, repository: every_check("fast-suite"))
     assert len(reasons) == 3
 
 
