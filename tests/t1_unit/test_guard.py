@@ -133,6 +133,7 @@ handles commands and paths, no document.
 """
 
 import io
+import itertools
 import json
 import re
 import subprocess
@@ -408,14 +409,17 @@ def _check_names(text: str) -> dict[str, str]:
     at the job's key level, quotes taken off, else the id. A `name:` deeper down (a step's, one
     under `with:` or `env:`) is not the job's. Raises ValueError when no line is `jobs:` (with or
     without a comment after it).
-    Known limits: YAML flow style (`jobs: {a: ...}`) and a `name:` set by an expression are not
-    read as GitHub would; no workflow here has either.
+    The jobs end at the next line that is not indented (`on:` may follow `jobs:`).
+    Known limits: YAML flow style (`jobs: {a: ...}`), a `name:` set by an expression, a quoted
+    name that holds ` #`, and a block-scalar name (`name: >`) are not read as GitHub would; no
+    workflow here has any. Each misread gives a name no check has, so EC35 fails closed.
     """
     lines = text.splitlines()
     starts = [i for i, line in enumerate(lines) if re.fullmatch(r"jobs:\s*(#.*)?", line)]
     if not starts:
         raise ValueError("no jobs: line")
-    below = [line for line in lines[starts[0] + 1 :] if line.strip() and not line.lstrip().startswith("#")]
+    kept = [line for line in lines[starts[0] + 1 :] if line.strip() and not line.lstrip().startswith("#")]
+    below = list(itertools.takewhile(lambda line: line[:1].isspace(), kept))
     keys = [(len(m.group(1)), m) for m in map(KEY.fullmatch, below) if m]
     if not keys:
         return {}
@@ -435,11 +439,12 @@ def _check_names(text: str) -> dict[str, str]:
 
 def test_ec35_the_required_checks_are_the_jobs_that_run_on_every_pull_request() -> None:
     # full-suite starts on a label only, so it is on no PR by default. GitHub runs .yml and .yaml.
-    names: set[str] = set()
+    # A list, not a set: two jobs under one check name would let one stand in for the other.
+    names: list[str] = []
     folder = REPOSITORY / ".github" / "workflows"
     for workflow in sorted([*folder.glob("*.yml"), *folder.glob("*.yaml")]):
-        names |= set(_check_names(workflow.read_text(encoding="utf-8")).values())
-    assert names - {"full-suite"} == set(guard.REQUIRED_CHECKS)
+        names += _check_names(workflow.read_text(encoding="utf-8")).values()
+    assert sorted(names) == sorted([*guard.REQUIRED_CHECKS, "full-suite"])
 
 
 @pytest.mark.parametrize(
@@ -456,6 +461,8 @@ def test_ec35_the_required_checks_are_the_jobs_that_run_on_every_pull_request() 
         ("jobs:\n  a:\n    steps:\n      - uses: x\n        with:\n          name: results\n", {"a": "a"}),
         ("jobs:\n  a:\n    steps:\n      - run: x\n        name: second line\n", {"a": "a"}),
         ("jobs:\n  a:\n    env:\n      name: x\n    runs-on: y\n", {"a": "a"}),
+        # A top-level key after jobs: ends the jobs.
+        ("jobs:\n  a:\n    runs-on: x\non:\n  pull_request:\n", {"a": "a"}),
     ],
 )
 def test_ec35_check_names_are_read_in_each_shape(text: str, names: dict[str, str]) -> None:
