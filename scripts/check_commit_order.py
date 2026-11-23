@@ -61,7 +61,7 @@ GIT = "git"
 
 
 class Commit(NamedTuple):
-    """One commit of the PR and what it touched.
+    """One commit of the PR, with what it touched.
 
     Why: the check judges the order of commits, so each keeps its paths apart.
 
@@ -120,7 +120,7 @@ def problems(commits: list[Commit]) -> list[str]:
 
 
 def mixed(commit: Commit, module: str) -> str:
-    """Return the line of a commit that touches a module and a test file for it, or "".
+    """Return the line of a commit that touches a module together with a test file for it, or "".
 
     Why: the row's second sentence: the failing tests are a commit of their own.
 
