@@ -16,9 +16,16 @@ Equivalence class:
      minutes, the two pinned actions, the hashed install and `make check`. Any changed or added
      line is red; a comment is not.
 Hebrew and document axes: do not apply; the input is a workflow file.
-Known limits: `make check` is pinned by its name only; what it runs is `Makefile` and
-`scripts/check.py`, which the PR checks of their own guard. The workflow that runs this test
-outside fast.yml comes in a PR of its own, then its pin.
+Known limits: `make check` is pinned by its name only. A PR that changes only the `Makefile`'s
+`check` target, or adds a pytest configuration file (`pytest.ini`, say, with `--collect-only` in
+its options), has no .py file and no workflow, and passes every check; `scripts/check.py` is
+guarded only by its own tests, which a code PR may change with it. The Makefile target and the
+pytest configuration files are on the Level 3 list (PROMOTION.md section 4), so only the review
+and CLAUDE.md stand against such a PR (the review of #193, finding 1). On a pull request GitHub
+runs the PR's own copy of each workflow, so one PR with no .py file that edits both fast.yml and
+the workflow that runs this test outside it switches off both, every check green; against that
+only the review stands, until that workflow reads the test from main's copy, as nightly.yml reads
+its script (the review of #193, finding 2). That workflow comes in a PR of its own, then its pin.
 """
 
 from pathlib import Path
