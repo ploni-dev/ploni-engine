@@ -447,7 +447,7 @@ def _check_names(text: str) -> dict[str, str]:
 # updates EC34's pin and takes the name off this list, in one patch. Achia, 2026-11-23, "A short
 # pending list (Recommended)". Each name added loosens EC35 and needs his decision on that check;
 # fast-pin, commit-order and reviewed-commit have it ("Yes, one workflow each (Recommended)").
-PENDING_CHECKS: dict[str, int] = {}
+PENDING_CHECKS: dict[str, int] = {"fast-pin": 173}
 
 
 def _workflow_problems(folder: Path, required: tuple[str, ...], pending: dict[str, int]) -> list[str]:
