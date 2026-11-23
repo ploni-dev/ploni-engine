@@ -16,7 +16,7 @@ Matrix:
       merged clean                                                     exit 1, the diff line:
       the old content of that file differs (Known limits: it only narrows)
   M7  a merge of another branch, cut from main and not in it, after the reviewed commit    exit 1,
-      a line naming the merge
+      a line naming that branch's commit, the oldest after the reviewed one
   M8  the named commit is not in the PR: the base itself, a commit of another branch, a hash
       the store does not hold, and the base and head the same          exit 1, one line
   M9  a merge of main, then an ordinary commit                         exit 1, a line naming
@@ -211,12 +211,12 @@ def test_m6_main_changed_another_line_of_the_branch_file(repo: Path) -> None:
 def test_m7_a_merge_of_another_branch(repo: Path) -> None:
     sha = commit(repo, "b.txt")
     git(repo, "checkout", "-q", "-b", "other", "main")
-    commit(repo, "d.txt")
+    brought = commit(repo, "d.txt")
     git(repo, "checkout", "-q", "feat")
-    merged = merge(repo, "other")
+    merge(repo, "other")
     done = run(repo, "main", "feat", body(sha))
     assert done.returncode == 1
-    assert done.stderr.splitlines() == [later(merged, sha, "main")]
+    assert done.stderr.splitlines() == [later(brought, sha, "main")]
 
 
 def test_m8_the_named_commit_is_not_in_the_pr(repo: Path) -> None:
