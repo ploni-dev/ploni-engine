@@ -23,9 +23,13 @@ guarded only by its own tests, which a code PR may change with it. The Makefile 
 pytest configuration files are on the Level 3 list (PROMOTION.md section 4), so only the review
 and CLAUDE.md stand against such a PR (the review of #193, finding 1). On a pull request GitHub
 runs the PR's own copy of each workflow, so one PR with no .py file that edits both fast.yml and
-the workflow that runs this test outside it switches off both, every check green; against that
-only the review stands, until that workflow reads the test from main's copy, as nightly.yml reads
-its script (the review of #193, finding 2). That workflow comes in a PR of its own, then its pin.
+the workflow that runs this test outside it switches off both, every check green, and only the
+review stands against it. Reading the test and the pytest configuration from main's copy, as
+nightly.yml reads its script, closes only the route through the PR's test file or pytest
+configuration, not that one; whether `pull_request_target` (which runs the base branch's copy of
+the workflow) can close it, with its check on the PR's head where the gate reads it, is to be
+measured in that workflow's PR (the review of #193, findings 2 and 4). That workflow comes in a
+PR of its own, then its pin.
 """
 
 from pathlib import Path
