@@ -11,7 +11,8 @@ writes the hook payload to stdin as JSON. Exit code 0 lets the call run. Exit co
 refuses it, and stderr gives one line for each reason. Refused are:
   - `gh pr merge`, unless it names the PR by number and one repository with -R, every
     check on that PR's last commit has finished as SUCCESS, and a workflow job of each
-    name in REQUIRED_CHECKS is among them;
+    name in REQUIRED_CHECKS is among them; of a workflow job run more than once, only
+    the newest run for each trigger counts (`newest`);
   - `--no-verify` on any command, and `git commit -n`;
   - `git push` that names main, names no branch, or pushes every branch;
   - an edit of one of the PROTECTED files.
@@ -60,6 +61,7 @@ import shutil
 import subprocess
 import sys
 from collections.abc import Callable
+from typing import Any
 
 Check = dict[str, object]
 Fetch = Callable[[str, str], list[Check] | None]
@@ -72,6 +74,16 @@ REQUIRED_CHECKS = ("changed-paths", "fast-suite", "nightly", "pr-body", "pr-size
 # is as a rule a refusal with a reason. A hook that is cut off all the same refuses too
 # (`onFailure` in the settings file), without a reason.
 GH_TIMEOUT_SECONDS = 30
+# `rollup` asks gh twice, one call after the other, so each call gets half of the limit.
+GH_CALL_SECONDS = GH_TIMEOUT_SECONDS / 2
+# The most runs GitHub gives on one page (REST API, "List workflow runs for a repository").
+RUNS_PER_PAGE = 100
+# Where the detailsUrl of a workflow job names its run: .../actions/runs/<run id>/job/<job id>.
+RUN_OF_JOB = re.compile(r"/actions/runs/(\d+)/job/\d+")
+# A start time as GitHub spells it in the rollup; in this spelling text order is time order.
+START = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
+# The start time GitHub gives a run that has not started.
+NOT_STARTED = "0001-01-01T00:00:00Z"
 # PROCESS.md section 12 item 8: the waiver file, and the files that hold the hooks.
 PROTECTED = (".claude/settings.json", ".claude/settings.local.json", "docs/WAIVERS.md", "scripts/guard.py")
 # One shell word, with the quoted texts that touch it; or one run of the signs that end a
@@ -263,18 +275,78 @@ def _state(check: Check) -> tuple[object, object]:
     return check.get("context"), check.get("state") or "UNKNOWN"
 
 
+def _contest(check: Check) -> tuple[tuple[str, str], str] | None:
+    """Return the (name, trigger) under which a workflow job competes, with its start time.
+
+    Why: `newest` compares only runs whose name, trigger and start it can read; any other
+    entry counts as it stands, so that what cannot be read can only refuse a merge.
+
+    Contract:
+        Args: check, one entry of the rollup, as `_with_events` gives it back.
+        Returns: ((name, event), startedAt) for a CheckRun whose name and event are text
+            and whose startedAt is spelled as START and is not NOT_STARTED; else None.
+        Raises: AttributeError when check is not a mapping.
+
+    Known limits: a start time in any other spelling, also a correct one with a time
+    zone or with parts of a second, is not read.
+    """
+    name, event, started = check.get("name"), check.get("event"), check.get("startedAt")
+    if (
+        check.get("__typename") == "CheckRun"
+        and isinstance(name, str)
+        and isinstance(event, str)
+        and isinstance(started, str)
+        and started != NOT_STARTED
+        and START.fullmatch(started)
+    ):
+        return (name, event), started
+    return None
+
+
+def newest(checks: list[Check]) -> list[Check]:
+    """Return the entries of a rollup that count: of each check, its newest run for each trigger.
+
+    Why: Achia, 2026-11-22, "Gate reads newest run (Recommended)" (issue #137): a check run
+    again after a PR body edit replaces its earlier result. Until then a check that went
+    red and then, on the same commit, green again still blocked the merge. fast-suite runs
+    on push and on pull_request, and each of the two counts by its own newest run.
+
+    Contract:
+        Args: checks, the rollup as `rollup` gives it: a workflow job whose run was found
+            carries the trigger of that run as "event".
+        Returns: the entries of checks, in their order, less each workflow job that a run
+            started later with the same name and trigger replaces. Every entry that
+            `_contest` cannot read is kept: a commit status, a job with no trigger, no
+            name or no start time that can be read, and a run that has not started.
+        Raises: AttributeError when an entry is not a mapping.
+
+    Known limits: start times are compared to the second, as GitHub gives them; runs that
+    started in the same second all count. A job is known by its name, not by the workflow
+    file it comes from. A run that waits to start counts, and so refuses, even when a
+    newer run of the same check has finished.
+    """
+    contests = [(check, _contest(check)) for check in checks]
+    latest: dict[tuple[str, str], str] = {}
+    for _, contest in contests:
+        if contest:
+            latest[contest[0]] = max(latest.get(contest[0], ""), contest[1])
+    return [check for check, contest in contests if contest is None or latest[contest[0]] == contest[1]]
+
+
 def red(checks: list[Check] | None) -> list[str]:
     """Return why the checks of a PR's last commit do not allow a merge.
 
     Why: this is the rule of CLAUDE.md, "Merging", point 1, in one place: every check
     finished and green, each of REQUIRED_CHECKS among them, and a missing, pending or
-    skipped check counts as red (PROMOTION.md section 11, "What it is").
+    skipped check counts as red (PROMOTION.md section 11, "What it is"). Of a check run
+    more than once, its newest run for each trigger is the one that counts (`newest`).
 
     Contract:
-        Args: checks, the `statusCheckRollup` list of `gh pr view --json`, or None.
-        Returns: one line for each check that is not a finished SUCCESS (a workflow job)
-            or not in state SUCCESS (a commit status), and one more for each name of
-            REQUIRED_CHECKS that no workflow job has. Empty when the merge is allowed.
+        Args: checks, the rollup as `rollup` gives it, or None.
+        Returns: one line for each entry that `newest` keeps and that is not a finished
+            SUCCESS (a workflow job) or not in state SUCCESS (a commit status), and one
+            more for each name of REQUIRED_CHECKS that no workflow job has. Empty when
+            the merge is allowed.
         Raises: AttributeError when an entry is not a mapping.
 
     Known limits: a commit status with a required name does not count as that check,
@@ -282,40 +354,92 @@ def red(checks: list[Check] | None) -> list[str]:
     name only, not by the workflow file it comes from. A workflow added or renamed needs
     REQUIRED_CHECKS changed with it; tests/t1_unit/test_guard.py EC35 goes red until then.
     """
-    checks = checks or []
+    checks = newest(checks or [])
     reasons = [f"check {name} is {state}" for name, state in map(_state, checks) if state != "SUCCESS"]
     jobs = {check.get("name") for check in checks if check.get("__typename") == "CheckRun"}
     reasons += [f"there is no {name} check on the last commit" for name in REQUIRED_CHECKS if name not in jobs]
     return reasons
 
 
-def rollup(number: str, repository: str) -> list[Check] | None:
-    """Ask GitHub for the checks on the last commit of a PR.
+def _with_events(checks: list[Check], runs: list[Check]) -> list[Check]:
+    """Return the checks with the trigger of its run added to each workflow job, as "event".
 
-    Why: the only act of the gate. It is apart from `red`, which decides, so that the
-    decision is tested without GitHub.
+    Why: the rollup does not say what started a job, and `newest` compares the runs of one
+    trigger only. GitHub's list of the runs of the commit does, and the detailsUrl of a
+    job names its run.
 
     Contract:
-        Args: number, the PR number in digits; repository, as owner/name.
-        Returns: the `statusCheckRollup` list of `gh pr view`, as GitHub gave it.
+        Args: checks, the `statusCheckRollup` list of `gh pr view`; runs, the
+            `workflow_runs` list of GitHub's runs of the same commit, each with an "id"
+            and an "event".
+        Returns: the entries of checks, in their order: a copy with "event" added for
+            each entry whose detailsUrl names a run of runs as RUN_OF_JOB reads it, the
+            entry itself for every other. No given entry is changed.
+        Raises: KeyError when a run has no id or no event; TypeError when a run is not a
+            mapping; AttributeError when a check is not a mapping.
+
+    Known limits: a job of a run that runs does not hold gets no event, and `newest` then
+    keeps it as it stands. So does a detailsUrl in another spelling than GitHub's of today.
+    """
+    events = {str(run["id"]): run["event"] for run in runs}
+    found = [(check, RUN_OF_JOB.search(str(check.get("detailsUrl")))) for check in checks]
+    return [{**check, "event": events[match[1]]} if match and match[1] in events else check for check, match in found]
+
+
+def _gh(words: list[str], timeout: float) -> Any:
+    """Return what gh prints for these words, read as JSON.
+
+    Why: `rollup` asks gh twice, and both calls find, start and read gh in one way.
+
+    Contract:
+        Args: words, the words after `gh`; timeout, in seconds.
+        Returns: the JSON that gh printed, as Python values.
         Raises: OSError when gh is not installed or cannot start;
             subprocess.CalledProcessError when gh ends with an error;
-            subprocess.TimeoutExpired after GH_TIMEOUT_SECONDS; ValueError when gh
-            printed no JSON; KeyError or TypeError when the JSON has no rollup.
+            subprocess.TimeoutExpired after timeout; ValueError when gh printed no JSON.
 
     Known limits: it uses the first `gh` on PATH and the login that gh has.
     """
     gh = shutil.which("gh")
     if gh is None:
         raise OSError("the gh program was not found")
-    done = subprocess.run(  # noqa: S603 fixed argv, no shell; gh takes the word after -R as a value
-        [gh, "pr", "view", number, "-R", repository, "--json", "statusCheckRollup"],
+    done = subprocess.run(  # noqa: S603 no shell; the words are rollup's own, and gh takes the word after -R as a value
+        [gh, *words],
         capture_output=True,
         encoding="utf-8",
-        timeout=GH_TIMEOUT_SECONDS,
+        timeout=timeout,
         check=True,
     )
-    return json.loads(done.stdout)["statusCheckRollup"]
+    return json.loads(done.stdout)
+
+
+def rollup(number: str, repository: str) -> list[Check]:
+    """Ask GitHub for the checks on the last commit of a PR, and for the trigger of each job.
+
+    Why: the only act of the gate. It is apart from `red`, which decides, so that the
+    decision is tested without GitHub. The checks do not say what started a job, so the
+    runs of that commit are asked for too (`_with_events`).
+
+    Contract:
+        Args: number, the PR number in digits; repository, as owner/name.
+        Returns: the `statusCheckRollup` list of `gh pr view`, as `_with_events` gives it
+            back with the `workflow_runs` that GitHub lists for the PR's last commit.
+        Raises: OSError when gh is not installed or cannot start;
+            subprocess.CalledProcessError when gh ends with an error;
+            subprocess.TimeoutExpired when a call takes over GH_CALL_SECONDS; ValueError
+            when gh printed no JSON; KeyError or TypeError when the JSON has no rollup,
+            no last commit or no runs, or a run has no id or no event.
+
+    Known limits: it uses the first `gh` on PATH and the login that gh has. The two
+    calls run one after the other with half of GH_TIMEOUT_SECONDS each, so a first call
+    slower than that is refused although both together would have fitted. Of a commit
+    with more than RUNS_PER_PAGE runs, the runs past the first page are not read.
+    """
+    view = _gh(["pr", "view", number, "-R", repository, "--json", "headRefOid,statusCheckRollup"], GH_CALL_SECONDS)
+    # The query goes in -f fields and not in the path: an `&` in a word breaks it when gh is a .cmd.
+    query = ["-f", f"head_sha={view['headRefOid']}", "-f", f"per_page={RUNS_PER_PAGE}"]
+    runs = _gh(["api", "-X", "GET", f"repos/{repository}/actions/runs", *query], GH_CALL_SECONDS)
+    return _with_events(view["statusCheckRollup"], runs["workflow_runs"])
 
 
 def merge_refusals(command: str, fetch: Fetch) -> list[str]:
