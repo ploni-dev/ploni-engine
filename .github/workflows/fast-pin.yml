@@ -1,18 +1,23 @@
 # The pin of the fast workflow, run outside it (issue #173). Achia, 2026-11-20, "Yes, all four
 # (Recommended)", of "4. Guard for the fast robot: a test, run outside the fast-test robot, that
 # goes red if someone edits that robot to run fewer tests"; 2026-11-23, "Yes, one workflow each
-# (Recommended)". On every PR it runs main's copy of tests/t1_unit/test_fast_workflow.py, with
-# main's pytest configuration, against the PR's own fast.yml, read only as data: a PR that edits
-# fast.yml to run less goes red here even when the edit stops the fast suite itself, and a PR that
-# edits the test or the pytest configuration cannot turn this green.
+# (Recommended)". On every PR it runs main's tests/t1_unit/test_fast_workflow.py, with main's
+# pytest configuration and main's pinned tools, against the PR's own fast.yml, read only as data:
+# a PR that edits fast.yml to run less goes red here even when the edit stops the fast suite
+# itself, and a PR that edits the test or the pytest configuration cannot turn this green.
+# Main is checked out at the root and the PR under pr/, and no step runs Python in pr/: a module a
+# PR plants (a compiled pip/__main__.pyc, say, which changed-paths does not count as code) would
+# run in place of the real one wherever `python -m` starts in a folder that holds it (the review
+# of #195, finding 1, measured on the laptop).
 # Known limits:
 # - GitHub runs the PR's own copy of this file on a pull request, so one PR with no .py file that
 #   edits both fast.yml and this file switches off both, every check green; only the review stands
-#   against it. Whether pull_request_target (which runs main's copy of the workflow) closes that,
-#   with its check on the PR's head where the merge gate reads it, can be measured only once this
-#   file is on main; until it is, Achia is asked before #173 is called done (the review of #193).
-# - A PR that changes only the Makefile's check target passes every check (tests/t1_unit/
-#   test_fast_workflow.py, Known limits).
+#   against it. pull_request_target runs "in the context of the default branch" (docs.github.com,
+#   "Events that trigger workflows"), so whether it closes that, with its check on the PR's head
+#   where the merge gate reads it, can be measured only once this file is on main; until it is,
+#   Achia is asked before #173 is called done (the review of #193).
+# - A PR that changes only the Makefile's check target, adds a pytest configuration file, or
+#   changes scripts/check.py passes every check (tests/t1_unit/test_fast_workflow.py, Known limits).
 # - Until the guard patch that names fast-pin, the merge gate does not require this check
 #   (PENDING_CHECKS in tests/t1_unit/test_guard.py, #191).
 name: fast-pin
@@ -30,11 +35,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
+          ref: main
           persist-credentials: false
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
         with:
-          ref: main
-          path: main-copy
+          path: pr
           persist-credentials: false
       - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
         with:
@@ -42,8 +47,7 @@ jobs:
           python-version: "3.13.5"
           # The pip that checks the hashes is pinned too; 25.1.1 is the laptop's.
           pip-version: "25.1.1"
-      - run: python -m pip install --require-hashes -r main-copy/requirements-dev.txt
+      - run: python -m pip install --require-hashes -r requirements-dev.txt
       # The PR's fast.yml in place of main's, as data; then main's test and configuration read it.
-      - run: cp .github/workflows/fast.yml main-copy/.github/workflows/fast.yml
-      - working-directory: main-copy
-        run: python -m pytest tests/t1_unit/test_fast_workflow.py -q -p no:cacheprovider
+      - run: cp pr/.github/workflows/fast.yml .github/workflows/fast.yml
+      - run: python -m pytest tests/t1_unit/test_fast_workflow.py -q -p no:cacheprovider
