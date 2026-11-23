@@ -122,7 +122,7 @@ def test_ec5_the_first_commit_of_the_module_counts() -> None:
 
 def test_ec6_a_test_of_another_module_only() -> None:
     commits = [c("a1", "tests/t1_unit/test_logging.py"), c("b2", ATOMIC)]
-    assert check.problems(commits) == [no_test(ATOMIC, "a1")]
+    assert check.problems(commits) == [no_test(ATOMIC, "b2")]
 
 
 def test_ec7_no_module_touched() -> None:
