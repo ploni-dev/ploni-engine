@@ -30,7 +30,7 @@ permissions:
 jobs:
   commit-order:
     runs-on: ubuntu-24.04
-    # The three runs of #198 took 20 to 30 s; room for a long PR's history.
+    # The five runs of #198 took 17 to 23 s each (their check runs); room for a long PR's history.
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
