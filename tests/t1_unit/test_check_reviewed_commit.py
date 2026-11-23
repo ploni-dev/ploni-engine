@@ -25,6 +25,16 @@ Equivalence classes (named):
   EC8  the section followed by another section, and the section last in the body    the hash
   EC9  main: a body that names a commit reaches the history (stubbed here, the history is
        the module suite's); a body that refuses never calls git        exit 1, one line
+  EC10 two review sections, naming A then B (the review of #201, pass 1, finding 1)    one
+       line naming two sections; three                                one line naming three
+  EC11 the review heading inside an HTML comment before the real section    the real
+       section's hash: comments are removed from the whole body first
+
+Equivalence classes (label_lines):
+  EC12 no section                                                       None
+  EC13 a section with no label line                                     an empty list
+  EC14 label lines indented, with CRLF, among other lines and a comment    the label lines,
+       stripped, in order
 
 Boundaries:
   B1  an empty body, and no PR_BODY at all                              missing section
@@ -55,6 +65,8 @@ Adversarial:
   A10 the label line names no hash in its place, and a later "Commit reviewed: `<hash>`" on
        the same line                                                    not pasted: the hash
        must follow the label at the line's start
+  A11 the review heading inside a fenced code block before the real section    refused: two
+       sections (a heading in a fence counts, as in check_pr_body.py; it only narrows)
 
 Not applicable: the document axes, and the Hebrew axes other than A9: the body is read for one
 line of fixed ASCII text.
@@ -250,3 +262,42 @@ def test_a9_an_rtl_mark_before_the_label() -> None:
 def test_a10_a_hash_later_on_the_line() -> None:
     line = f"Commit reviewed: eb204fb, as the earlier Commit reviewed: `{SHA}` said."
     assert check.named(body(line)) == ("", NOT_PASTED)
+
+
+def sections(count: int) -> str:
+    """Return the refusal of a body with `count` review sections."""
+    return f"{count} sections ## Ponytail review in the body; keep one, with the review of the last commit"
+
+
+def test_ec10_two_sections() -> None:
+    text = body(f"Commit reviewed: `{SHA}`") + body(f"Commit reviewed: `{OTHER}`", before="")
+    assert check.named(text) == ("", sections(2))
+
+
+def test_ec10_three_sections() -> None:
+    text = body(f"Commit reviewed: `{SHA}`") + body("x", before="") + body("y", before="")
+    assert check.named(text) == ("", sections(3))
+
+
+def test_ec11_a_heading_inside_a_comment() -> None:
+    commented = f"<!--\n## Ponytail review\nCommit reviewed: `{OTHER}`\n-->\n"
+    assert check.named(body(f"Commit reviewed: `{SHA}`", before=commented)) == (SHA, "")
+
+
+def test_ec12_label_lines_without_the_section() -> None:
+    assert check.label_lines("## Orientation\nCommit reviewed: x\n") is None
+
+
+def test_ec13_label_lines_of_a_section_without_one() -> None:
+    assert check.label_lines(body("Reviewed by: x", "> Commit reviewed: y")) == []
+
+
+def test_ec14_label_lines_stripped_in_order() -> None:
+    text = body("  Commit reviewed: a  ", "Reviewed by: x", "<!-- Commit reviewed: c -->", "Commit reviewed: b")
+    assert check.label_lines(text.replace("\n", "\r\n")) == ["Commit reviewed: a", "Commit reviewed: b"]
+
+
+def test_a11_a_heading_inside_a_fence() -> None:
+    fenced = f"```\n## Ponytail review\nCommit reviewed: `{OTHER}`\n```\n"
+    assert check.named(body(f"Commit reviewed: `{SHA}`", before=fenced)) == ("", sections(2))
+

@@ -40,6 +40,19 @@ Matrix:
       (git patch-id would not see it: why the trees are compared)
   M20 a body that names no commit, on a real history                   exit 1, the body's line,
       and no git line
+  M21 an octopus merge after the reviewed commit, its parents the reviewed commit, an earlier
+      commit of the branch and main, its tree that of a clean merge of main (the review of #201,
+      pass 1, finding 4)                                                exit 1, the octopus
+      named: every parent after the first is judged, not only the last
+  M22 a merge of main~1 after main moved on twice                      exit 0: main holds it
+  M23 a merge of main whose resolution checks out main~1's version of main's own path, one
+      the branch never touches                                          exit 1, the diff line
+  M24 a merge of main whose resolution changes only the mode of the branch's file (+x)
+                                                                        exit 1, the diff line:
+      the raw diff holds the modes, so a mode is part of the branch's own diff
+
+The functions outside_problem(), later_problem() and diff_problem() are called on their own in
+M8, M2 and M4, as own_diff() is in M14.
 
 Not in the fast suite: PROCESS.md section 5.1 puts t4 in the full suite. Until the full
 workflow exists it is run by hand: python -m pytest tests/t4_integration
@@ -161,6 +174,8 @@ def test_m2_an_ordinary_commit_after(repo: Path) -> None:
     done = run(repo, "main", "feat", body(sha))
     assert (done.returncode, done.stdout) == (1, "")
     assert done.stderr.splitlines() == [later(after, sha, "main")]
+    assert check.later_problem(sha, "main", "feat", repo) == later(after, sha, "main")
+    assert check.later_problem(sha, "main", sha, repo) == ""
 
 
 def test_m3_merges_of_main_after(repo: Path) -> None:
@@ -182,6 +197,8 @@ def test_m4_the_resolution_changes_a_line(repo: Path) -> None:
     done = run(repo, "main", "feat", body(sha))
     assert done.returncode == 1
     assert done.stderr.splitlines() == [differs("feat", sha)]
+    assert check.diff_problem(sha, "main", "feat", repo) == differs("feat", sha)
+    assert check.diff_problem(sha, "main", sha, repo) == ""
 
 
 def test_m5_the_resolution_adds_a_file(repo: Path) -> None:
@@ -232,6 +249,8 @@ def test_m8_the_named_commit_is_not_in_the_pr(repo: Path) -> None:
         done = run(repo, "main", "feat", body(sha))
         assert done.returncode == 1
         assert done.stderr.splitlines() == [outside(sha, "main", "feat")]
+        assert check.outside_problem(sha, "main", "feat", repo) == outside(sha, "main", "feat")
+    assert check.outside_problem(git(repo, "rev-parse", "feat"), "main", "feat", repo) == ""
     done = run(repo, "feat", "feat", body(git(repo, "rev-parse", "feat")))
     assert done.stderr.splitlines() == [outside(git(repo, "rev-parse", "feat"), "feat", "feat")]
 
@@ -347,3 +366,48 @@ def test_m20_a_body_that_names_no_commit(repo: Path) -> None:
     assert done.stderr.splitlines() == [
         'not pasted: the "Commit reviewed:" line of ## Ponytail review names no full 40-character hash in backticks'
     ]
+
+
+def test_m21_an_octopus_with_a_branch_commit_in_the_middle(repo: Path) -> None:
+    earlier = commit(repo, "e.txt")
+    sha = commit(repo, "b.txt")
+    main_moves(repo)
+    tree = git(repo, "rev-parse", f"{merge(repo, 'main')}^{{tree}}")
+    octopus = git(repo, "commit-tree", tree, "-p", sha, "-p", earlier, "-p", "main", "-m", "octopus")
+    git(repo, "reset", "-q", "--hard", octopus)
+    done = run(repo, "main", "feat", body(sha))
+    assert done.returncode == 1
+    assert done.stderr.splitlines() == [later(octopus, sha, "main")]
+
+
+def test_m22_a_merge_of_an_older_main(repo: Path) -> None:
+    sha = commit(repo, "b.txt")
+    main_moves(repo)
+    main_moves(repo, "d.txt")
+    merge(repo, "main~1")
+    done = run(repo, "main", "feat", body(sha))
+    assert (done.returncode, done.stderr) == (0, "")
+
+
+def test_m23_the_resolution_undoes_a_change_of_main(repo: Path) -> None:
+    sha = commit(repo, "b.txt")
+    main_moves(repo)
+    main_moves(repo)
+    git(repo, "merge", "-q", "--no-ff", "--no-commit", "main")
+    git(repo, "checkout", "main~1", "--", "c.txt")
+    git(repo, "commit", "-q", "-m", "merge")
+    done = run(repo, "main", "feat", body(sha))
+    assert done.returncode == 1
+    assert done.stderr.splitlines() == [differs("feat", sha)]
+
+
+def test_m24_the_resolution_changes_only_a_mode(repo: Path) -> None:
+    sha = commit(repo, "b.txt")
+    main_moves(repo)
+    git(repo, "merge", "-q", "--no-ff", "--no-commit", "main")
+    git(repo, "update-index", "--chmod=+x", "b.txt")
+    git(repo, "commit", "-q", "-m", "merge")
+    assert git(repo, "ls-tree", "HEAD", "b.txt").startswith("100755 ")
+    done = run(repo, "main", "feat", body(sha))
+    assert done.returncode == 1
+    assert done.stderr.splitlines() == [differs("feat", sha)]
