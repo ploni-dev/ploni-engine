@@ -86,7 +86,9 @@ run of each of REQUIRED_CHECKS (Achia, 2026-11-22, "Yes, name all seven (Recomme
                                                     counts (issue #137)
 
 newest(checks): of each check, the runs that count. Achia, 2026-11-22, "Gate reads newest run
-(Recommended)": only the newest run of each check for each trigger counts (issue #137).
+(Recommended)": only the newest run of each check for each trigger counts (issue #137). A check
+is a job name in one workflow; the newest run is the one created last, and of one run's
+attempts the one started last (the review of PR #192).
   EC37  a check red, then green on the same trigger    the green run only
   EC38  a check green, then red on the same trigger    the red run only
   EC39  fast-suite red on push, green on pull_request  both: each trigger counts by its own runs
@@ -99,16 +101,24 @@ newest(checks): of each check, the runs that count. Achia, 2026-11-22, "Gate rea
   A15   startedAt missing, no text, in another spelling, or GitHub's zero time of a run that
         has not started    kept: a re-run that waits after a green run is red
   A16   an older green run and a newer one in progress    the one in progress
+  EC46  an older event's run whose job starts last, green, and the newer event's run, red
+                                                    the red run: a run judges the PR as it was
+                                                    when its event came (the review of PR #192)
+  EC47  a re-run of the newest run: one creation time, a later start    the re-run only
+  EC48  a job of the same name in another workflow, green and newer    both: the red run counts
+  A18   a run whose creation time or workflow is missing, no text, or in another spelling
+                                                    kept, judged as now
   E4    an entry that is no mapping                   AttributeError
 
 _with_events(checks, runs): the trigger of each workflow job, from the runs of the commit.
-  EC43  a job whose detailsUrl names a listed run      that run's event added, nothing else
-                                                    changed, the given entry left as it was
+  EC43  a job whose detailsUrl names a listed run      that run's event and created_at added,
+                                                    nothing else changed, the given entry left
+                                                    as it was
   EC44  a run that is not listed, no detailsUrl, one that is no text, a link that is not a
         job of a run, a commit status    unchanged
   A17   run ids where one starts the other (runs/12 and runs/123)    each gets its own event
   B8    no checks                                     nothing
-  E5    a listed run with no id or no event           KeyError
+  E5    a listed run with no id, no event or no created_at    KeyError
   E6    a listed run that is no mapping               TypeError
 
 push_refusals(command): a push that reaches main, or that does not say what it reaches.
@@ -142,7 +152,8 @@ rollup(number, repository):
   EC30  gh is installed                             it is asked for the last commit and the
                                                     rollup of that PR in that repository, then
                                                     for the runs of that commit; the two time
-                                                    limits together are within GH_TIMEOUT_SECONDS;
+                                                    limits together are within GH_TIMEOUT_SECONDS,
+                                                    each of them GH_CALL_SECONDS;
                                                     the checks come back with their events
   E2    gh is not installed                         OSError
   E7    the second call fails, the first answer has no commit, the second no runs    the
@@ -222,9 +233,26 @@ def timed_run(
     name: str = "ratchet",
     event: str = "pull_request",
     status: str = "COMPLETED",
+    created: str | None = None,
+    workflow: str | None = None,
 ) -> dict[str, object]:
-    """Return a workflow job with its start time and, as `rollup` adds it, its trigger."""
-    return {**check_run(conclusion, status, name), "startedAt": started, "event": event}
+    """Return a workflow job as `rollup` gives it back, with the trigger and creation time of its run.
+
+    The run is created when the job starts, and its workflow has the job's name, unless
+    created or workflow says otherwise.
+    """
+    job = {**check_run(conclusion, status, name), "startedAt": started, "workflowName": workflow or name}
+    return {**job, "event": event, "created_at": created or started}
+
+
+def without(entry: dict[str, object], key: str) -> dict[str, object]:
+    """Return a copy of entry without key."""
+    return {name: value for name, value in entry.items() if name != key}
+
+
+def listed(run: int, event: str = "push", created: str = EARLY) -> dict[str, object]:
+    """Return a run as GitHub's list of the runs of a commit gives it, with the fields that are read."""
+    return {"id": run, "event": event, "created_at": created}
 
 
 @pytest.mark.parametrize(
@@ -533,7 +561,7 @@ def test_a15_a_run_with_no_start_time_is_kept() -> None:
 
 def test_a15_a_re_run_that_has_not_started_after_a_green_run_is_red() -> None:
     green = timed_run("SUCCESS", LATE)
-    waiting = timed_run("", "0001-01-01T00:00:00Z", status="QUEUED")
+    waiting = timed_run("", "0001-01-01T00:00:00Z", status="QUEUED", created=LATE)
     assert guard.newest([green, waiting]) == [green, waiting]
     assert guard.red([*every_check("ratchet"), green, waiting]) == ["check ratchet is QUEUED"]
 
@@ -544,6 +572,51 @@ def test_a16_a_newer_run_in_progress_counts_over_an_older_green_one() -> None:
     assert guard.red([*every_check("ratchet"), old, new]) == ["check ratchet is IN_PROGRESS"]
 
 
+# The probe of the review of PR #192: a pr-body run created after a body edit, at 10:04:58, went
+# red; the run of the event before it went green, its job started later.
+BEFORE_EDIT = "2026-11-23T10:04:20Z"
+AFTER_EDIT = "2026-11-23T10:04:58Z"
+
+
+def test_ec46_an_older_run_whose_job_starts_last_does_not_hide_the_newer_red_run() -> None:
+    stale = timed_run("SUCCESS", "2026-11-23T10:06:00Z", "pr-body", created=BEFORE_EDIT)
+    current = timed_run("FAILURE", "2026-11-23T10:05:02Z", "pr-body", created=AFTER_EDIT)
+    assert guard.newest([stale, current]) == [current]
+    assert guard.newest([current, stale]) == [current]
+    assert guard.red([*every_check("pr-body"), stale, current]) == ["check pr-body is FAILURE"]
+
+
+def test_ec47_a_re_run_of_the_newest_run_replaces_its_first_attempt() -> None:
+    first = timed_run("FAILURE", "2026-11-23T10:05:02Z", "pr-body", created=AFTER_EDIT)
+    again = timed_run("SUCCESS", "2026-11-23T10:09:00Z", "pr-body", created=AFTER_EDIT)
+    assert guard.newest([first, again]) == [again]
+    assert guard.red([*every_check("pr-body"), first, again]) == []
+
+
+def test_ec48_a_job_of_the_same_name_in_another_workflow_does_not_hide_a_red_run() -> None:
+    first = timed_run("FAILURE", EARLY, "ratchet", workflow="ratchet")
+    other = timed_run("SUCCESS", LATE, "ratchet", workflow="ratchet-copy")
+    assert guard.newest([first, other]) == [first, other]
+    assert guard.red([*every_check("ratchet"), first, other]) == ["check ratchet is FAILURE"]
+
+
+@pytest.mark.parametrize(
+    "old",
+    [
+        without(timed_run("FAILURE", EARLY), "created_at"),
+        {**timed_run("FAILURE", EARLY), "created_at": None},
+        {**timed_run("FAILURE", EARLY), "created_at": 1},
+        {**timed_run("FAILURE", EARLY), "created_at": "2026-11-19 23:20:27"},
+        without(timed_run("FAILURE", EARLY), "workflowName"),
+        {**timed_run("FAILURE", EARLY), "workflowName": None},
+    ],
+)
+def test_a18_a_run_whose_creation_or_workflow_cannot_be_read_is_kept(old: dict[str, object]) -> None:
+    new = timed_run("SUCCESS", LATE)
+    assert guard.newest([old, new]) == [old, new]
+    assert guard.red([*every_check("ratchet"), old, new]) == ["check ratchet is FAILURE"]
+
+
 def test_e4_newest_raises_attributeerror_for_an_entry_that_is_no_mapping() -> None:
     with pytest.raises(AttributeError):
         guard.newest(NO_MAPPING)
@@ -552,14 +625,15 @@ def test_e4_newest_raises_attributeerror_for_an_entry_that_is_no_mapping() -> No
 JOB_URL = "https://github.com/o/r/actions/runs/{}/job/9"
 
 
-def test_ec43_a_job_of_a_listed_run_gets_the_event_of_that_run() -> None:
+def test_ec43_a_job_of_a_listed_run_gets_the_event_and_creation_time_of_that_run() -> None:
     job = {**check_run(), "detailsUrl": JOB_URL.format(7)}
     given = [job]
-    assert guard._with_events(given, [{"id": 8, "event": "push"}, {"id": 7, "event": "pull_request"}]) == [
-        {**job, "event": "pull_request"}
+    assert guard._with_events(given, [listed(8, "push"), listed(7, "pull_request", LATE)]) == [
+        {**job, "event": "pull_request", "created_at": LATE}
     ]
     assert given == [job]
     assert "event" not in job
+    assert "created_at" not in job
 
 
 @pytest.mark.parametrize(
@@ -575,21 +649,21 @@ def test_ec43_a_job_of_a_listed_run_gets_the_event_of_that_run() -> None:
     ],
 )
 def test_ec44_an_entry_of_no_listed_run_is_unchanged(check: dict[str, object]) -> None:
-    assert guard._with_events([check], [{"id": 7, "event": "push"}]) == [check]
+    assert guard._with_events([check], [listed(7)]) == [check]
 
 
 def test_a17_run_ids_that_start_one_another_each_get_their_own_event() -> None:
     short, long = {**check_run(), "detailsUrl": JOB_URL.format(12)}, {**check_run(), "detailsUrl": JOB_URL.format(123)}
-    found = guard._with_events([short, long], [{"id": 123, "event": "pull_request"}, {"id": 12, "event": "push"}])
+    found = guard._with_events([short, long], [listed(123, "pull_request"), listed(12, "push")])
     assert [check["event"] for check in found] == ["push", "pull_request"]
 
 
 def test_b8_with_events_of_no_checks_is_nothing() -> None:
-    assert guard._with_events([], [{"id": 7, "event": "push"}]) == []
+    assert guard._with_events([], [listed(7)]) == []
 
 
-@pytest.mark.parametrize("run", [{"event": "push"}, {"id": 7}])
-def test_e5_a_listed_run_with_no_id_or_no_event_raises_keyerror(run: dict[str, object]) -> None:
+@pytest.mark.parametrize("run", [without(listed(7), "id"), without(listed(7), "event"), without(listed(7), "created_at")])
+def test_e5_a_listed_run_with_no_id_event_or_creation_time_raises_keyerror(run: dict[str, object]) -> None:
     with pytest.raises(KeyError):
         guard._with_events([{**check_run(), "detailsUrl": JOB_URL.format(7)}], [run])
 
@@ -1094,7 +1168,7 @@ VIEW = json.dumps(
         "statusCheckRollup": [{"name": "\u05e4", "detailsUrl": JOB_URL.format(7)}, {"name": "b"}],
     }
 )
-RUNS = json.dumps({"workflow_runs": [{"id": 7, "event": "push"}]})
+RUNS = json.dumps({"workflow_runs": [{"id": 7, "event": "push", "created_at": EARLY, "name": "fast"}]})
 
 
 def answering(
@@ -1118,7 +1192,10 @@ def answering(
 def test_ec30_rollup_asks_for_the_checks_then_for_the_runs_of_that_commit(monkeypatch: pytest.MonkeyPatch) -> None:
     calls = answering(monkeypatch)
     found = guard.rollup("80", "o/r")
-    assert found == [{"name": "\u05e4", "detailsUrl": JOB_URL.format(7), "event": "push"}, {"name": "b"}]
+    assert found == [
+        {"name": "\u05e4", "detailsUrl": JOB_URL.format(7), "event": "push", "created_at": EARLY},
+        {"name": "b"},
+    ]
     view, runs = [argv for argv, options in calls]
     assert view == ["X:/tools/gh.exe", "pr", "view", "80", "-R", "o/r", "--json", "headRefOid,statusCheckRollup"]
     assert runs == [
@@ -1127,6 +1204,7 @@ def test_ec30_rollup_asks_for_the_checks_then_for_the_runs_of_that_commit(monkey
     timeouts = [options.pop("timeout") for argv, options in calls]
     assert all(isinstance(timeout, (int, float)) and timeout > 0 for timeout in timeouts)
     assert sum(timeouts) <= guard.GH_TIMEOUT_SECONDS
+    assert timeouts == [guard.GH_CALL_SECONDS] * 2
     assert [options for argv, options in calls] == [{"capture_output": True, "encoding": "utf-8", "check": True}] * 2
 
 

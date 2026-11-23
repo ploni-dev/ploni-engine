@@ -32,6 +32,8 @@ with a fixed exit code, so no test reaches GitHub):
   M17 the runs cannot be read: gh api ends with an error, or prints no JSON, or no runs
                                               exit code 2
   M18 the red run is not among the runs gh api lists  exit code 2: it is kept
+  M19 pr-body red in the run of the newer event, green in the run of the older event whose
+      job started later                           exit code 2 (the review of PR #192)
 
 Every refusal is told from a script that never ran by its stderr: each line starts with
 `guard: `. Python itself ends with 2 when it cannot open the script.
@@ -66,7 +68,7 @@ EVERY = [
 
 
 def stand_in_gh(folder: Path, answer: str, exit_code: int = 0, runs: str = NO_RUNS, runs_exit: int = 0) -> None:
-    """Write a `gh` into folder that answers each call by its first word and notes its words.
+    """Write a stand-in `gh` that answers by its first word, noting the words of each call.
 
     `gh api` prints runs and ends with runs_exit; every other call prints answer and ends
     with exit_code. The words of each call go on a line of the file `started`.
@@ -109,14 +111,16 @@ def rollup(*checks: dict[str, str]) -> str:
 
 
 def job(name: str, conclusion: str, started: str, run: int) -> dict[str, str]:
-    """Return a finished workflow job of run, as the rollup lists it."""
+    """Return a finished workflow job of run, in a workflow of its own name, as the rollup lists it."""
     url = f"https://github.com/o/r/actions/runs/{run}/job/{run + 1000}"
-    return {**GREEN, "name": name, "conclusion": conclusion, "startedAt": started, "detailsUrl": url}
+    finished = {**GREEN, "name": name, "conclusion": conclusion, "workflowName": name}
+    return {**finished, "startedAt": started, "detailsUrl": url}
 
 
-def runs(*events: tuple[int, str]) -> str:
-    """Return what `gh api .../actions/runs` prints for runs given as (id, event)."""
-    return json.dumps({"workflow_runs": [{"id": run, "event": event} for run, event in events]})
+def runs(*events: tuple[int, str, str]) -> str:
+    """Return what `gh api .../actions/runs` prints for runs given as (id, event, created_at)."""
+    listed = [{"id": run, "event": event, "created_at": created} for run, event, created in events]
+    return json.dumps({"workflow_runs": listed})
 
 
 def but(name: str) -> list[dict[str, str]]:
@@ -210,7 +214,7 @@ def test_m12_a_refusal_names_a_hebrew_repository_letter_for_letter(tmp_path: Pat
 
 def test_m14_a_check_red_then_green_again_on_the_same_trigger_is_let_through(tmp_path: Path) -> None:
     checks = (job("ratchet", "FAILURE", EARLY, 1), job("ratchet", "SUCCESS", LATE, 2))
-    stand_in_gh(tmp_path, rollup(*but("ratchet"), *checks), runs=runs((1, "pull_request"), (2, "pull_request")))
+    stand_in_gh(tmp_path, rollup(*but("ratchet"), *checks), runs=runs((1, "pull_request", EARLY), (2, "pull_request", LATE)))
     done = hook(payload("Bash", command=MERGE), tmp_path)
     assert done.stderr == b""
     assert done.returncode == 0
@@ -222,13 +226,13 @@ def test_m14_a_check_red_then_green_again_on_the_same_trigger_is_let_through(tmp
 
 def test_m15_a_check_green_then_red_on_the_same_trigger_is_refused(tmp_path: Path) -> None:
     checks = (job("ratchet", "SUCCESS", EARLY, 1), job("ratchet", "FAILURE", LATE, 2))
-    stand_in_gh(tmp_path, rollup(*but("ratchet"), *checks), runs=runs((1, "pull_request"), (2, "pull_request")))
+    stand_in_gh(tmp_path, rollup(*but("ratchet"), *checks), runs=runs((1, "pull_request", EARLY), (2, "pull_request", LATE)))
     assert b"PR 80 of o/r: check ratchet is FAILURE" in refused(hook(payload("Bash", command=MERGE), tmp_path))
 
 
 def test_m16_fast_suite_counts_by_the_newest_run_of_each_trigger(tmp_path: Path) -> None:
     checks = (job("fast-suite", "FAILURE", EARLY, 1), job("fast-suite", "SUCCESS", LATE, 2))
-    stand_in_gh(tmp_path, rollup(*but("fast-suite"), *checks), runs=runs((1, "push"), (2, "pull_request")))
+    stand_in_gh(tmp_path, rollup(*but("fast-suite"), *checks), runs=runs((1, "push", EARLY), (2, "pull_request", LATE)))
     assert b"PR 80 of o/r: check fast-suite is FAILURE" in refused(hook(payload("Bash", command=MERGE), tmp_path))
 
 
@@ -240,5 +244,13 @@ def test_m17_a_merge_is_refused_when_the_runs_cannot_be_read(tmp_path: Path, ans
 
 def test_m18_a_red_run_that_gh_api_does_not_list_is_kept(tmp_path: Path) -> None:
     checks = (job("ratchet", "FAILURE", EARLY, 1), job("ratchet", "SUCCESS", LATE, 2))
-    stand_in_gh(tmp_path, rollup(*but("ratchet"), *checks), runs=runs((2, "pull_request")))
+    stand_in_gh(tmp_path, rollup(*but("ratchet"), *checks), runs=runs((2, "pull_request", LATE)))
     assert b"PR 80 of o/r: check ratchet is FAILURE" in refused(hook(payload("Bash", command=MERGE), tmp_path))
+
+
+def test_m19_an_older_run_whose_job_starts_last_does_not_hide_the_newer_red_run(tmp_path: Path) -> None:
+    stale = job("pr-body", "SUCCESS", "2026-11-23T10:06:00Z", 1)
+    current = job("pr-body", "FAILURE", "2026-11-23T10:05:02Z", 2)
+    events = runs((1, "pull_request", "2026-11-23T10:04:20Z"), (2, "pull_request", "2026-11-23T10:04:58Z"))
+    stand_in_gh(tmp_path, rollup(*but("pr-body"), stale, current), runs=events)
+    assert b"PR 80 of o/r: check pr-body is FAILURE" in refused(hook(payload("Bash", command=MERGE), tmp_path))
