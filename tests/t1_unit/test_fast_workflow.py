@@ -27,9 +27,10 @@ the workflow that runs this test outside it switches off both, every check green
 review stands against it. Reading the test and the pytest configuration from main's copy, as
 nightly.yml reads its script, closes only the route through the PR's test file or pytest
 configuration, not that one; whether `pull_request_target` (which runs the base branch's copy of
-the workflow) can close it, with its check on the PR's head where the gate reads it, is to be
-measured in that workflow's PR (the review of #193, findings 2 and 4). That workflow comes in a
-PR of its own, then its pin.
+the workflow) can close it, with its check on the PR's head where the gate reads it, can be
+measured only now that that workflow, fast-pin.yml (#195), is on main, as its header says (the
+reviews of #193, findings 2 and 4, and of #195, finding 4). Its pin is
+tests/t1_unit/test_fast_pin_workflow.py.
 """
 
 from pathlib import Path
