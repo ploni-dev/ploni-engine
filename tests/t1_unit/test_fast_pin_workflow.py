@@ -17,7 +17,11 @@ Equivalence class:
 Hebrew and document axes: do not apply; the input is a workflow file.
 Known limits: a PR that edits both fast.yml and fast-pin.yml with no .py file is not caught here
 (the fast suite runs the PR's copy of this test, which the PR may leave as it is, and the PR's
-copy of each workflow); fast-pin.yml's header says what stands against that.
+copy of each workflow); fast-pin.yml's header says what stands against that. A PR that edits
+fast-pin.yml together with a non-.py file that keeps this test from running (a `--deselect` in
+pyproject.toml's pytest options, the Makefile's `check` target) passes every check;
+pyproject.toml and that make target are on the Level 3 list (PROMOTION.md section 4), so only
+the review and CLAUDE.md stand against it (the review of #197, finding 1, measured).
 """
 
 from pathlib import Path
