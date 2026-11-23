@@ -31,6 +31,8 @@ Matrix:
       module's missing test, then the test commit, by module
   M15 git() returns what git wrote (a hash); raises CalledProcessError on a revision git does
       not know
+  M16 two merges of other branches                               merge_problems() gives one line
+      each, oldest merge first
 
 Not in the fast suite: PROCESS.md section 5.1 puts t4 in the full suite. Until the full
 workflow exists it is run by hand: python -m pytest tests/t4_integration
@@ -251,3 +253,17 @@ def test_m15_git(repo: Path) -> None:
     assert check.git(["rev-parse", "base"], repo).strip() == git(repo, "rev-parse", "base")
     with pytest.raises(subprocess.CalledProcessError):
         check.git(["rev-parse", "--verify", "no-such-revision"], repo)
+
+
+def test_m16_two_merges_of_other_branches(repo: Path) -> None:
+    tips = []
+    for name in ("one", "two"):
+        git(repo, "checkout", "-q", "-b", name, "main")
+        tips.append(commit(repo, f"docs/{name}.md"))
+    git(repo, "checkout", "-q", "-b", "feat", "main")
+    merges = []
+    for name in ("two", "one"):
+        commit(repo, f"docs/feat-{name}.md")
+        git(repo, "merge", "-q", "--no-ff", "--no-edit", name)
+        merges.append(git(repo, "rev-parse", "HEAD"))
+    assert check.merge_problems("main", "feat", repo) == [foreign(merges[0], tips[1], "main"), foreign(merges[1], tips[0], "main")]
