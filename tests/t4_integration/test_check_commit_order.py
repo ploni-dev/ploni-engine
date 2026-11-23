@@ -8,7 +8,7 @@ left out, that a deletion and a rename arrive as such, and that a Hebrew name ar
 Matrix:
   M1  the test file in one commit, the module in the next        exit 0, nothing written
   M2  the module first, its test file next                       exit 1, one line
-  M3  the module and its test file in one commit                 exit 1, two lines
+  M3  the module and its test file in one commit                 exit 1, one line
   M4  the branch merges main, which changed a module after the branch was cut    exit 0: the
       merge and main's commits are not the branch's; commits() leaves the merge out
   M5  a module deleted, with no test                             exit 0
@@ -23,6 +23,14 @@ Matrix:
   M10 documents only                                             exit 0
   M11 main moved on after the branch, with a module and no test, and no merge    exit 0: only
       the branch's commits count (base..head, not base...head)
+  M12 the branch merges another branch, cut from the base and not merged into main    exit 1,
+      one line naming the merge and that branch's tip; merge_problems() gives the same line
+  M13 GitHub's merge of the PR into main: run on HEAD^1 HEAD^2 (the PR's own commits)    exit 0;
+      on HEAD^1 HEAD the merge itself brings in the PR, which main does not hold    exit 1
+  M14 a test commit that also changes another module, then the module    exit 1: the other
+      module's missing test, then the test commit, by module
+  M15 git() returns what git wrote (a hash); raises CalledProcessError on a revision git does
+      not know
 
 Not in the fast suite: PROCESS.md section 5.1 puts t4 in the full suite. Until the full
 workflow exists it is run by hand: python -m pytest tests/t4_integration
@@ -114,10 +122,7 @@ def test_m3_one_commit(repo: Path) -> None:
     sha = commit(repo, MODULE, TEST)
     done = run(repo, "base", "HEAD")
     assert done.returncode == 1
-    assert done.stderr.splitlines() == [
-        no_test(MODULE, sha),
-        f"{sha[:12]}: touches {MODULE} and its test file {TEST}; the failing tests are a commit of their own",
-    ]
+    assert done.stderr.splitlines() == [no_test(MODULE, sha)]
 
 
 def test_m4_a_merge_of_main(repo: Path) -> None:
@@ -194,3 +199,55 @@ def test_m11_main_moved_on_after_the_branch(repo: Path) -> None:
     commit(repo, "scripts/other.py")
     done = run(repo, "main", "feat")
     assert (done.returncode, done.stderr) == (0, "")
+
+
+def foreign(merge: str, parent: str, base: str) -> str:
+    """Return the line of a merge that brings in a commit the base does not hold."""
+    return f"{merge[:12]}: merges {parent[:12]}, which {base} does not hold; merge only main into the branch"
+
+
+def test_m12_a_merge_of_another_branch(repo: Path) -> None:
+    git(repo, "checkout", "-q", "-b", "other")
+    tip = commit(repo, "tests/t1_unit/test_other.py")
+    git(repo, "checkout", "-q", "main")
+    git(repo, "checkout", "-q", "-b", "feat")
+    commit(repo, TEST)
+    git(repo, "merge", "-q", "--no-ff", "--no-edit", "other")
+    merge = git(repo, "rev-parse", "HEAD")
+    commit(repo, MODULE)
+    done = run(repo, "main", "feat")
+    assert done.returncode == 1
+    assert done.stderr.splitlines() == [foreign(merge, tip, "main")]
+    assert check.merge_problems("main", "feat", repo) == [foreign(merge, tip, "main")]
+
+
+def test_m13_github_merge_of_the_pr(repo: Path) -> None:
+    git(repo, "checkout", "-q", "-b", "feat")
+    commit(repo, TEST)
+    tip = commit(repo, MODULE)
+    git(repo, "checkout", "-q", "main")
+    commit(repo, "docs/a.md")
+    git(repo, "merge", "-q", "--no-ff", "--no-edit", "feat")
+    done = run(repo, "HEAD^1", "HEAD^2")
+    assert (done.returncode, done.stderr) == (0, "")
+    done = run(repo, "HEAD^1", "HEAD")
+    assert done.returncode == 1
+    assert done.stderr.splitlines() == [foreign(git(repo, "rev-parse", "HEAD"), tip, "HEAD^1")]
+
+
+def test_m14_a_test_commit_with_code(repo: Path) -> None:
+    first = commit(repo, TEST, "ploni/other.py")
+    commit(repo, MODULE)
+    done = run(repo, "base", "HEAD")
+    assert done.returncode == 1
+    assert done.stderr.splitlines() == [
+        no_test("ploni/other.py", first),
+        f"{first[:12]}: a test commit of {MODULE} also changes ploni/other.py; "
+        "the failing tests are a commit of their own, with no implementation in it",
+    ]
+
+
+def test_m15_git(repo: Path) -> None:
+    assert check.git(["rev-parse", "base"], repo).strip() == git(repo, "rev-parse", "base")
+    with pytest.raises(subprocess.CalledProcessError):
+        check.git(["rev-parse", "--verify", "no-such-revision"], repo)

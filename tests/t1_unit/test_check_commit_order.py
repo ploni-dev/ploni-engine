@@ -11,9 +11,12 @@ Test matrix:
 Equivalence classes (problems):
   EC1  a test file for X in one commit, X in a later one              no line
   EC2  X first, its test file in a later commit                       one line: no test before
-  EC3  X and its test file in one commit, nothing before              two lines: no test before,
-                                                                      and the commit mixes them
-  EC4  a test commit first, then a commit touching X and its test again    one line: that commit
+  EC3  X and its test file in one commit, nothing before              one line: no test before
+                                                                      (that commit is X's first,
+                                                                      not a test commit before it)
+  EC4  a test commit first, then a commit touching X and its test again    no line: a later commit
+                                                                      may change both (the review
+                                                                      of #194, decision 1)
   EC5  X in two commits, its test file between them                   one line: the first counts
   EC6  a test file for another module only                            one line
   EC7  no module touched (docs, tests, a workflow, experiments/)      no line
@@ -25,7 +28,23 @@ Equivalence classes (problems):
   EC12 X deleted, then added again, no test                           one line: it is there at the end
   EC13 X added, then deleted later, no test                           no line
   EC14 status T (a type change) counts as touching                    one line
-  EC19 a commit touching X and two test files for it                  one line naming both, sorted
+  EC19 a test commit of X, before X's first, that also changes module Y    a line for X naming Y,
+                                                                      and Y's own no-test line
+  EC20 two test commits before X's first, one with code in it         one line: that commit
+  EC21 a test commit of X that deletes a module                       one line: a deletion is a
+                                                                      change of code (Claude's
+                                                                      choice: it only narrows)
+  EC22 X's test file deleted in a commit before X's first             no line: a deleted test file
+                                                                      counts as touched (Claude's
+                                                                      choice 5: it does less than
+                                                                      the row asks)
+  EC23 a test commit of X with code in it, X deleted at the end       no line: a deleted module
+                                                                      needs no test
+
+Equivalence classes (mixed, on its own):
+  EC24 test files only; test files and documents; code with a test file of another module only
+                                                                      ""
+  EC25 a test file of X and two modules, given in reverse             the line, both named, sorted
 
 Equivalence classes (is_module):
   EC15 a .py file under ploni/ (any depth), eval/, scripts/           a module
@@ -66,8 +85,9 @@ Adversarial:
       one line with the name whole
   A6  two modules with the same tail (ploni/a/x.py, scripts/x.py) share test_x.py    one test
       commit covers both (Known limits)
-  A7  a merge commit of main into the branch                          not in the list: git
-                                                                      leaves it out (the module suite)
+  A7  a merge commit of main into the branch (its second parent on the base)    left out; a
+      merge of another branch, whose second parent the base does not hold    one line naming it
+      (the module suite: merges are read from git only)
 
 Not applicable: the document axes; the Hebrew axes of the test-matrix skill other than A5, as
 the input is a list of paths compared by their parts.
@@ -93,9 +113,9 @@ def no_test(module: str, sha: str) -> str:
     return f"{module}: no test file for it is touched before its first commit, {sha}"
 
 
-def mixed(sha: str, module: str, tests: str) -> str:
-    """Return the line of a commit that touches a module and a test file for it."""
-    return f"{sha}: touches {module} and its test file {tests}; the failing tests are a commit of their own"
+def mixed(sha: str, module: str, code: str) -> str:
+    """Return the line of a test commit of a module, before its first commit, that changes code."""
+    return f"{sha}: a test commit of {module} also changes {code}; the failing tests are a commit of their own, with no implementation in it"
 
 
 def test_ec1_test_first_then_the_module() -> None:
@@ -107,12 +127,12 @@ def test_ec2_the_module_first() -> None:
 
 
 def test_ec3_module_and_test_in_one_commit() -> None:
-    assert check.problems([c("a1", ATOMIC, TEST)]) == [no_test(ATOMIC, "a1"), mixed("a1", ATOMIC, TEST)]
+    assert check.problems([c("a1", ATOMIC, TEST)]) == [no_test(ATOMIC, "a1")]
 
 
-def test_ec4_a_later_commit_mixes_them() -> None:
+def test_ec4_a_later_commit_may_change_both() -> None:
     commits = [c("a1", TEST), c("b2", ATOMIC), c("c3", ATOMIC, TEST)]
-    assert check.problems(commits) == [mixed("c3", ATOMIC, TEST)]
+    assert check.problems(commits) == []
 
 
 def test_ec5_the_first_commit_of_the_module_counts() -> None:
@@ -287,7 +307,39 @@ def test_a6_one_tail_two_modules() -> None:
     assert check.problems(commits) == []
 
 
-def test_ec19_a_mixed_commit_names_each_test_file() -> None:
-    other = "tests/t4_integration/test_atomic.py"
-    commits = [c("a1", other), c("b2", other, ATOMIC, TEST)]
-    assert check.problems(commits) == [mixed("b2", ATOMIC, f"{TEST}, {other}")]
+def test_ec19_a_test_commit_with_another_module() -> None:
+    commits = [c("a1", TEST, "ploni/types.py"), c("b2", ATOMIC)]
+    assert check.problems(commits) == [mixed("a1", ATOMIC, "ploni/types.py"), no_test("ploni/types.py", "a1")]
+
+
+def test_ec20_one_of_two_test_commits_with_code() -> None:
+    commits = [c("a1", TEST, "tests/t1_unit/test_check.py"), c("b2", TEST, "scripts/check.py"), c("c3", ATOMIC)]
+    assert check.problems(commits) == [mixed("b2", ATOMIC, "scripts/check.py")]
+
+
+def test_ec21_a_test_commit_that_deletes_a_module() -> None:
+    commits = [Commit("a1", {TEST: "M", "ploni/types.py": "D"}), c("b2", ATOMIC)]
+    assert check.problems(commits) == [mixed("a1", ATOMIC, "ploni/types.py")]
+
+
+def test_ec22_a_test_file_deleted_before_the_module() -> None:
+    assert check.problems([c("a1", TEST, status="D"), c("b2", ATOMIC)]) == []
+
+
+def test_ec23_a_mixed_test_commit_of_a_module_deleted_at_the_end() -> None:
+    commits = [c("a1", TEST, "ploni/types.py"), c("b2", ATOMIC, status="D"), c("c3", "tests/t1_unit/test_types.py")]
+    assert check.problems(commits) == [no_test("ploni/types.py", "a1")]
+
+
+@pytest.mark.parametrize(
+    "paths",
+    [(TEST, "tests/t4_integration/test_atomic.py"), (TEST, DOCS), ("tests/t1_unit/test_types.py", "ploni/types.py")],
+    ids=["tests", "tests-and-docs", "another-module-test"],
+)
+def test_ec24_mixed_without_code_or_without_a_test_of_x(paths: tuple[str, ...]) -> None:
+    assert check.mixed(c("a1", *paths), ATOMIC) == ""
+
+
+def test_ec25_mixed_names_the_code_sorted() -> None:
+    commit = c("0123456789abcdef", "scripts/check.py", TEST, "eval/score.py")
+    assert check.mixed(commit, ATOMIC) == mixed("0123456789ab", ATOMIC, "eval/score.py, scripts/check.py")

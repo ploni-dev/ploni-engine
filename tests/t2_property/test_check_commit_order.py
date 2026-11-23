@@ -7,8 +7,8 @@ expected answer of each case comes from the labels and the words of `PROMOTION.m
 
 Invariants:
   I1  for each module the sequence touches, in module order: one line when no commit before
-      its first touches its test file, and one line for each commit that touches both; nothing
-      else.
+      its first touches its test file, and one line for each commit before its first that
+      touches its test file and a module (the other one); nothing else.
   I2  a commit that touches no module and no test file, added at the front and at the end,
       does not change the answer.
 
@@ -50,11 +50,13 @@ def expected(commits: list[Commit]) -> list[str]:
         test = TESTS[module]
         if not any(test in commit.changes for commit in commits[: touching[0]]):
             lines.append(f"{module}: no test file for it is touched before its first commit, c{touching[0]}")
-        lines += [
-            f"c{index}: touches {module} and its test file {test}; the failing tests are a commit of their own"
-            for index in touching
-            if test in commits[index].changes
-        ]
+        for index in range(touching[0]):
+            code = sorted(path for path in commits[index].changes if path in TESTS)
+            if test in commits[index].changes and code:
+                lines.append(
+                    f"c{index}: a test commit of {module} also changes {', '.join(code)}; "
+                    "the failing tests are a commit of their own, with no implementation in it"
+                )
     return lines
 
 
