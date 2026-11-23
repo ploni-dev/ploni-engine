@@ -19,6 +19,10 @@ name: commit-order
 
 on:
   pull_request:
+    # edited: a PR whose base branch is changed is judged again against the new base, as the check
+    # reads base..head. GitHub also sends it when the title or the body is edited; the run is then
+    # the same (as changed-paths.yml; the review of #198, finding 1).
+    types: [opened, edited, synchronize, reopened]
 
 permissions:
   contents: read
@@ -26,6 +30,7 @@ permissions:
 jobs:
   commit-order:
     runs-on: ubuntu-24.04
+    # The three runs of #198 took 20 to 30 s; room for a long PR's history.
     timeout-minutes: 5
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
