@@ -92,6 +92,14 @@ From the second review:
        Event class in place of a member; an event that carries an exception
   The helper tests/logging_state.py puts back the handler of last resort and every logger's level
 
+From the survivors of the Cosmic Ray trial of #188 (issue #189):
+  A14  a value of a real `str` or `int` subclass whose metaclass says its classes equal every
+       class, so that `type(x) == str` would hold where `type(x) is str` does not, and which
+       shows the text of a document when it is written: as a field key, a file name, a name
+       in code, a field value, a level name, a line number, a level; and an object of such a
+       class, no dict, tuple or float, as a record's fields, `exc_info` and time
+  B3   a whole number one below -LARGEST_NUMBER: a mark, as at -LARGEST_NUMBER itself
+
 The Hebrew axes of the test-matrix skill apply as input only: text in Hebrew, in Latin letters
 and mixed is what must not come out; the canary test carries them. The document-structure axes
 do not apply: no document is handled.
@@ -477,6 +485,24 @@ class Claims(metaclass=EqualsAll):
         return TEXT
 
 
+class EqualLoudStr(LoudStr, metaclass=EqualsAll):
+    """A real string whose class claims to equal `str`, and which shows the text of a document when written."""
+
+    __slots__ = ()
+
+
+class EqualLoudInt(int, metaclass=EqualsAll):
+    """A real whole number whose class claims to equal `int`, and which shows the text of a document when written."""
+
+    __slots__ = ()
+
+    def __repr__(self) -> str:
+        return TEXT
+
+    def __format__(self, spec: str) -> str:
+        return TEXT
+
+
 class Renamed(type):
     """A metaclass that gives its classes the text of a document as their name."""
 
@@ -496,6 +522,7 @@ class Renamed(type):
         (-(2**63) + 1, "-9223372036854775807"),
         (2**63, "<int>"),
         (-(2**63), "<int>"),
+        (-(2**63) - 1, "<int>"),
         pytest.param(10**5000, "<int>", id="a number of 5001 digits"),
         (0.25, "0.25"),
         (float("inf"), "inf"),
@@ -510,6 +537,8 @@ class Renamed(type):
         (1 + 2j, "<complex>"),
         (LoudStr("12"), "<LoudStr>"),
         (Claims(), "<Claims>"),
+        pytest.param(EqualLoudStr("12"), "<EqualLoudStr>", id="a str of a class that claims to equal str"),
+        pytest.param(EqualLoudInt(5), "<EqualLoudInt>", id="an int of a class that claims to equal int"),
         (Renamed("Thing", (), {})(), "<Thing>"),
         (type(TEXT, (), {})(), "<value>"),
         (type("two words", (), {})(), "<value>"),
@@ -526,7 +555,8 @@ def test_is_key_takes_a_lower_case_identifier(key: str) -> None:
 
 
 @pytest.mark.parametrize(
-    "key", ["_x", "aB", "a-b", "a.b", "pages\n", "", "1a", "two words", "שם", "pages$", "a$b", 1, None, b"pages", LoudStr("pages")]
+    "key", ["_x", "aB", "a-b", "a.b", "pages\n", "", "1a", "two words", "שם", "pages$", "a$b", 1, None, b"pages", LoudStr("pages"),
+            EqualLoudStr("pages")]
 )
 def test_is_key_refuses_every_other_shape_and_every_other_type(key: object) -> None:
     assert not safe._is_key(key)
@@ -540,7 +570,7 @@ def test_is_file_takes_the_name_of_a_source_file(name: str) -> None:
 @pytest.mark.parametrize(
     "name",
     ["Jacob Cohen.py", "יעקב.py", "<two words>", "<>", "<Stdin>", "<st1n>", "<a$>", "x$.py", "x.pyc", "path/x.py", "x.py\n",
-     "<stdin>\n", ".py", "", None, 3, LoudStr("x.py")],  # fmt: skip
+     "<stdin>\n", ".py", "", None, 3, LoudStr("x.py"), EqualLoudStr("x.py")],  # fmt: skip
 )
 def test_is_file_refuses_every_other_shape_and_every_other_type(name: object) -> None:
     assert not safe._is_file(name)
@@ -551,7 +581,8 @@ def test_code_name_gives_a_name_of_code_back(name: str) -> None:
     assert safe._code_name(name, "<mark>") == name
 
 
-@pytest.mark.parametrize("name", ["two words", "יעקב", "a.b", "a\nb", "Sample\n", "a$", "a-b", "1a", "", None, 3, LoudStr("Sample")])
+@pytest.mark.parametrize("name", ["two words", "יעקב", "a.b", "a\nb", "Sample\n", "a$", "a-b", "1a", "", None, 3, LoudStr("Sample"),
+                                  EqualLoudStr("Sample")])
 def test_code_name_gives_the_mark_for_anything_else(name: object) -> None:
     assert safe._code_name(name, "<mark>") == "<mark>"
 
@@ -574,6 +605,35 @@ def test_a4_a_level_name_and_a_file_name_of_a_class_of_their_own_are_marks(start
     logging.getLogger().handle(by_hand(LoudStr("INFO"), LoudStr("module.py"), 3))
     assert out.getvalue().endswith(" LEVEL <file>:3 <withheld>\n"), out.getvalue()
     assert "יעקב" not in out.getvalue()
+
+
+def test_a14_a_level_name_file_name_and_line_of_classes_that_claim_to_equal_str_and_int_are_marks(
+    start: Callable[..., io.StringIO],
+) -> None:
+    out = start()
+    logging.getLogger().handle(by_hand(EqualLoudStr("INFO"), EqualLoudStr("module.py"), EqualLoudInt(3)))
+    assert out.getvalue().endswith(" LEVEL <file>:0 <withheld>\n"), out.getvalue()
+    assert "יעקב" not in out.getvalue()
+
+
+def test_a14_fields_exc_info_and_time_of_a_class_that_claims_to_equal_dict_tuple_and_float_keep_the_line(
+    start: Callable[..., io.StringIO],
+) -> None:
+    out = start()
+    fields, raised, timed = (by_hand("ERROR", "module.py", 5) for _ in range(3))
+    fields.msg = Sample.DONE
+    setattr(fields, safe.FIELDS, Claims())
+    raised.exc_info = Claims()
+    timed.created = Claims()
+    for record in (fields, raised, timed):
+        logging.getLogger().handle(record)
+    lines = out.getvalue().splitlines()
+    assert [line.split(" ", 1)[1] for line in lines] == [
+        "ERROR module.py:5 Sample.DONE",
+        "ERROR module.py:5 <withheld>",
+        "ERROR module.py:5 <withheld>",
+    ], out.getvalue()
+    assert lines[2].startswith(safe.NO_TIME)
 
 
 def with_exc_info(exc_info: object) -> logging.LogRecord:
@@ -727,7 +787,7 @@ def test_ec17_the_time_of_a_record_is_its_local_time_to_the_second(start: Callab
     assert out.getvalue() == f"{expected} INFO module.py:3 <withheld>\n"
 
 
-@pytest.mark.parametrize("level", ["WARNING", TEXT, 20.0, True, None, LevelOfItsOwn(20)])
+@pytest.mark.parametrize("level", ["WARNING", TEXT, 20.0, True, None, LevelOfItsOwn(20), pytest.param(EqualLoudInt(20), id="claims int")])
 def test_e3_install_refuses_a_level_that_is_no_whole_number_before_it_changes_anything(
     logging_restored: None, level: object
 ) -> None:
@@ -739,7 +799,7 @@ def test_e3_install_refuses_a_level_that_is_no_whole_number_before_it_changes_an
     assert (list(root.handlers), root.level, logging.lastResort, warnings.showwarning) == before
 
 
-@pytest.mark.parametrize("level", ["WARNING", TEXT, 20.0, True, None, LevelOfItsOwn(20)])
+@pytest.mark.parametrize("level", ["WARNING", TEXT, 20.0, True, None, LevelOfItsOwn(20), pytest.param(EqualLoudInt(20), id="claims int")])
 def test_e3_event_refuses_a_level_that_is_no_whole_number(start: Callable[..., io.StringIO], level: object) -> None:
     out = start()
     with pytest.raises(TypeError, match="whole number") as raised:
