@@ -17,7 +17,7 @@ Equivalence classes (problems):
   EC5  X in two commits, its test file between them                   one line: the first counts
   EC6  a test file for another module only                            one line
   EC7  no module touched (docs, tests, a workflow, experiments/)      no line
-  EC8  two modules, both refused                                      lines sorted by module
+  EC8  two modules, both refused; six, given in reverse order        lines sorted by module
   EC9  a module of each folder: ploni/, eval/, scripts/               each needs its test
   EC10 X deleted, no test anywhere                                    no line
   EC11 X deleted together with its test file in one commit            no line: a deleted module
@@ -133,6 +133,11 @@ def test_ec7_no_module_touched() -> None:
 def test_ec8_two_modules_sorted() -> None:
     commits = [c("a1", "scripts/check.py"), c("b2", ATOMIC)]
     assert check.problems(commits) == [no_test(ATOMIC, "b2"), no_test("scripts/check.py", "a1")]
+
+
+def test_ec8_six_modules_sorted() -> None:
+    modules = [f"ploni/m{index}.py" for index in range(6)]
+    assert check.problems([c("a1", *reversed(modules))]) == [no_test(module, "a1") for module in modules]
 
 
 @pytest.mark.parametrize(
@@ -284,5 +289,5 @@ def test_a6_one_tail_two_modules() -> None:
 
 def test_ec19_a_mixed_commit_names_each_test_file() -> None:
     other = "tests/t4_integration/test_atomic.py"
-    commits = [c("a1", other), c("b2", ATOMIC, TEST, other)]
+    commits = [c("a1", other), c("b2", other, ATOMIC, TEST)]
     assert check.problems(commits) == [mixed("b2", ATOMIC, f"{TEST}, {other}")]

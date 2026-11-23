@@ -21,6 +21,8 @@ Matrix:
   M9  commits() gives the commits oldest first, with the status of each path (added, modified,
       deleted)
   M10 documents only                                             exit 0
+  M11 main moved on after the branch, with a module and no test, and no merge    exit 0: only
+      the branch's commits count (base..head, not base...head)
 
 Not in the fast suite: PROCESS.md section 5.1 puts t4 in the full suite. Until the full
 workflow exists it is run by hand: python -m pytest tests/t4_integration
@@ -181,4 +183,14 @@ def test_m9_commits_oldest_first(repo: Path) -> None:
 def test_m10_documents_only(repo: Path) -> None:
     commit(repo, "docs/a.md")
     done = run(repo, "base", "HEAD")
+    assert (done.returncode, done.stderr) == (0, "")
+
+
+def test_m11_main_moved_on_after_the_branch(repo: Path) -> None:
+    git(repo, "checkout", "-q", "-b", "feat")
+    commit(repo, TEST)
+    commit(repo, MODULE)
+    git(repo, "checkout", "-q", "main")
+    commit(repo, "scripts/other.py")
+    done = run(repo, "main", "feat")
     assert (done.returncode, done.stderr) == (0, "")
