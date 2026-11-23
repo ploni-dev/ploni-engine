@@ -68,6 +68,11 @@ From the second review:
   EC6 on Windows too: the root that the helper makes does not take its access list from
       the folder above it
 
+From the survivors of the Cosmic Ray trial of #188 (issue #189):
+  B4  a file with 257 names, all inside the folder: one more than the largest whole number
+      that CPython keeps a single object of, so the count of names and the link count are
+      two objects that are equal    written over under every name
+
 The Hebrew axes of the test-matrix skill apply to names and content of files (A1, and the
 canary). The document-structure axes do not apply: no document is handled.
 """
@@ -227,6 +232,22 @@ def test_b2_an_empty_file_one_byte_and_one_byte_more_than_three_chunks(tmp_path:
             (folder / name).write_bytes((TEXT.encode("utf-8") * (size // 20 + 1))[:size])
     assert {name: len(data) for name, data in seen_at_removal.items()} == sizes
     assert all(set(data) <= {0} for data in seen_at_removal.values())
+
+
+# CPython keeps one object of each whole number below this (Include/internal/pycore_global_objects.h line 20 of
+# 3.13.5, _PY_NSMALLPOSINTS 257): from it up, a count and a link count that are equal are two objects.
+NAMES_PAST_THE_SMALL_NUMBERS = 257
+
+
+def test_b4_a_file_with_257_names_inside_is_written_over(tmp_path: Path, seen_at_removal: dict[str, bytes]) -> None:
+    with tempfiles.private_dir(tmp_path) as folder:
+        (folder / "name-0").write_text(TEXT, encoding="utf-8")
+        for number in range(1, NAMES_PAST_THE_SMALL_NUMBERS):
+            os.link(folder / "name-0", folder / f"name-{number}")
+        assert (folder / "name-0").stat().st_nlink == NAMES_PAST_THE_SMALL_NUMBERS
+    assert list(tmp_path.iterdir()) == []
+    assert len(seen_at_removal) == NAMES_PAST_THE_SMALL_NUMBERS
+    assert all(set(data) == {0} for data in seen_at_removal.values())
 
 
 def test_ec8_every_file_is_flushed_to_the_disk_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

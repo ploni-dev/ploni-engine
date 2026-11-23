@@ -39,6 +39,9 @@ Durability:
        file holds all of them, and os.replace comes after
   EC8 _sync_folder: on POSIX a descriptor of the folder is flushed and closed; on Windows nothing
        is opened
+  EC13 _sync_folder where os.name says "posix", on any system (the calls to the system faked):
+       the folder is opened, flushed and closed, in that order. Kills `os.name >= "nt"` on
+       Windows too (issue #189, the review of PR #203, finding 3)
   EC12 write_atomic flushes the target's folder, after the rename
   EC9 the random part of the partial name is 16 hex characters
 Targets:
@@ -294,6 +297,20 @@ def test_ec8_sync_folder(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Non
         assert (opened, flushed, closed) == ([], [], [])
     else:
         assert opened == [tmp_path] and flushed == descriptors and closed == descriptors
+
+
+# Any number stands for the descriptor: the calls that would use it are faked.
+FAKE_DESCRIPTOR = 7
+
+
+def test_ec13_sync_folder_flushes_the_folder_where_the_system_is_posix(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[tuple[str, object]] = []
+    monkeypatch.setattr(atomic.os, "name", "posix")
+    monkeypatch.setattr(atomic.os, "open", lambda path, flags: (calls.append(("open", path)), FAKE_DESCRIPTOR)[1])
+    monkeypatch.setattr(atomic.os, "fsync", lambda descriptor: calls.append(("fsync", descriptor)))
+    monkeypatch.setattr(atomic.os, "close", lambda descriptor: calls.append(("close", descriptor)))
+    atomic._sync_folder(tmp_path)
+    assert calls == [("open", tmp_path), ("fsync", FAKE_DESCRIPTOR), ("close", FAKE_DESCRIPTOR)]
 
 
 def test_ec9_the_random_part_of_the_name(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
