@@ -14,7 +14,7 @@ scripts/check_pr_body.py and `git()` of scripts/check_commit_order.py. The body 
 on the one line of its `## Ponytail review` section that starts, past spaces, with
 `Commit reviewed: ` and then the full 40-character hash, lower case, in backticks; anything may
 follow. It is refused, with one line on the error stream and exit code 1, when: the section or
-that line is missing, or there is more than one; the line names no full hash (the template's
+that line is missing, or there is more than one of either; the line names no full hash (the template's
 line as it is: the review is not pasted); the named commit is not one of `base..head`; a commit
 of `head` that neither the named commit nor `base` holds, oldest first, is not a merge whose
 every parent after the first `base` holds (a merge of main); or the branch's own diff at
@@ -29,9 +29,10 @@ Known limits:
   the old content differs and the merge of main is refused, though the branch's own lines are
   the same (this only narrows; `git patch-id` would let it through, and would also let through
   a change of white space made in the merge, which it ignores).
-- Lines inside an HTML comment do not count; a line inside a fenced code block does, as in
-  scripts/check_pr_body.py. A quoted line ("> Commit reviewed: ...") is a reviewer's report
-  and does not count.
+- HTML comments are removed from the whole body first, so neither a heading nor a line inside
+  one counts. A heading or a line inside a fenced code block does, as in
+  scripts/check_pr_body.py: a review heading in a fence makes two sections, refused (this only
+  narrows). A quoted line ("> Commit reviewed: ...") is a reviewer's report and does not count.
 - Only the form of the PR bodies of this repository is read: one space after the colon, the
   hash in backticks, in lower case. Any other form is refused (this only narrows).
 - `base` must be main as the PR sees it: a merge of a main newer than `base` is refused. Run
@@ -49,12 +50,12 @@ from collections.abc import Mapping
 from pathlib import Path
 
 from scripts.check_commit_order import SHORT_HASH, git
-from scripts.check_pr_body import COMMENT, REVIEW, section
+from scripts.check_pr_body import COMMENT, REVIEW, heading_of, section
 
 USAGE = "usage: python -m scripts.check_reviewed_commit <base> <head>, with the PR body in PR_BODY"
 LABEL = "Commit reviewed:"
 # The form of the merged PR bodies (#99 to #197): the label, one space, the full hash in backticks.
-NAMED = re.compile(r"Commit reviewed: `([0-9a-f]{40})`")
+NAMED = re.compile(re.escape(LABEL) + r" `([0-9a-f]{40})`")
 MISSING_LINE = f'missing: a line that starts with "{LABEL}" in {REVIEW}'
 NOT_PASTED = f'not pasted: the "{LABEL}" line of {REVIEW} names no full 40-character hash in backticks'
 
@@ -64,13 +65,17 @@ def label_lines(body: str) -> list[str] | None:
 
     Why: the commit is named on one line; comments and quoted reports are not that line.
 
-    Contract: None when the section is absent. HTML comments are removed first; each line is
-    stripped of white space at both ends, so CRLF line ends and an indent do not count.
+    Contract: None when the section is absent. HTML comments are removed from the whole body
+    first, so a heading inside one does not start the section; each line is stripped of white
+    space at both ends, so CRLF line ends and an indent do not count.
+
+    Known limits: only the first review section is read; `named()` refuses a body with more
+    than one. A heading inside a fenced code block starts a section, as in check_pr_body.py.
     """
-    review = section(body, REVIEW)
+    review = section(COMMENT.sub("", body), REVIEW)
     if review is None:
         return None
-    lines = (line.strip() for line in COMMENT.sub("", review).split("\n"))
+    lines = (line.strip() for line in review.split("\n"))
     return [line for line in lines if line.startswith(LABEL)]
 
 
@@ -80,9 +85,13 @@ def named(body: str) -> tuple[str, str]:
     Why: Achia's strict reading of 2026-11-22: red until a review naming the last commit is
     pasted, so a body that names no commit, or more than one, is refused.
 
-    Contract: the hash is 40 lower-case hex characters. The refusal is one line: the section
-    missing, the label line missing, more than one, or one that names no full hash.
+    Contract: the hash is 40 lower-case hex characters. The refusal is one line: more than one
+    review section (counted past HTML comments; the review of #201, pass 1, finding 1), the
+    section missing, the label line missing, more than one, or one that names no full hash.
     """
+    sections = sum(heading_of(line) == REVIEW for line in COMMENT.sub("", body).split("\n"))
+    if sections > 1:
+        return "", f"{sections} sections {REVIEW} in the body; keep one, with the review of the last commit"
     lines = label_lines(body)
     if lines is None:
         return "", f"missing: {REVIEW}"
@@ -135,6 +144,10 @@ def own_diff(revision: str, base: str, cwd: Path) -> str:
     Contract: `git diff-tree -r -z --no-renames <merge base> <revision>`: for each path changed,
     the modes, the full object names before and after, the status and the path, NUL-separated.
     Raises CalledProcessError when git fails, as when the two share no history.
+
+    Known limits: one merge base. When there are several, `git merge-base` picks one. Main is
+    linear (squash merges only), so a branch and main have one; a scratch branch that the merge
+    gate's own test targets (PROMOTION.md sections 10 and 11) may not be linear.
     """
     fork = git(["merge-base", revision, base], cwd).strip()
     return git(["diff-tree", "-r", "-z", "--no-renames", fork, revision], cwd)
