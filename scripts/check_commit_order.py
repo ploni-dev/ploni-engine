@@ -9,22 +9,26 @@ one of the four robots Achia chose on 2026-11-20 ("Yes, all four (Recommended)")
 
 Contract: `python -m scripts.check_commit_order <base> <head>`, run from the root of the
 checkout. It runs as a module so that it uses `is_code()` of scripts/check_changed_paths.py.
-The commits of `base..head` are read from git oldest first, merge commits left out (a merge of
-main carries main's changes, not the branch's), each with the paths it touched and how (added,
-modified, deleted, type changed; a rename is a deletion and an addition). A module is a .py file
-under ploni/, eval/ or scripts/. A test file for module X is a file under tests/, at any depth,
-named `test_` plus any tail of X's path joined by `_`, plus `.py`: for ploni/safety/atomic.py,
-test_atomic.py, test_safety_atomic.py or test_ploni_safety_atomic.py. For each module the PR
-touches and has not deleted at its last touch, one line on the error stream when no commit
-before its first touches a test file for it, and one line for each commit that touches it and
-a test file for it; then the exit code is 1. Otherwise nothing is written and the exit code is
-0. Wrong arguments: a usage line, exit 2. A revision git does not know: git's error, a
-traceback, a non-zero exit.
+The commits of `base..head` are read from git oldest first, merge commits left out, each with
+the paths it touched and how (added, modified, deleted, type changed; a rename is a deletion
+and an addition). A module is a .py file under ploni/, eval/ or scripts/. A test file for
+module X is a file under tests/, at any depth, named `test_` plus any tail of X's path joined
+by `_`, plus `.py`: for ploni/safety/atomic.py, test_atomic.py, test_safety_atomic.py or
+test_ploni_safety_atomic.py. For each module X the PR touches and has not deleted at its last
+touch, one line on the error stream when no commit before X's first touches a test file for X,
+and one line for each commit before X's first that touches a test file for X and any module
+(the row: "with no implementation in it"). A later commit may change X and its tests together.
+A merge is left out when each of its parents after the first is held by `base` (a merge of
+main, which carries main's changes, not the branch's); a merge that brings in a commit `base`
+does not hold, as a merge of another open branch does, gets one line per such parent. Any line
+written: exit code 1. Otherwise nothing is written and the exit code is 0. Wrong arguments: a
+usage line, exit 2. A revision git does not know: git's error, a traceback, a non-zero exit.
 
 Known limits:
 - No module is exempt, though six have no test file named for them today (issue #175, measured
   on 7aca103): ploni/__init__.py, ploni/safety/__init__.py, ploni/__main__.py (tested by
-  tests/t1_unit/test_cli.py, which does not count), ploni/errors.py,
+  tests/t1_unit/test_cli.py, which does not count), ploni/errors.py (its suite is
+  tests/t4_integration/test_types_errors.py, which does not count),
   scripts/download_e1_model.py and scripts/download_e5_models.py. A PR that changes one of
   them must first add or touch a test file named by the rule. This narrows Claude only: the
   row names no exemption.
@@ -32,10 +36,18 @@ Known limits:
   failing test, and nothing shows that the test failed.
 - A tail names a test file for every module that ends in it: test_atomic.py counts for any
   atomic.py, and test___init__.py for every __init__.py.
-- A merge commit is left out whole, also what it resolved by hand. A module deleted at its last
-  touch needs no test, and a commit that touches it and its test file is not refused.
-- base..head: run on GitHub's merge of a PR (HEAD^1 HEAD), that merge is itself left out as a
-  merge commit, and the checkout must hold every commit of the PR, not a depth of 2.
+- A merge of main is left out whole, also what it resolved by hand: a module written in the
+  resolution passes with no test (this does less than the row).
+- A test file deleted counts as touched: a commit that only deletes X's test file, before X,
+  satisfies the first rule (this does less than the row).
+- A module deleted at its last touch needs no test (the brief). A test commit that deletes a
+  module is refused: a deletion is a change of code (this only narrows).
+- A test commit is judged once for each module it holds tests of, and only before that
+  module's first commit: a commit of tests and code that comes after the module's first commit
+  is not refused.
+- Run on GitHub's merge of a PR, pass HEAD^1 HEAD^2, the PR's own head: HEAD^1 HEAD takes in
+  that merge, whose second parent main does not hold, and is refused. The checkout must hold
+  every commit of the PR, not a depth of 2.
 - On Windows the error stream is written in the local code page (cp1255 on the laptop), or with
   backslash-u escapes where it has no Hebrew; the exit code is the same. A reader that expects
   UTF-8 sets PYTHONIOENCODING=utf-8, as the module suite does. GitHub's runners write UTF-8.
@@ -53,7 +65,7 @@ USAGE = "usage: python -m scripts.check_commit_order <base> <head>"
 MODULE_FOLDERS = ("ploni", "eval", "scripts")
 TESTS = "tests"
 DELETED = "D"
-# The length git itself abbreviates a hash to in a repository of this size and more.
+# 12: unique across this repository and short enough to read (git abbreviates to 7 here).
 SHORT_HASH = 12
 # Well inside a CI job's minutes; each git call here reads one commit or one range.
 GIT_TIMEOUT_SECONDS = 60
@@ -98,13 +110,13 @@ def is_test_for(path: str, module: str) -> bool:
 
 
 def problems(commits: list[Commit]) -> list[str]:
-    """Return one line per module touched before a test file for it, or with one.
+    """Return one line per module whose failing tests do not come first, on their own.
 
     Why: the judgement of the check, apart from where the commits come from.
 
     Contract: `commits` oldest first, merges left out. For each module touched and not
     deleted at its last touch, by path: a line when no commit before its first touches a test
-    file for it, then a line for each commit that touches both, naming the test files sorted.
+    file for it, then the line of `mixed()` for each commit before its first that has one.
     """
     modules = sorted({path for commit in commits for path in commit.changes if is_module(path)})
     found = []
@@ -115,21 +127,27 @@ def problems(commits: list[Commit]) -> list[str]:
         first = touching[0]
         if not any(is_test_for(path, module) for commit in commits[:first] for path in commit.changes):
             found.append(f"{module}: no test file for it is touched before its first commit, {commits[first].sha[:SHORT_HASH]}")
-        found += [line for index in touching if (line := mixed(commits[index], module))]
+        found += [line for commit in commits[:first] if (line := mixed(commit, module))]
     return found
 
 
 def mixed(commit: Commit, module: str) -> str:
-    """Return the line of a commit that touches a module together with a test file for it, or "".
+    """Return the line of a test commit of a module that also changes code, or "".
 
-    Why: the row's second sentence: the failing tests are a commit of their own.
+    Why: the row's second sentence: "The failing tests are a commit of their own, with no
+    implementation in it."
 
-    Contract: "" when the commit touches no test file for the module.
+    Contract: "" when the commit touches no test file for `module`, or no module at all;
+    otherwise the line names each module the commit touches, sorted. The caller gives only
+    commits before the module's first.
     """
-    tests = sorted(path for path in commit.changes if is_test_for(path, module))
-    if not tests:
+    code = sorted(path for path in commit.changes if is_module(path))
+    if not code or not any(is_test_for(path, module) for path in commit.changes):
         return ""
-    return f"{commit.sha[:SHORT_HASH]}: touches {module} and its test file {', '.join(tests)}; the failing tests are a commit of their own"
+    return (
+        f"{commit.sha[:SHORT_HASH]}: a test commit of {module} also changes {', '.join(code)}; "
+        "the failing tests are a commit of their own, with no implementation in it"
+    )
 
 
 def git(arguments: list[str], cwd: Path) -> str:
@@ -161,6 +179,27 @@ def commits(base: str, head: str, cwd: Path) -> list[Commit]:
     return found
 
 
+def merge_problems(base: str, head: str, cwd: Path) -> list[str]:
+    """Return one line per parent a merge of base..head brings in that base does not hold.
+
+    Why: a merge of main is left out, as it carries main's changes; a merge of another open
+    branch would bring that branch's code in with no commit of the PR to judge it by.
+
+    Contract: each merge of `git rev-list --merges --parents base..head`, oldest first; each
+    parent after its first is held by base when `git rev-list base..<parent>` is empty. Raises
+    CalledProcessError when git fails.
+    """
+    found = []
+    for line in git(["rev-list", "--reverse", "--topo-order", "--merges", "--parents", f"{base}..{head}"], cwd).splitlines():
+        merge, _first, *others = line.split()
+        found += [
+            f"{merge[:SHORT_HASH]}: merges {parent[:SHORT_HASH]}, which {base} does not hold; merge only main into the branch"
+            for parent in others
+            if git(["rev-list", f"{base}..{parent}"], cwd).strip()
+        ]
+    return found
+
+
 def main(argv: list[str]) -> int:
     """Check the commit order between the two revisions in argv; return the exit code.
 
@@ -172,7 +211,7 @@ def main(argv: list[str]) -> int:
     if len(argv) != 2:
         print(USAGE, file=sys.stderr)
         return 2
-    found = problems(commits(argv[0], argv[1], Path.cwd()))
+    found = problems(commits(argv[0], argv[1], Path.cwd())) + merge_problems(argv[0], argv[1], Path.cwd())
     for line in found:
         print(line, file=sys.stderr)
     return 1 if found else 0
