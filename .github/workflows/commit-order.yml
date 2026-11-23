@@ -1,0 +1,48 @@
+# The commit-order check (issue #175; PROMOTION.md section 5.2, "Test written before
+# implementation"). Achia, 2026-11-20, "Yes, all four (Recommended)", of "2. Test-first check: a
+# GitHub robot checks that every PR changing code committed its failing test before the code";
+# 2026-11-23, "Yes, one workflow each (Recommended)". On every PR, main's
+# scripts/check_commit_order.py (#194) reads the PR's commits: base HEAD^1, the PR's head HEAD^2
+# of GitHub's merge, as its Known limits say.
+# Main is checked out at the root and the PR, with all its history, under pr/. The script runs
+# from main's copy (PYTHONPATH the root, `python -P`, so pr/ is not put on the import path) with
+# git working in pr/: the PR's files are read only as git data, and no module the PR plants can
+# run (the review of #195, finding 1). Nothing is installed: the script needs the standard
+# library only.
+# Known limits:
+# - GitHub runs the PR's own copy of this file on a pull request, so a PR with no .py file that
+#   edits it switches it off, every check green; only the review stands against it, until this
+#   file's pin (the next PR), which a PR can only change together with a .py file.
+# - Until the guard patch that names commit-order, the merge gate does not require this check
+#   (PENDING_CHECKS in tests/t1_unit/test_guard.py, #196).
+name: commit-order
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  commit-order:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          path: pr
+          # The check reads every commit of the PR, not the last one only.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          # build-plan.md Phase 0: Python 3.13; the laptop runs 3.13.5.
+          python-version: "3.13.5"
+      - working-directory: pr
+        env:
+          PYTHONPATH: ${{ github.workspace }}
+        run: python -P -m scripts.check_commit_order HEAD^1 HEAD^2
