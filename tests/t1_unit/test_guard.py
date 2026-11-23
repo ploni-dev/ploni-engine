@@ -67,14 +67,15 @@ merges(command): the `gh pr merge` commands in a shell command, as (number, repo
   A8m   a number with a letter (80x); `merge` before `pr`                 no number; no merge
 
 red(checks): why the checks of a PR's last commit are not green. "Every check" is one green
-run of each of REQUIRED_CHECKS (Achia, 2026-11-22, "Yes, name all seven (Recommended)", #180).
+run of each of REQUIRED_CHECKS (Achia, 2026-11-22, "Yes, name all seven (Recommended)", #180;
+fast-pin and commit-order added by 2026-11-23, "Yes, one workflow each (Recommended)", #173, #175).
   EC7   every check, and a second green fast-suite run    green
   EC8   every check and a green commit status       green
   EC9   a finished check with any conclusion but SUCCESS    red, named with its conclusion
   EC10  a check that has not finished               red, named with its status
   EC11  a commit status in any state but SUCCESS    red
   EC12  every check green but fast-suite, which is missing  red
-  EC34  every check but one of the seven            red, one reason that names the missing one
+  EC34  every check but one of the nine             red, one reason that names the missing one
   EC35  REQUIRED_CHECKS is every job of the workflows that run on each pull request: all jobs
         but full-suite, which starts on a label only; .yml and .yaml, a job line with a comment,
         any indentation under jobs:; a job with a name: of its own is red (the review of #187)
@@ -82,7 +83,7 @@ run of each of REQUIRED_CHECKS (Achia, 2026-11-22, "Yes, name all seven (Recomme
         before its name is in REQUIRED_CHECKS, by one job only; a pending name that is already
         required or full-suite, or has no issue number (an int over 0), is red; each case is
         tested on workflows made in a temporary folder
-  B4    no check at all, or no list                 red, one reason for each of the seven
+  B4    no check at all, or no list                 red, one reason for each of the nine
   A6    a required check only as a commit status, which can be set by hand    red
   A7    one of two fast-suite runs red              red
   A8    an entry with no known shape                red
@@ -391,7 +392,17 @@ def test_red_gives_one_reason_for_each_of_these(checks: list[dict[str, str]] | N
 
 
 def test_ec34_each_required_check_that_is_missing_is_named() -> None:
-    assert guard.REQUIRED_CHECKS == ("changed-paths", "fast-suite", "nightly", "pr-body", "pr-size", "ratchet", "waiver")
+    assert guard.REQUIRED_CHECKS == (
+        "changed-paths",
+        "commit-order",
+        "fast-pin",
+        "fast-suite",
+        "nightly",
+        "pr-body",
+        "pr-size",
+        "ratchet",
+        "waiver",
+    )
     for name in guard.REQUIRED_CHECKS:
         assert guard.red(every_check(name)) == [f"there is no {name} check on the last commit"]
 
@@ -447,7 +458,8 @@ def _check_names(text: str) -> dict[str, str]:
 # updates EC34's pin and takes the name off this list, in one patch. Achia, 2026-11-23, "A short
 # pending list (Recommended)". Each name added loosens EC35 and needs his decision on that check;
 # fast-pin, commit-order and reviewed-commit have it ("Yes, one workflow each (Recommended)").
-PENDING_CHECKS: dict[str, int] = {"fast-pin": 173, "commit-order": 175}
+# fast-pin (#173) and commit-order (#175) left it when the gate named them.
+PENDING_CHECKS: dict[str, int] = {}
 
 
 def _workflow_problems(folder: Path, required: tuple[str, ...], pending: dict[str, int]) -> list[str]:
