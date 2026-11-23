@@ -35,7 +35,9 @@ Known limits:
 - The check sees paths, not content: a test commit that changes a comment counts as the
   failing test, and nothing shows that the test failed.
 - A tail names a test file for every module that ends in it: test_atomic.py counts for any
-  atomic.py, and test___init__.py for every __init__.py.
+  atomic.py, and test___init__.py for every __init__.py. So it does less than the row, and it can
+  also refuse the code commit of one module as a test commit of the other (the review of #194,
+  pass 2, finding 9); no two modules share a tail today.
 - A merge of main is left out whole, also what it resolved by hand: a module written in the
   resolution passes with no test (this does less than the row).
 - A test file deleted counts as touched: a commit that only deletes X's test file, before X,

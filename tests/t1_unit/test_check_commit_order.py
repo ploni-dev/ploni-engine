@@ -16,7 +16,7 @@ Equivalence classes (problems):
                                                                       not a test commit before it)
   EC4  a test commit first, then a commit touching X and its test again    no line: a later commit
                                                                       may change both (the review
-                                                                      of #194, decision 1)
+                                                                      of #194, finding 1)
   EC5  X in two commits, its test file between them                   one line: the first counts
   EC6  a test file for another module only                            one line
   EC7  no module touched (docs, tests, a workflow, experiments/)      no line
