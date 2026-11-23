@@ -52,6 +52,9 @@ Adversarial:
   A8  "### Ponytail review" and "## Ponytail reviewer" headings         missing section
   A9  Hebrew after the hash, and an RTL mark before the label           the hash; missing line
        (the mark is not stripped, so the line does not start with the label)
+  A10 the label line names no hash in its place, and a later "Commit reviewed: `<hash>`" on
+       the same line                                                    not pasted: the hash
+       must follow the label at the line's start
 
 Not applicable: the document axes, and the Hebrew axes other than A9: the body is read for one
 line of fixed ASCII text.
@@ -242,3 +245,8 @@ def test_a9_hebrew_after_the_hash() -> None:
 
 def test_a9_an_rtl_mark_before_the_label() -> None:
     assert check.named(body(f"‏Commit reviewed: `{SHA}`")) == ("", MISSING_LINE)
+
+
+def test_a10_a_hash_later_on_the_line() -> None:
+    line = f"Commit reviewed: eb204fb, as the earlier Commit reviewed: `{SHA}` said."
+    assert check.named(body(line)) == ("", NOT_PASTED)

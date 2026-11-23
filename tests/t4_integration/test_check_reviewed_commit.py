@@ -18,7 +18,8 @@ Matrix:
   M7  a merge of another branch, cut from main and not in it, after the reviewed commit    exit 1,
       a line naming that branch's commit, the oldest after the reviewed one
   M8  the named commit is not in the PR: the base itself, a commit of another branch, a hash
-      the store does not hold, and the base and head the same          exit 1, one line
+      the store does not hold, a commit main made after the branch was cut, and the base and
+      head the same                                                    exit 1, one line
   M9  a merge of main, then an ordinary commit                         exit 1, a line naming
       the ordinary commit
   M10 main merged the wrong way: a commit on main's side merges the branch, and the branch is
@@ -226,7 +227,8 @@ def test_m8_the_named_commit_is_not_in_the_pr(repo: Path) -> None:
     elsewhere = commit(repo, "d.txt")
     git(repo, "checkout", "-q", "feat")
     unknown = "0123456789abcdef0123456789abcdef01234567"
-    for sha in (base, elsewhere, unknown):
+    newer = main_moves(repo)
+    for sha in (base, elsewhere, unknown, newer):
         done = run(repo, "main", "feat", body(sha))
         assert done.returncode == 1
         assert done.stderr.splitlines() == [outside(sha, "main", "feat")]
