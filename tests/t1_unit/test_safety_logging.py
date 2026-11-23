@@ -486,13 +486,13 @@ class Claims(metaclass=EqualsAll):
 
 
 class EqualLoudStr(LoudStr, metaclass=EqualsAll):
-    """A real string whose class claims to equal `str`, and which shows the text of a document when written."""
+    """A real string whose class claims to equal `str`; written, it shows the text of a document."""
 
     __slots__ = ()
 
 
 class EqualLoudInt(int, metaclass=EqualsAll):
-    """A real whole number whose class claims to equal `int`, and which shows the text of a document when written."""
+    """A real whole number whose class claims to equal `int`; written, it shows the text of a document."""
 
     __slots__ = ()
 
