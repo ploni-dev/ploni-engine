@@ -110,6 +110,12 @@ attempts the one started last (the review of PR #192).
                                                     kept, judged as now
   E4    an entry that is no mapping                   AttributeError
 
+_time(value): a creation or start time that newest may order as text.
+  EC49  a time as GitHub spells it                    itself
+  B9    GitHub's zero time of a run that has not started    None
+  A19   None, a number, "", another spelling (a blank, parts of a second, +00:00, no Z), a text
+        that holds a time    None
+
 _with_events(checks, runs): the trigger of each workflow job, from the runs of the commit.
   EC43  a job whose detailsUrl names a listed run      that run's event and created_at added,
                                                     nothing else changed, the given entry left
@@ -615,6 +621,28 @@ def test_a18_a_run_whose_creation_or_workflow_cannot_be_read_is_kept(old: dict[s
     new = timed_run("SUCCESS", LATE)
     assert guard.newest([old, new]) == [old, new]
     assert guard.red([*every_check("ratchet"), old, new]) == ["check ratchet is FAILURE"]
+
+
+def test_ec49_time_gives_back_a_time_as_github_spells_it() -> None:
+    assert guard._time(EARLY) == EARLY
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "0001-01-01T00:00:00Z",  # B9
+        None,  # A19
+        1,
+        "",
+        "2026-11-19 23:20:30",
+        "2026-11-19T23:20:30.5Z",
+        "2026-11-19T23:20:30+00:00",
+        "2026-11-19T23:20:30",
+        "at 2026-11-19T23:20:30Z",
+    ],
+)
+def test_time_gives_none_for_what_is_no_time_as_github_spells_it(value: object) -> None:
+    assert guard._time(value) is None
 
 
 def test_e4_newest_raises_attributeerror_for_an_entry_that_is_no_mapping() -> None:
