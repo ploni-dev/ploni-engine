@@ -4,8 +4,8 @@ Why: commit-order checks that a PR's tests come before its code (issue #175; Ach
 "Yes, all four (Recommended)"; 2026-11-23, "Yes, one workflow each (Recommended)"). A later
 workflow-only PR holds no .py file, so the changed-paths check lets an edit of commit-order.yml
 alone through that switches it off (`run: true`, the PR's own copy of the script run, Python run
-with pr/ on its import path, a shallow fetch, the edited trigger dropped); the fast suite runs
-this test on every PR, so such an edit goes red (the pattern of the other check workflows, #166,
+with pr/ on its import path, a shallow fetch, the edited trigger dropped); the PR's fast suite
+runs this test on every PR, so such an edit goes red (the pattern of the other check workflows, #166,
 #171, #186, #197).
 
 Equivalence class:
@@ -16,8 +16,12 @@ Equivalence class:
      main's script run with `python -P` from pr/ on HEAD^1 HEAD^2, PYTHONPATH the root. Any
      changed or added line is red; a comment is not.
 Hebrew and document axes: do not apply; the input is a workflow file.
-Known limits: a PR that edits commit-order.yml together with a non-.py file that keeps this test
-from running (a `--deselect` in pyproject.toml's pytest options, the Makefile's `check` target)
+Known limits: one PR with no .py file that edits fast.yml and fast-pin.yml together with
+commit-order.yml stops this test with them, every check green (the fast suite runs the PR's copy
+of fast.yml, guarded only by the PR's copy of fast-pin.yml; tests/t1_unit/test_fast_pin_workflow.py,
+Known limits); CI workflows are on the Level 3 list, so only the review stands against it (the
+review of #200, finding 1). A PR that edits commit-order.yml together with a non-.py file that
+keeps this test from running (a `--deselect` in pyproject.toml's pytest options, the Makefile's `check` target)
 passes every check; pyproject.toml and that make target are on the Level 3 list (PROMOTION.md
 section 4), so only the review and CLAUDE.md stand against it (as the pin of fast-pin.yml, the
 review of #197, finding 1).
