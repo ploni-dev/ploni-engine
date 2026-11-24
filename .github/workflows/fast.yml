@@ -1,5 +1,6 @@
 # The fast suite, on every push and every PR, to any base branch (PROCESS.md section 5.1).
 # The merge gate reads the check this job reports (PROMOTION.md section 11).
+# A probe line of the pull_request_target measurement (issue #173); never merged.
 name: fast
 
 on:
