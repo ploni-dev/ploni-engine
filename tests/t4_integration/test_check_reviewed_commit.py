@@ -50,6 +50,14 @@ Matrix:
   M24 a merge of main whose resolution changes only the mode of the branch's file (+x)
                                                                         exit 1, the diff line:
       the raw diff holds the modes, so a mode is part of the branch's own diff
+  M25 an empty commit after the reviewed one (the commit pushed once the review is pasted;
+      Achia, 2026-11-24, "Drop the newest-run gate (Recommended)"); then a second one and a
+      merge of main                                                     exit 0, nothing written
+  M26 an empty commit, then an ordinary commit                         exit 1, a line naming
+      the ordinary commit
+  M27 two ordinary commits that undo each other, the head's tree that of the reviewed commit
+                                                                        exit 1, the first of
+      them named: a commit is judged by its own change, not by where the branch ends
 
 The functions outside_problem(), later_problem() and diff_problem() are called on their own in
 M8, M2 and M4, as own_diff() is in M14.
@@ -411,3 +419,42 @@ def test_m24_the_resolution_changes_only_a_mode(repo: Path) -> None:
     done = run(repo, "main", "feat", body(sha))
     assert done.returncode == 1
     assert done.stderr.splitlines() == [differs("feat", sha)]
+
+
+def empty_commit(folder: Path) -> str:
+    """Make a commit that changes nothing, as the one pushed after a review is pasted; return its hash."""
+    git(folder, "commit", "-q", "--allow-empty", "-m", "the review is pasted")
+    return git(folder, "rev-parse", "HEAD")
+
+
+def test_m25_empty_commits_after(repo: Path) -> None:
+    sha = commit(repo, "b.txt")
+    empty_commit(repo)
+    done = run(repo, "main", "feat", body(sha))
+    assert (done.returncode, done.stdout, done.stderr) == (0, "", "")
+    assert check.later_problem(sha, "main", "feat", repo) == ""
+    empty_commit(repo)
+    main_moves(repo)
+    merge(repo, "main")
+    done = run(repo, "main", "feat", body(sha))
+    assert (done.returncode, done.stderr) == (0, "")
+
+
+def test_m26_an_empty_commit_then_an_ordinary_one(repo: Path) -> None:
+    sha = commit(repo, "b.txt")
+    empty_commit(repo)
+    after = commit(repo, "b.txt")
+    done = run(repo, "main", "feat", body(sha))
+    assert (done.returncode, done.stdout) == (1, "")
+    assert done.stderr.splitlines() == [later(after, sha, "main")]
+
+
+def test_m27_two_commits_that_undo_each_other(repo: Path) -> None:
+    sha = commit(repo, "b.txt")
+    first = commit(repo, "e.txt")
+    git(repo, "rm", "-q", "e.txt")
+    git(repo, "commit", "-q", "-m", "undo")
+    assert git(repo, "rev-parse", "HEAD^{tree}") == git(repo, "rev-parse", f"{sha}^{{tree}}")
+    done = run(repo, "main", "feat", body(sha))
+    assert (done.returncode, done.stdout) == (1, "")
+    assert done.stderr.splitlines() == [later(first, sha, "main")]
