@@ -1,6 +1,7 @@
 """Test matrix for ploni/__main__.py: the command line of Phase 0, with `selftest` and nine stubs.
 
-The command run as a program of its own is tests/t4_integration/test_cli.py.
+The command run as a program of its own is tests/t4_integration/test_cli.py, and EC18 here, for
+the fast suite.
 
 main. Equivalence classes:
   EC1  each of the nine stubs (scan, analyze, review, export, verify, restore, rehydrate,
@@ -16,10 +17,17 @@ main. Equivalence classes:
   EC18 the module run as a program with `selftest` (`python -m ploni selftest`, in a fresh
        interpreter)                  exit code 0; the last line is "offline OK"; nothing on the
                                      error stream
-  EC19 the default models folder     models/ at the top of the checkout
-EC16 to EC19 kill the mutants of ploni/__main__.py that survived this file alone on 2026-11-24
-(Cosmic Ray 8.9.0, issue #210): the folder, the help text, `is` for `==`, and the two lines that
-start the program, which before only tests/t4_integration/test_cli.py reached.
+  EC19 the default models folder     models/ at the top of the checkout (a development
+                                     checkout or an editable install; a built one comes with
+                                     Phase 13)
+  EC20 the file compiled with every warning made an error    no error: Python warns of `is`
+                                     with a literal only when it compiles, and a later run reads
+                                     the cached bytecode and says nothing
+EC16 to EC20 kill the mutants of ploni/__main__.py that survived this file alone on 2026-11-24
+(Cosmic Ray 8.9.0, issue #210): the folder, the help text, `is` for `==` in two places, and the
+two lines that start the program, which before only tests/t4_integration/test_cli.py reached.
+One mutant stays, judged equivalent: `__name__ <= "__main__"` on the line that starts the program,
+for the two names this file has ("__main__" when run, "ploni.__main__" when imported).
 
 inventory. Equivalence classes:
   EC4  models/<name>/<revision>/ with files    one line per revision: name, revision, number
@@ -52,6 +60,7 @@ import os
 import subprocess
 import sys
 import tomllib
+import warnings
 from pathlib import Path
 
 import pytest
@@ -103,12 +112,20 @@ def test_ec18_the_module_run_as_a_program() -> None:
     done = subprocess.run([sys.executable, "-m", "ploni", "selftest"], cwd=ROOT, capture_output=True, text=True, timeout=60, check=False)
     assert done.returncode == 0, done.stdout + done.stderr
     assert done.stdout.splitlines()[-1] == "offline OK"
-    # Nothing on the error stream: not a traceback, and not a warning Python gives when it compiles the file.
+    # Nothing on the error stream: not a message, not a warning given while it runs. A warning Python
+    # gives when it compiles the file shows here only when no bytecode is cached: EC20 holds that one.
     assert done.stderr == ""
 
 
 def test_ec19_the_default_models_folder() -> None:
     assert cli.MODELS == ROOT / "models"
+
+
+def test_ec20_the_file_compiles_with_no_warning() -> None:
+    source = Path(cli.__file__).read_text(encoding="utf-8")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        compile(source, cli.__file__, "exec")
 
 
 def test_ec4_ec5_inventory(tmp_path: Path) -> None:
