@@ -85,8 +85,9 @@ def label_lines(body: str) -> list[str] | None:
 def named(body: str) -> tuple[str, str]:
     """Return the commit the body's Ponytail review names, as (hash, "") or ("", the refusal).
 
-    Why: Achia's strict reading of 2026-11-22: red until a review naming the last commit is
-    pasted, so a body that names no commit, or more than one, is refused.
+    Why: the check is strict, by Achia's choice of 2026-11-24 as the module's Why gives it:
+    red until a review naming the commit is pasted, so a body that names no commit, or more
+    than one, is refused.
 
     Contract: the hash is 40 lower-case hex characters. The refusal is one line: more than one
     review section (counted past HTML comments; the review of #201, pass 1, finding 1), the
@@ -130,6 +131,9 @@ def changes_nothing(commit: str, parents: list[str], cwd: Path) -> bool:
     Contract: `git rev-parse <revision>^{tree}` of the commit and of its one parent, compared
     as text. False for a commit with no parent or with more than one. Raises
     CalledProcessError when git fails.
+
+    Known limits: `parents` is the caller's list, as `git rev-list --parents` printed it; it
+    is not checked against the commit, so a wrong list gives a wrong answer.
     """
     return len(parents) == 1 and git(["rev-parse", f"{commit}^{{tree}}"], cwd) == git(["rev-parse", f"{parents[0]}^{{tree}}"], cwd)
 
