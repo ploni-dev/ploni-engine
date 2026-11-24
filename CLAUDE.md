@@ -2,21 +2,31 @@
 
 ## Hard constraints
 - No networking imports anywhere under ploni/. Downloads live in scripts/ only.
-  Checked: tests/t8_privacy/test_imports.py; ruff's banned imports in pyproject.toml.
+  Checked (the imports): tests/t8_privacy/test_imports.py; ruff's banned imports in
+  pyproject.toml. Where a download lives is not checked.
 - eval/ may use the network. ploni/ must never import from eval/.
   Checked: tests/t8_privacy/test_imports.py.
 - No document text in logs or temp files. Use ploni/safety/ helpers.
   Checked in part: tests/t8_privacy/test_log_setup.py, test_log_canary.py, test_temp_canary.py.
 - Pin every dependency version and every model revision by commit hash.
-  Checked: tests/t0_contract/test_requirements.py, tests/t0_contract/test_third_party.py.
+  Checked in part: tests/t0_contract/test_requirements.py (the requirements files),
+  tests/t0_contract/test_third_party.py (the model folders on this machine),
+  tests/t1_unit/test_download_models.py (the pins of scripts/download_models.py).
 - Every requirements file pins with `==` and carries hashes; installs use `--require-hashes`.
-  Checked: tests/t0_contract/test_requirements.py (the files); the pin tests of the workflows
-  that install (their install lines).
-- ruff and mypy give no warning: `python scripts/check.py` is green before every push.
-  Checked: the fast suite; .githooks/pre-push.
+  Checked: tests/t0_contract/test_requirements.py (the files); the pin tests of the four
+  workflows that install, tests/t1_unit/test_fast_workflow.py, test_fast_pin_workflow.py,
+  test_full_workflow.py and test_nightly_workflow.py (their install lines; an install by
+  hand is not checked).
+- ruff and mypy give no warning.
+  Checked: scripts/check.py, run by .github/workflows/fast.yml and by .githooks/pre-push.
 - Never use PyMuPDF. It is AGPL.
+  Checked: ruff's banned imports in pyproject.toml.
 - GLiNER v0 and v1 checkpoints are CC-BY-NC and unusable here. Only v2.1 and PII variants.
+  Checked in part: tests/t1_unit/test_download_models.py (the models of
+  scripts/download_models.py).
 - No real client documents in the repo, in any form, including fixtures.
+  Checked in part: tests/t0_contract/test_fixtures_manifest.py (every file under
+  tests/fixtures/ has a row with its provenance).
 
 ## Branching
 - One feature, one branch, one concern. feat/<phase>-<slug>, fix/, test/, docs/, chore/.
@@ -36,7 +46,8 @@
 - Body over 40 lines or complexity over 8 needs a justification in the PR body or a split.
 - Over 50 statements or complexity over 10 is split. No justification lifts that.
   Vendored third-party code is exempt.
-  Checked: ruff, `max-statements = 50` and `max-complexity = 10` in pyproject.toml.
+  Checked: ruff, `max-statements = 50` and `max-complexity = 10` in pyproject.toml. ruff
+  honours a `# noqa` of C901 or PLR0915 on the line: that one is the reviewer's to refuse.
 
 ## Docstrings
 - Every module, class and public function has one.
@@ -83,6 +94,7 @@
 - At `ultra` the push-back is a question to Achia before building. It drops nothing by
   itself, and never a test, a gate or a plan deliverable.
 - Invoke it again on the diff before every PR. Paste the output into the PR body.
+  Checked, that the section is there and filled in: scripts/check_pr_body.py.
 - That review is run by a session or subagent that did not write the code, and its
   output names the commit it reviewed.
 - Ponytail runs before merge. No branch merges until the Ponytail review has run on
@@ -102,11 +114,13 @@
   `--auto`. Never around the merge gate: no other merge command, no API call, no local
   merge pushed to main, no check status set by hand, no edit of the gate's own files
   to get a merge through.
+  Checked in part, for Claude's own tool calls: scripts/guard.py (a push that names main
+  or no branch, `--no-verify`, an edit of the hook's files or of docs/WAIVERS.md).
 - Never past a red, pending or skipped check. Once the fast CI workflow is on main,
   a missing check counts as red too. The one merge command that may be run on such
   a PR is the gate's own test, on a PR that targets a scratch branch
   (`PROMOTION.md` sections 10 and 11).
-  Checked: scripts/guard.py, the merge gate.
+  Checked for Claude's own `gh pr merge`: scripts/guard.py, the merge gate.
 - Never ask Achia whether to merge (Achia, 2026-11-15; his words are in
   `PROMOTION.md` section 11). Merge a PR when three things hold, and only then. A PR
   that cannot pass does not merge: stop and report.
@@ -141,6 +155,9 @@
   findings note; or rejects a Ponytail finding. In doubt, it does. Say in the PR
   whether it does, and why. Granting a waiver is Achia's own act: he fills the
   `## Decision` of the request and edits `docs/WAIVERS.md`. Claude does neither.
+  Checked in part: scripts/check_ratchet.py (a drop of a test or assertion count),
+  tests/t0_contract/test_skip_markers.py (a skip names an issue), scripts/check_waiver.py
+  (a waiver a PR cites), scripts/guard.py (Claude's edit of docs/WAIVERS.md).
 - Such a PR merges only after Achia decided what it changes. Ask him that, in plain
   words, not whether to merge. No answer, no merge. Put the question, his answer and
   the date in the PR. What he already decided needs no new question: quote his words,
@@ -162,7 +179,9 @@
   2026-11-20, "Same PR, no ask each time"). A raise for a bare `# noqa`, a file-wide
   `ruff: noqa` or `flake8: noqa`, or a `type: ignore` line still needs his decision: he was
   asked about a noqa that skips one rule on one line only.
-  Checked: scripts/check_changed_paths.py; the ceiling by scripts/check_ratchet.py.
+  Checked in part: scripts/check_changed_paths.py (eval/baselines.json and the workflows
+  only); the ceiling's count by scripts/check_ratchet.py, which does not tell the kinds
+  of suppression apart.
 - Speed is measured, for every stage, and recorded at every phase. For now it is not a
   gate: a slow time blocks no merge and stops no work (Achia, 2026-11-13 and
   2026-11-15). This covers the run time of the pipeline only: not memory, not the
