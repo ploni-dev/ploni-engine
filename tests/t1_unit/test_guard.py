@@ -78,6 +78,10 @@ run of each of REQUIRED_CHECKS (Achia, 2026-11-22, "Yes, name all seven (Recomme
   EC35  REQUIRED_CHECKS is every job of the workflows that run on each pull request: all jobs
         but full-suite, which starts on a label only; .yml and .yaml, a job line with a comment,
         any indentation under jobs:; a job with a name: of its own is red (the review of #187)
+        a job named on PENDING_CHECKS (a new check on its way, with its issue) may run on PRs
+        before its name is in REQUIRED_CHECKS, by one job only; a pending name that is already
+        required or full-suite, or has no issue number (an int over 0), is red; each case is
+        tested on workflows made in a temporary folder
   B4    no check at all, or no list                 red, one reason for each of the seven
   A6    a required check only as a commit status, which can be set by hand    red
   A7    one of two fast-suite runs red              red
@@ -752,14 +756,87 @@ def _check_names(text: str) -> dict[str, str]:
     return names
 
 
-def test_ec35_the_required_checks_are_the_jobs_that_run_on_every_pull_request() -> None:
-    # full-suite starts on a label only, so it is on no PR by default. GitHub runs .yml and .yaml.
-    # A list, not a set: two jobs under one check name would let one stand in for the other.
+# New checks on their way, each with its issue: a job named here may run on PRs before its name is
+# in REQUIRED_CHECKS, as its workflow and the guard patch that names it come in two PRs (the
+# changed-paths check refuses a workflow with a .py file). The guard patch that adds a name also
+# updates EC34's pin and takes the name off this list, in one patch. Achia, 2026-11-23, "A short
+# pending list (Recommended)". Each name added loosens EC35 and needs his decision on that check;
+# fast-pin, commit-order and reviewed-commit have it ("Yes, one workflow each (Recommended)").
+PENDING_CHECKS: dict[str, int] = {"fast-pin": 173, "commit-order": 175}
+
+
+def _workflow_problems(folder: Path, required: tuple[str, ...], pending: dict[str, int]) -> list[str]:
+    """Return why the check names of the workflows in `folder` do not match the gate's list.
+
+    Why: EC35's rule in one place, so that its cases are tested on workflows made for them.
+    Contract: folder, a folder of workflow files (.yml and .yaml); required, the gate's
+    REQUIRED_CHECKS; pending, PENDING_CHECKS. Returns one line per problem, empty when every
+    job's check name is required, full-suite, or pending and run by one job only.
+    Known limits: those of `_check_names`.
+    """
     names: list[str] = []
-    folder = REPOSITORY / ".github" / "workflows"
     for workflow in sorted([*folder.glob("*.yml"), *folder.glob("*.yaml")]):
         names += _check_names(workflow.read_text(encoding="utf-8")).values()
-    assert sorted(names) == sorted([*guard.REQUIRED_CHECKS, "full-suite"])
+    listed = [name for name in names if name in pending]
+    problems = []
+    # A list, not a set: two jobs under one check name would let one stand in for the other.
+    if sorted(names) != sorted([*required, "full-suite", *listed]):
+        problems.append(f"the check names {sorted(names)} are not the required, full-suite and pending ones")
+    if len(listed) != len(set(listed)):
+        problems.append("two jobs under one pending check name")
+    return problems
+
+
+def test_ec35_the_required_checks_are_the_jobs_that_run_on_every_pull_request() -> None:
+    # full-suite starts on a label only, so it is on no PR by default.
+    assert _workflow_problems(REPOSITORY / ".github" / "workflows", guard.REQUIRED_CHECKS, PENDING_CHECKS) == []
+
+
+@pytest.mark.parametrize(
+    ("workflows", "pending", "fine"),
+    [
+        ({"a.yml": "jobs:\n  a:\n    runs-on: x\n"}, {}, True),
+        ({"a.yml": "jobs:\n  a:\n    runs-on: x\n", "n.yml": "jobs:\n  new:\n    runs-on: x\n"}, {}, False),
+        ({"a.yml": "jobs:\n  a:\n    runs-on: x\n", "n.yml": "jobs:\n  new:\n    runs-on: x\n"}, {"new": 175}, True),
+        ({"a.yml": "jobs:\n  a:\n    runs-on: x\n", "n.yml": "jobs:\n  new:\n    runs-on: x\n  again:\n    name: new\n"}, {"new": 175}, False),
+        ({"a.yml": "jobs:\n  a:\n    runs-on: x\n", "n.yml": "jobs:\n  lint:\n    runs-on: x\n"}, {"new": 175}, False),
+        ({"a.yml": "jobs:\n  a:\n    runs-on: x\n"}, {"new": 175}, True),
+        ({"a.yaml": "jobs:\n  a:\n    runs-on: x\n"}, {}, True),
+        ({}, {}, False),
+        ({"a.yml": "jobs:\n  a:\n    runs-on: x\n", "b.yml": "jobs:\n  b:\n    name: a\n"}, {}, False),
+    ],
+    ids=["required-only", "new-unlisted", "new-listed", "two-of-a-pending-name", "other-new-unlisted", "listed-no-workflow-yet", "yaml", "required-missing", "two-of-a-required-name"],
+)
+def test_ec35_workflow_problems_in_each_case(tmp_path: Path, workflows: dict[str, str], pending: dict[str, int], fine: bool) -> None:
+    for name, text in workflows.items():
+        (tmp_path / name).write_text(text, encoding="utf-8")
+    (tmp_path / "full.yml").write_text("jobs:\n  full-suite:\n    runs-on: x\n", encoding="utf-8")
+    assert (_workflow_problems(tmp_path, ("a",), pending) == []) is fine
+
+
+def _pending_problems(pending: dict[str, int], required: tuple[str, ...]) -> list[str]:
+    """Return why PENDING_CHECKS holds a name it may not.
+
+    Why: a name on the list is new, so it may not be one the gate requires or full-suite, and it
+    names its issue. Contract: pending, PENDING_CHECKS; required, REQUIRED_CHECKS. Returns one
+    line per problem, empty when the list is fine.
+    """
+    problems = [f"{name} is already a check of the gate" for name in pending if name in {*required, "full-suite"}]
+    problems += [f"{name} names no issue" for name, issue in pending.items() if type(issue) is not int or issue <= 0]
+    return problems
+
+
+def test_ec35_the_pending_list_holds_new_checks_only() -> None:
+    assert _pending_problems(PENDING_CHECKS, guard.REQUIRED_CHECKS) == []
+
+
+@pytest.mark.parametrize(
+    ("pending", "count"),
+    [({}, 0), ({"new": 175}, 0), ({"a": 175}, 1), ({"full-suite": 175}, 1), ({"new": 0}, 1), ({"new": True}, 1), ({"new": "175"}, 1), ({"a": 0}, 2)],
+    ids=["empty", "new", "required", "full-suite", "issue-0", "issue-true", "issue-text", "both"],
+)
+def test_ec35_pending_problems_in_each_case(pending: dict[str, int], count: int) -> None:
+    assert len(_pending_problems(pending, ("a",))) == count
 
 
 @pytest.mark.parametrize(
