@@ -12,7 +12,7 @@ refuses it, and stderr gives one line for each reason. Refused are:
   - `gh pr merge`, unless it names the PR by number and one repository with -R, every
     check on that PR's last commit has finished as SUCCESS, and a workflow job of each
     name in REQUIRED_CHECKS is among them; of a workflow job run more than once, only
-    the newest run for each trigger counts (`newest`);
+    the newest run of its workflow for each trigger counts (`newest`);
   - `--no-verify` on any command, and `git commit -n`;
   - `git push` that names main, names no branch, or pushes every branch;
   - an edit of one of the PROTECTED files.
@@ -80,7 +80,8 @@ GH_CALL_SECONDS = GH_TIMEOUT_SECONDS / 2
 RUNS_PER_PAGE = 100
 # Where the detailsUrl of a workflow job names its run: .../actions/runs/<run id>/job/<job id>.
 RUN_OF_JOB = re.compile(r"/actions/runs/(\d+)/job/\d+")
-# A start time as GitHub spells it in the rollup; in this spelling text order is time order.
+# A time as GitHub spells it in the rollup and in its list of runs; in this spelling text
+# order is time order.
 START = re.compile(r"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\dZ")
 # The start time GitHub gives a run that has not started.
 NOT_STARTED = "0001-01-01T00:00:00Z"
@@ -275,32 +276,45 @@ def _state(check: Check) -> tuple[object, object]:
     return check.get("context"), check.get("state") or "UNKNOWN"
 
 
-def _contest(check: Check) -> tuple[tuple[str, str], str] | None:
-    """Return the (name, trigger) under which a workflow job competes, with its start time.
+def _time(value: object) -> str | None:
+    """Return value when it is a time that GitHub gave, spelled as START; else None.
 
-    Why: `newest` compares only runs whose name, trigger and start it can read; any other
-    entry counts as it stands, so that what cannot be read can only refuse a merge.
+    Why: `_contest` orders runs by their times as text, which is right for START only.
+
+    Contract:
+        Args: value, the creation time of a run or the start time of a job, as given.
+        Returns: value, when it is text spelled as START and is not NOT_STARTED; else None.
+        Raises: nothing.
+
+    Known limits: a time in any other spelling, also a correct one with a time zone or
+    with parts of a second, is not read.
+    """
+    return value if isinstance(value, str) and value != NOT_STARTED and START.fullmatch(value) else None
+
+
+def _contest(check: Check) -> tuple[tuple[str, ...], tuple[str, ...]] | None:
+    """Return the group in which a workflow job competes, with its place in time.
+
+    Why: `newest` compares only runs whose workflow, name, trigger and times it can read;
+    any other entry counts as it stands, so that what cannot be read can only refuse a
+    merge. The run created last is the newest: pr-body, ratchet and waiver judge the PR
+    as it was when their event came, and a job of an older event may start later (the
+    review of PR #192). Of the attempts of one run, the one started last is the newest.
 
     Contract:
         Args: check, one entry of the rollup, as `_with_events` gives it back.
-        Returns: ((name, event), startedAt) for a CheckRun whose name and event are text
-            and whose startedAt is spelled as START and is not NOT_STARTED; else None.
+        Returns: ((workflowName, name, event), (created_at, startedAt)) for a CheckRun
+            whose workflowName, name and event are text and whose two times `_time`
+            reads; else None.
         Raises: AttributeError when check is not a mapping.
 
-    Known limits: a start time in any other spelling, also a correct one with a time
-    zone or with parts of a second, is not read.
+    Known limits: a job is known by the name of its workflow, not by the workflow file.
     """
-    name, event, started = check.get("name"), check.get("event"), check.get("startedAt")
-    if (
-        check.get("__typename") == "CheckRun"
-        and isinstance(name, str)
-        and isinstance(event, str)
-        and isinstance(started, str)
-        and started != NOT_STARTED
-        and START.fullmatch(started)
-    ):
-        return (name, event), started
-    return None
+    group = (check.get("workflowName"), check.get("name"), check.get("event"))
+    times = (_time(check.get("created_at")), _time(check.get("startedAt")))
+    if check.get("__typename") != "CheckRun" or None in times or not all(isinstance(part, str) for part in group):
+        return None
+    return tuple(map(str, group)), tuple(map(str, times))
 
 
 def newest(checks: list[Check]) -> list[Check]:
@@ -313,23 +327,24 @@ def newest(checks: list[Check]) -> list[Check]:
 
     Contract:
         Args: checks, the rollup as `rollup` gives it: a workflow job whose run was found
-            carries the trigger of that run as "event".
-        Returns: the entries of checks, in their order, less each workflow job that a run
-            started later with the same name and trigger replaces. Every entry that
-            `_contest` cannot read is kept: a commit status, a job with no trigger, no
-            name or no start time that can be read, and a run that has not started.
+            carries the trigger of that run as "event" and its creation time as "created_at".
+        Returns: the entries of checks, in their order, less each workflow job that
+            another of the same workflow, name and trigger replaces: one of a run created
+            later, or of the same run's creation time and started later (`_contest`).
+            Every entry that `_contest` cannot read is kept: a commit status, a job with
+            no workflow, name, trigger, creation time or start time that can be read, and
+            a run that has not started.
         Raises: AttributeError when an entry is not a mapping.
 
-    Known limits: start times are compared to the second, as GitHub gives them; runs that
-    started in the same second all count. A job is known by its name, not by the workflow
-    file it comes from. A run that waits to start counts, and so refuses, even when a
-    newer run of the same check has finished.
+    Known limits: times are compared to the second, as GitHub gives them; runs created
+    and started in the same seconds all count. A run that waits to start counts, and so
+    refuses, even when a newer run of the same check has finished.
     """
     contests = [(check, _contest(check)) for check in checks]
-    latest: dict[tuple[str, str], str] = {}
+    latest: dict[tuple[str, ...], tuple[str, ...]] = {}
     for _, contest in contests:
         if contest:
-            latest[contest[0]] = max(latest.get(contest[0], ""), contest[1])
+            latest[contest[0]] = max(latest.get(contest[0], ()), contest[1])
     return [check for check, contest in contests if contest is None or latest[contest[0]] == contest[1]]
 
 
@@ -362,28 +377,29 @@ def red(checks: list[Check] | None) -> list[str]:
 
 
 def _with_events(checks: list[Check], runs: list[Check]) -> list[Check]:
-    """Return the checks with the trigger of its run added to each workflow job, as "event".
+    """Return the checks, each workflow job with the facts of its run that `newest` reads.
 
-    Why: the rollup does not say what started a job, and `newest` compares the runs of one
-    trigger only. GitHub's list of the runs of the commit does, and the detailsUrl of a
-    job names its run.
+    Why: the rollup does not say what started a job, nor when its run was created, and
+    `newest` compares the runs of one trigger by their creation. GitHub's list of the
+    runs of the commit says both, and the detailsUrl of a job names its run.
 
     Contract:
         Args: checks, the `statusCheckRollup` list of `gh pr view`; runs, the
-            `workflow_runs` list of GitHub's runs of the same commit, each with an "id"
-            and an "event".
-        Returns: the entries of checks, in their order: a copy with "event" added for
-            each entry whose detailsUrl names a run of runs as RUN_OF_JOB reads it, the
-            entry itself for every other. No given entry is changed.
-        Raises: KeyError when a run has no id or no event; TypeError when a run is not a
-            mapping; AttributeError when a check is not a mapping.
+            `workflow_runs` list of GitHub's runs of the same commit, each with an "id",
+            an "event" and a "created_at".
+        Returns: the entries of checks, in their order: a copy with that run's "event"
+            and "created_at" added for each entry whose detailsUrl names a run of runs as
+            RUN_OF_JOB reads it, the entry itself for every other. No given entry is
+            changed.
+        Raises: KeyError when a run has no id, no event or no created_at; TypeError when
+            a run is not a mapping; AttributeError when a check is not a mapping.
 
-    Known limits: a job of a run that runs does not hold gets no event, and `newest` then
-    keeps it as it stands. So does a detailsUrl in another spelling than GitHub's of today.
+    Known limits: a job whose run is not in `runs` gets no event, and `newest` then keeps
+    it as it stands. So does a detailsUrl in another spelling than GitHub's of today.
     """
-    events = {str(run["id"]): run["event"] for run in runs}
+    facts = {str(run["id"]): {"event": run["event"], "created_at": run["created_at"]} for run in runs}
     found = [(check, RUN_OF_JOB.search(str(check.get("detailsUrl")))) for check in checks]
-    return [{**check, "event": events[match[1]]} if match and match[1] in events else check for check, match in found]
+    return [{**check, **facts[match[1]]} if match and match[1] in facts else check for check, match in found]
 
 
 def _gh(words: list[str], timeout: float) -> Any:
@@ -414,7 +430,7 @@ def _gh(words: list[str], timeout: float) -> Any:
 
 
 def rollup(number: str, repository: str) -> list[Check]:
-    """Ask GitHub for the checks on the last commit of a PR, and for the trigger of each job.
+    """Ask GitHub for the checks on a PR's last commit, each workflow job with the trigger of its run.
 
     Why: the only act of the gate. It is apart from `red`, which decides, so that the
     decision is tested without GitHub. The checks do not say what started a job, so the
@@ -423,12 +439,13 @@ def rollup(number: str, repository: str) -> list[Check]:
     Contract:
         Args: number, the PR number in digits; repository, as owner/name.
         Returns: the `statusCheckRollup` list of `gh pr view`, as `_with_events` gives it
-            back with the `workflow_runs` that GitHub lists for the PR's last commit.
+            back with the `workflow_runs` that GitHub lists for the PR's last commit: each
+            job of a listed run with its "event" and "created_at".
         Raises: OSError when gh is not installed or cannot start;
             subprocess.CalledProcessError when gh ends with an error;
             subprocess.TimeoutExpired when a call takes over GH_CALL_SECONDS; ValueError
             when gh printed no JSON; KeyError or TypeError when the JSON has no rollup,
-            no last commit or no runs, or a run has no id or no event.
+            no last commit or no runs, or a run has no id, event or created_at.
 
     Known limits: it uses the first `gh` on PATH and the login that gh has. The two
     calls run one after the other with half of GH_TIMEOUT_SECONDS each, so a first call
