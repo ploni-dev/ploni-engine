@@ -24,6 +24,9 @@ name: nightly
 
 on:
   pull_request:
+    # edited: a PR whose base branch is changed is judged again, in its merge into the new base.
+    # GitHub also sends it when the title or the body is edited (issue #199; Achia, 2026-11-24).
+    types: [opened, edited, synchronize, reopened]
 
 permissions:
   contents: read
