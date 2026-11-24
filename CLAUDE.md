@@ -2,9 +2,18 @@
 
 ## Hard constraints
 - No networking imports anywhere under ploni/. Downloads live in scripts/ only.
+  Checked: tests/t8_privacy/test_imports.py; ruff's banned imports in pyproject.toml.
 - eval/ may use the network. ploni/ must never import from eval/.
+  Checked: tests/t8_privacy/test_imports.py.
 - No document text in logs or temp files. Use ploni/safety/ helpers.
+  Checked in part: tests/t8_privacy/test_log_setup.py, test_log_canary.py, test_temp_canary.py.
 - Pin every dependency version and every model revision by commit hash.
+  Checked: tests/t0_contract/test_requirements.py, tests/t0_contract/test_third_party.py.
+- Every requirements file pins with `==` and carries hashes; installs use `--require-hashes`.
+  Checked: tests/t0_contract/test_requirements.py (the files); the pin tests of the workflows
+  that install (their install lines).
+- ruff and mypy give no warning: `python scripts/check.py` is green before every push.
+  Checked: the fast suite; .githooks/pre-push.
 - Never use PyMuPDF. It is AGPL.
 - GLiNER v0 and v1 checkpoints are CC-BY-NC and unusable here. Only v2.1 and PII variants.
 - No real client documents in the repo, in any form, including fixtures.
@@ -27,9 +36,12 @@
 - Body over 40 lines or complexity over 8 needs a justification in the PR body or a split.
 - Over 50 statements or complexity over 10 is split. No justification lifts that.
   Vendored third-party code is exempt.
+  Checked: ruff, `max-statements = 50` and `max-complexity = 10` in pyproject.toml.
 
 ## Docstrings
 - Every module, class and public function has one.
+  Checked for ploni/ and scripts/ (`Why:` on each, `Contract:` on public functions):
+  tests/t0_contract/test_docstrings.py.
 - It answers: What (one line, no "and"), Why it exists, Contract (args, returns,
   raises, units and coordinate systems), Known limits.
 - A docstring that restates the function name is a blocking review comment.
@@ -53,6 +65,7 @@
 ## Tests
 - Write the failing test first, in a commit of its own before the implementation. Its
   message carries the failing output.
+  Checked for ploni/, eval/ and scripts/, the order only: scripts/check_commit_order.py.
 - Before a PR that changes code under ploni/, run mutation testing on the changed
   modules. Paste the surviving mutants into the PR body.
 - Every public function and every private function with real logic gets its own test.
@@ -93,6 +106,7 @@
   a missing check counts as red too. The one merge command that may be run on such
   a PR is the gate's own test, on a PR that targets a scratch branch
   (`PROMOTION.md` sections 10 and 11).
+  Checked: scripts/guard.py, the merge gate.
 - Never ask Achia whether to merge (Achia, 2026-11-15; his words are in
   `PROMOTION.md` section 11). Merge a PR when three things hold, and only then. A PR
   that cannot pass does not merge: stop and report.
@@ -148,6 +162,7 @@
   2026-11-20, "Same PR, no ask each time"). A raise for a bare `# noqa`, a file-wide
   `ruff: noqa` or `flake8: noqa`, or a `type: ignore` line still needs his decision: he was
   asked about a noqa that skips one rule on one line only.
+  Checked: scripts/check_changed_paths.py; the ceiling by scripts/check_ratchet.py.
 - Speed is measured, for every stage, and recorded at every phase. For now it is not a
   gate: a slow time blocks no merge and stops no work (Achia, 2026-11-13 and
   2026-11-15). This covers the run time of the pipeline only: not memory, not the
