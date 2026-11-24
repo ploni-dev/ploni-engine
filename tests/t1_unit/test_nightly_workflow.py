@@ -12,9 +12,7 @@ Equivalence class:
      character outside ASCII refused) equal EXPECTED, the 31 lines of #184: the trigger on every
      pull request, the two permissions, main checked out into main-copy and the script run from
      there, the step id and the two conditions on its output, the hashed install and `pytest
-     tests` at full size. Any changed or added line is red; a comment is not. Until the third
-     step of issue #199 the lines may also equal NEXT: EXPECTED with the one line that runs the
-     workflow again on an edit of the PR.
+     tests` at full size. Any changed or added line is red; a comment is not.
 Hebrew and document axes: do not apply; the input is a workflow file.
 Known limits: a PR that edits this test (or tests/workflow_lines.py) together with the workflow
 is refused by changed-paths, which refuses a workflow with any .py file. A PR that edits the
@@ -64,12 +62,7 @@ EXPECTED = [
     "        env:",
     '          PLONI_FULL_SUITE: "1"',
 ]
-# Step 1 of 3 of issue #199 (Achia, 2026-11-24, "Three small steps (Recommended)" and "Yes, fix
-# both (Recommended)"): the next PR adds this one line under the trigger, after the first three
-# lines (name, on, pull_request). Until the third PR drops the old shape, the pin accepts either
-# exact shape and no other.
-NEXT = [*EXPECTED[:3], "    types: [opened, edited, synchronize, reopened]", *EXPECTED[3:]]
 
 
 def test_f1_the_workflow() -> None:
-    assert code_lines(WORKFLOW) in (EXPECTED, NEXT)
+    assert code_lines(WORKFLOW) == EXPECTED
