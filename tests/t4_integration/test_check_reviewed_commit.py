@@ -59,13 +59,18 @@ Matrix:
                                                                         exit 1, the first of
       them named: a commit is judged by its own change, not by where the branch ends
   M28 changes_nothing() on its own: an empty commit with its one parent    True; an ordinary
-      commit, a merge of main with its two parents, a commit given no parent    False
+      commit, a merge of main with its two parents, a commit of two parents with the tree of
+      its first, a commit given no parent                               False
+  M29 an empty commit made beside the branch, on the reviewed commit, and merged in: the merge
+      has two parents and the reviewed commit's tree                    exit 1, the merge named:
+      only a commit of one parent is empty (the review of this change, pass 1, finding 1)
 
 The functions outside_problem(), later_problem() and diff_problem() are called on their own in
 M8, M2 and M4, as own_diff() is in M14 and changes_nothing() in M28.
 
-Not in the fast suite: PROCESS.md section 5.1 puts t4 in the full suite. Until the full
-workflow exists it is run by hand: python -m pytest tests/t4_integration
+Not in the fast suite: PROCESS.md section 5.1 puts t4 in the full suite, which
+.github/workflows/full.yml runs nightly on main and on a PR that gets the label run-full or
+phase-close. By hand: python -m pytest tests/t4_integration
 """
 
 import os
@@ -451,6 +456,20 @@ def test_m28_changes_nothing_on_its_own(repo: Path) -> None:
     assert check.changes_nothing(sha, [git(repo, "rev-parse", "main~1")], repo) is False
     assert check.changes_nothing(merged, [empty, git(repo, "rev-parse", "main")], repo) is False
     assert check.changes_nothing(empty, [], repo) is False
+    same_tree = git(repo, "commit-tree", f"{sha}^{{tree}}", "-p", sha, "-p", empty, "-m", "two parents, the tree of the first")
+    assert check.changes_nothing(same_tree, [sha, empty], repo) is False
+
+
+def test_m29_an_empty_commit_beside_the_branch_merged_in(repo: Path) -> None:
+    sha = commit(repo, "b.txt")
+    git(repo, "checkout", "-q", "-b", "side")
+    empty_commit(repo)
+    git(repo, "checkout", "-q", "feat")
+    merged = merge(repo, "side")
+    assert git(repo, "rev-parse", "HEAD^{tree}") == git(repo, "rev-parse", f"{sha}^{{tree}}")
+    done = run(repo, "main", "feat", body(sha))
+    assert (done.returncode, done.stdout) == (1, "")
+    assert done.stderr.splitlines() == [later(merged, sha, "main")]
 
 
 def test_m26_an_empty_commit_then_an_ordinary_one(repo: Path) -> None:
