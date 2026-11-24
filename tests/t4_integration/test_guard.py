@@ -47,7 +47,8 @@ RED = {"__typename": "CheckRun", "name": "lint", "status": "COMPLETED", "conclus
 # One green run of each check the gate asks for (scripts/guard.py, REQUIRED_CHECKS; issue #180),
 # written out here so that the program is tested against the list, not against itself.
 EVERY = [
-    {**GREEN, "name": name} for name in ("changed-paths", "fast-suite", "nightly", "pr-body", "pr-size", "ratchet", "waiver")
+    {**GREEN, "name": name}
+    for name in ("changed-paths", "commit-order", "fast-pin", "fast-suite", "nightly", "pr-body", "pr-size", "ratchet", "waiver")
 ]
 
 
