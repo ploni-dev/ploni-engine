@@ -10,6 +10,16 @@ main. Equivalence classes:
   EC3  selftest                      what `selftest` returns
   EC15 no argument list given (the installed `ploni` command calls main so)    the arguments
        of the process, without the program name
+  EC16 `--help`                      exit code 0; the output holds the first line of the module's
+                                     docstring
+  EC17 the command given as a text equal to "selftest" that is another object    selftest runs
+  EC18 the module run as a program with `selftest` (`python -m ploni selftest`, in a fresh
+       interpreter)                  exit code 0; the last line is "offline OK"; nothing on the
+                                     error stream
+  EC19 the default models folder     models/ at the top of the checkout
+EC16 to EC19 kill the mutants of ploni/__main__.py that survived this file alone on 2026-11-24
+(Cosmic Ray 8.9.0, issue #210): the folder, the help text, `is` for `==`, and the two lines that
+start the program, which before only tests/t4_integration/test_cli.py reached.
 
 inventory. Equivalence classes:
   EC4  models/<name>/<revision>/ with files    one line per revision: name, revision, number
@@ -70,6 +80,35 @@ def test_ec2_no_command_or_an_unknown_one(argv: list[str]) -> None:
 def test_ec3_selftest_returns_what_selftest_returns(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
     monkeypatch.setattr(cli, "MODELS", tmp_path)
     assert cli.main(["selftest"]) == cli.selftest(tmp_path, io.StringIO())
+
+
+def test_ec16_help_shows_the_first_line_of_the_module_docstring(capsys: pytest.CaptureFixture[str]) -> None:
+    with pytest.raises(SystemExit) as caught:
+        cli.main(["--help"])
+    assert caught.value.code == 0
+    assert cli.__doc__ is not None
+    # argparse wraps the description to the width of the terminal, so the words are compared.
+    assert " ".join(cli.__doc__.splitlines()[0].split()) in " ".join(capsys.readouterr().out.split())
+
+
+def test_ec17_a_command_equal_to_selftest_that_is_another_object(monkeypatch: pytest.MonkeyPatch, tmp_path: Path) -> None:
+    monkeypatch.setattr(cli, "MODELS", tmp_path)
+    command = "".join(["self", "test"])
+    assert command == "selftest" and command is not sys.intern("selftest")
+    # What selftest returns depends on what this process has loaded (EC6), so the two are compared.
+    assert cli.main([command]) == cli.selftest(tmp_path, io.StringIO()) != cli.NOT_BUILT
+
+
+def test_ec18_the_module_run_as_a_program() -> None:
+    done = subprocess.run([sys.executable, "-m", "ploni", "selftest"], cwd=ROOT, capture_output=True, text=True, timeout=60, check=False)
+    assert done.returncode == 0, done.stdout + done.stderr
+    assert done.stdout.splitlines()[-1] == "offline OK"
+    # Nothing on the error stream: not a traceback, and not a warning Python gives when it compiles the file.
+    assert done.stderr == ""
+
+
+def test_ec19_the_default_models_folder() -> None:
+    assert cli.MODELS == ROOT / "models"
 
 
 def test_ec4_ec5_inventory(tmp_path: Path) -> None:
