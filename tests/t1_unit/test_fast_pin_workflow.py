@@ -13,7 +13,8 @@ Equivalence class:
      trigger, read-only contents, main checked out at the root and the PR under pr/, both
      without credentials, the two pinned actions, the hashed install of main's tools, the copy
      of the PR's fast.yml over main's, and main's pin run at the root. Any changed or added line
-     is red; a comment is not.
+     is red; a comment is not. Until the third step of issue #199 the lines may also equal
+     NEXT: EXPECTED with the one line that runs the workflow again on an edit of the PR.
 Hebrew and document axes: do not apply; the input is a workflow file.
 Known limits: a PR that edits both fast.yml and fast-pin.yml with no .py file is not caught here
 (the fast suite runs the PR's copy of this test, which the PR may leave as it is, and the PR's
@@ -58,7 +59,12 @@ EXPECTED = [
     "      - run: cp pr/.github/workflows/fast.yml .github/workflows/fast.yml",
     "      - run: python -m pytest tests/t1_unit/test_fast_workflow.py -q -p no:cacheprovider",
 ]
+# Step 1 of 3 of issue #199 (Achia, 2026-11-24, "Three small steps (Recommended)" and "Yes, fix
+# both (Recommended)"): the next PR adds this one line under the trigger, after the first three
+# lines (name, on, pull_request). Until the third PR drops the old shape, the pin accepts either
+# exact shape and no other.
+NEXT = [*EXPECTED[:3], "    types: [opened, edited, synchronize, reopened]", *EXPECTED[3:]]
 
 
 def test_f1_the_workflow() -> None:
-    assert code_lines(WORKFLOW) == EXPECTED
+    assert code_lines(WORKFLOW) in (EXPECTED, NEXT)
