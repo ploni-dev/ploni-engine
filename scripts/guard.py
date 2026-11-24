@@ -65,9 +65,20 @@ Check = dict[str, object]
 Fetch = Callable[[str, str], list[Check] | None]
 
 # The jobs every PR must carry: each workflow job that runs on every pull request; full-suite
-# starts on a label only. Achia, 2026-11-22, "Yes, name all seven (Recommended)" (issue #180).
+# starts on a label only. Achia, 2026-11-22, "Yes, name all seven (Recommended)" (issue #180);
+# fast-pin and commit-order by 2026-11-23, "Yes, one workflow each (Recommended)" (#173, #175).
 # fast-suite is the one CLAUDE.md, "Merging", asks for by name.
-REQUIRED_CHECKS = ("changed-paths", "fast-suite", "nightly", "pr-body", "pr-size", "ratchet", "waiver")
+REQUIRED_CHECKS = (
+    "changed-paths",
+    "commit-order",
+    "fast-pin",
+    "fast-suite",
+    "nightly",
+    "pr-body",
+    "pr-size",
+    "ratchet",
+    "waiver",
+)
 # Under the 40 seconds that .claude/settings.json gives the hook, so that a slow GitHub
 # is as a rule a refusal with a reason. A hook that is cut off all the same refuses too
 # (`onFailure` in the settings file), without a reason.
