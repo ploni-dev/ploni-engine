@@ -34,7 +34,7 @@ WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "fast
 EXPECTED = [
     "name: fast-pin",
     "on:",
-    "  pull_request:",
+    "  pull_request_target:",
     "permissions:",
     "  contents: read",
     "jobs:",
@@ -48,6 +48,7 @@ EXPECTED = [
     "          persist-credentials: false",
     "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1",
     "        with:",
+    "          ref: ${{ github.event.pull_request.head.sha }}",
     "          path: pr",
     "          persist-credentials: false",
     "      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0",
