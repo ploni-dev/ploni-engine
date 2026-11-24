@@ -20,7 +20,8 @@
 - ruff and mypy give no warning.
   Checked: scripts/check.py, run by .github/workflows/fast.yml and by .githooks/pre-push.
 - Never use PyMuPDF. It is AGPL.
-  Checked: ruff's banned imports in pyproject.toml.
+  Checked (an import statement of fitz or pymupdf): ruff's banned imports in pyproject.toml.
+  A `# noqa` of TID251 is the reviewer's to refuse.
 - GLiNER v0 and v1 checkpoints are CC-BY-NC and unusable here. Only v2.1 and PII variants.
   Checked in part: tests/t1_unit/test_download_models.py (the models of
   scripts/download_models.py).
@@ -194,6 +195,7 @@
 - adapters/ may not import detect/, resolve/, policy/, write/
 - detect/ may not import write/, rehydrate/, report/
 - Only api.py is public. Everything else is internal.
+  Not checked yet: tests/t0_contract/test_layering.py leaves this line out (issue #87).
 
 ## Measurement discipline
 - State the prediction and the disagreement threshold before running a measurement.
