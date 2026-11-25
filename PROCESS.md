@@ -111,7 +111,7 @@ Conventional commits, module-scoped: `feat(detect): israeli ID checksum detector
 
 This distinction matters and is easy to get wrong.
 
-**A machine holds every rule a machine can check.** A hook, the linter or CI refuses the change, and nobody has to remember the rule. A written rule is advice that a session can miss; a check is not. So a rule stays in `CLAUDE.md` only while no check enforces it yet: once a hook, lint rule or test covers a rule, its line in `CLAUDE.md` shrinks to a pointer at the check. Until Phase 0 builds the checks (section 12), every rule below is enforced by review alone, and section 11 of `PROMOTION.md` says what that is worth.
+**A machine holds every rule a machine can check.** A hook, the linter or CI refuses the change, and nobody has to remember the rule. A written rule is advice that a session can miss; a check is not. A rule stays written in `CLAUDE.md` also once a hook, lint rule or test covers it: its line is kept, and a line under it points at the check (Achia, 2026-11-24, "Keep the rules, add pointers (Recommended)"). Until Phase 0 builds the checks (section 12), every rule below is enforced by review alone, and section 11 of `PROMOTION.md` says what that is worth.
 
 **`CLAUDE.md` holds what is always true.** It is read every turn of every session, so it holds the rules that apply to all work and are cheap to check: no network imports, docstring contract, single responsibility, test obligation, layering, commit format. Rules that apply every turn do not belong behind an invocation.
 
@@ -467,10 +467,10 @@ Gates passed is the only velocity metric that means anything here.
    - The merge gate of `PROMOTION.md` section 11, built first: a Claude Code hook in `.claude/settings.json` that refuses the plain `gh pr merge` unless every check on the PR's last commit has finished and is green, and the fast-suite check is one of them. A missing, pending or skipped check counts as red. Decided by Achia on 2026-11-15, in place of paid branch protection.
    - A local `pre-push` git hook that runs the fast suite: the free stand-in for required status checks, which GitHub Free does not enforce on a private repository (`PROMOTION.md` section 11).
    - The commit-order check of `PROMOTION.md` section 5.2. Its row there states what it covers.
-   - A check that the commit named in the PR's Ponytail section is the PR's last commit, or that every commit after it is a merge of `main` that leaves the branch's own diff unchanged.
+   - A check that the commit named in the PR's Ponytail section is the PR's last commit, or that every commit after it is a merge of `main` that leaves the branch's own diff unchanged, or an empty commit (Achia, 2026-11-24, "Drop the newest-run gate (Recommended)").
    - A mutation testing tool that runs on Windows, chosen and pinned.
    - `pyproject.toml` and `.claude/settings.json` are in `CODEOWNERS` and on the Level 3 list of `PROMOTION.md` since 2026-11-15, before the files exist, so a code PR cannot loosen a limit with one line of configuration. Check that they still are.
-   - The `CLAUDE.md` lines these checks cover shrunk to pointers, and the two rules that waited for a tool added there as pointers: hashed requirements, and no warnings from ruff and mypy.
+   - The `CLAUDE.md` lines these checks cover kept, each with a pointer to its check under it, and the two rules that waited for a tool added there: hashed requirements, and no warnings from ruff and mypy.
 9. `eval/baselines.json` skeleton, `docs/STATUS.md`, `docs/REFERENCE_MACHINE.md`, `tests/fixtures/MANIFEST.md`.
 10. Then the code skeleton from `build-plan.md` Phase 0.
 
