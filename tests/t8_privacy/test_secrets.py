@@ -63,9 +63,10 @@ Known limits:
     ignored file, and the history of the repository, are not read.
   - In CI the scan runs after the push, for a PR and for a push to main (fast.yml since #253): a
     key it finds there is already on GitHub and must be revoked, and a branch pushed without a
-    PR is not scanned there until its PR opens. The scan before a commit (`PROCESS.md` sections
+    PR is not scanned by it until its PR opens. The scan before a commit (`PROCESS.md` sections
     2 and 5.6) is `scripts/pre_commit.py`, which `.githooks/pre-commit` runs where
-    `core.hooksPath` is set.
+    `core.hooksPath` is set; `.githooks/pre-push` runs the fast suite, this scan in it, before
+    a push. `--no-verify` skips either hook.
   - The fake values of this file are made at run time, so that the file itself holds none.
 """
 
