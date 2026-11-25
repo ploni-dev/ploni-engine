@@ -50,12 +50,27 @@ Matrix:
   M24 a merge of main whose resolution changes only the mode of the branch's file (+x)
                                                                         exit 1, the diff line:
       the raw diff holds the modes, so a mode is part of the branch's own diff
+  M25 an empty commit after the reviewed one (the commit pushed once the review is pasted;
+      Achia, 2026-11-24, "Drop the newest-run gate (Recommended)"); then a second one and a
+      merge of main                                                     exit 0, nothing written
+  M26 an empty commit, then an ordinary commit                         exit 1, a line naming
+      the ordinary commit
+  M27 two ordinary commits that undo each other, the head's tree that of the reviewed commit
+                                                                        exit 1, the first of
+      them named: a commit is judged by its own change, not by where the branch ends
+  M28 changes_nothing() on its own: an empty commit with its one parent    True; an ordinary
+      commit, a merge of main with its two parents, a commit of two parents with the tree of
+      its first, a commit given no parent                               False
+  M29 an empty commit made beside the branch, on the reviewed commit, and merged in: the merge
+      has two parents and the reviewed commit's tree                    exit 1, the merge named:
+      only a commit of one parent is empty (the review of this change, pass 1, finding 1)
 
 The functions outside_problem(), later_problem() and diff_problem() are called on their own in
-M8, M2 and M4, as own_diff() is in M14.
+M8, M2 and M4, as own_diff() is in M14 and changes_nothing() in M28.
 
-Not in the fast suite: PROCESS.md section 5.1 puts t4 in the full suite. Until the full
-workflow exists it is run by hand: python -m pytest tests/t4_integration
+Not in the fast suite: PROCESS.md section 5.1 puts t4 in the full suite, which
+.github/workflows/full.yml runs nightly on main and on a PR that gets the label run-full or
+phase-close. By hand: python -m pytest tests/t4_integration
 """
 
 import os
@@ -411,3 +426,67 @@ def test_m24_the_resolution_changes_only_a_mode(repo: Path) -> None:
     done = run(repo, "main", "feat", body(sha))
     assert done.returncode == 1
     assert done.stderr.splitlines() == [differs("feat", sha)]
+
+
+def empty_commit(folder: Path) -> str:
+    """Make a commit that changes nothing, as the one pushed after a review is pasted; return its hash."""
+    git(folder, "commit", "-q", "--allow-empty", "-m", "the review is pasted")
+    return git(folder, "rev-parse", "HEAD")
+
+
+def test_m25_empty_commits_after(repo: Path) -> None:
+    sha = commit(repo, "b.txt")
+    empty_commit(repo)
+    done = run(repo, "main", "feat", body(sha))
+    assert (done.returncode, done.stdout, done.stderr) == (0, "", "")
+    assert check.later_problem(sha, "main", "feat", repo) == ""
+    empty_commit(repo)
+    main_moves(repo)
+    merge(repo, "main")
+    done = run(repo, "main", "feat", body(sha))
+    assert (done.returncode, done.stderr) == (0, "")
+
+
+def test_m28_changes_nothing_on_its_own(repo: Path) -> None:
+    sha = commit(repo, "b.txt")
+    empty = empty_commit(repo)
+    main_moves(repo)
+    merged = merge(repo, "main")
+    assert check.changes_nothing(empty, [sha], repo) is True
+    assert check.changes_nothing(sha, [git(repo, "rev-parse", "main~1")], repo) is False
+    assert check.changes_nothing(merged, [empty, git(repo, "rev-parse", "main")], repo) is False
+    assert check.changes_nothing(empty, [], repo) is False
+    same_tree = git(repo, "commit-tree", f"{sha}^{{tree}}", "-p", sha, "-p", empty, "-m", "two parents, the tree of the first")
+    assert check.changes_nothing(same_tree, [sha, empty], repo) is False
+
+
+def test_m29_an_empty_commit_beside_the_branch_merged_in(repo: Path) -> None:
+    sha = commit(repo, "b.txt")
+    git(repo, "checkout", "-q", "-b", "side")
+    empty_commit(repo)
+    git(repo, "checkout", "-q", "feat")
+    merged = merge(repo, "side")
+    assert git(repo, "rev-parse", "HEAD^{tree}") == git(repo, "rev-parse", f"{sha}^{{tree}}")
+    done = run(repo, "main", "feat", body(sha))
+    assert (done.returncode, done.stdout) == (1, "")
+    assert done.stderr.splitlines() == [later(merged, sha, "main")]
+
+
+def test_m26_an_empty_commit_then_an_ordinary_one(repo: Path) -> None:
+    sha = commit(repo, "b.txt")
+    empty_commit(repo)
+    after = commit(repo, "b.txt")
+    done = run(repo, "main", "feat", body(sha))
+    assert (done.returncode, done.stdout) == (1, "")
+    assert done.stderr.splitlines() == [later(after, sha, "main")]
+
+
+def test_m27_two_commits_that_undo_each_other(repo: Path) -> None:
+    sha = commit(repo, "b.txt")
+    first = commit(repo, "e.txt")
+    git(repo, "rm", "-q", "e.txt")
+    git(repo, "commit", "-q", "-m", "undo")
+    assert git(repo, "rev-parse", "HEAD^{tree}") == git(repo, "rev-parse", f"{sha}^{{tree}}")
+    done = run(repo, "main", "feat", body(sha))
+    assert (done.returncode, done.stdout) == (1, "")
+    assert done.stderr.splitlines() == [later(first, sha, "main")]

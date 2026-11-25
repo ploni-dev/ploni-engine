@@ -1,12 +1,14 @@
-"""Check that the commit a PR's Ponytail review names is its last, or followed only by merges of main.
+"""Check that the commit a PR's Ponytail review names is its last, or followed only by merges of main or empty commits.
 
 Why: `PROCESS.md` section 12 item 8: "A check that the commit named in the PR's Ponytail
 section is the PR's last commit, or that every commit after it is a merge of `main` that leaves
 the branch's own diff unchanged." `CLAUDE.md`, Ponytail: a commit that changes what the branch
 adds or removes makes the review stale; taking main into the branch, with no other change, does
 not. Issue #176, one of the four robots Achia chose on 2026-11-20 ("Yes, all four
-(Recommended)"); strict by his choice of 2026-11-22, "Gate reads newest run (Recommended)":
-"red until a review naming the last commit is pasted".
+(Recommended)"). Strict, red until a review naming the commit is pasted; since his choice of
+2026-11-24, "Drop the newest-run gate (Recommended)", the merge gate counts every run on the
+last commit, so after the review is pasted an empty commit is pushed, and this check lets an
+empty commit through.
 
 Contract: `python -m scripts.check_reviewed_commit <base> <head>`, run in the checkout, with
 the PR body in PR_BODY. It runs as a module so that it uses `section()` of
@@ -16,8 +18,9 @@ on the one line of its `## Ponytail review` section that starts, past spaces, wi
 follow. It is refused, with one line on the error stream and exit code 1, when: the section or
 that line is missing, or there is more than one of either; the line names no full hash (the template's
 line as it is: the review is not pasted); the named commit is not one of `base..head`; a commit
-of `head` that neither the named commit nor `base` holds, oldest first, is not a merge whose
-every parent after the first `base` holds (a merge of main); or the branch's own diff at
+of `head` that neither the named commit nor `base` holds, oldest first, is neither a merge whose
+every parent after the first `base` holds (a merge of main) nor a commit with one parent and
+that parent's tree (an empty commit); or the branch's own diff at
 `head` is not the one at the named commit. The branch's own diff at a revision is git's raw
 diff, with full object names, from its merge base with `base` to it: equal means each path the
 branch changes holds the same content before and after, byte for byte. Otherwise nothing is
@@ -82,8 +85,9 @@ def label_lines(body: str) -> list[str] | None:
 def named(body: str) -> tuple[str, str]:
     """Return the commit the body's Ponytail review names, as (hash, "") or ("", the refusal).
 
-    Why: Achia's strict reading of 2026-11-22: red until a review naming the last commit is
-    pasted, so a body that names no commit, or more than one, is refused.
+    Why: the check is strict, by Achia's choice of 2026-11-24 as the module's Why gives it:
+    red until a review naming the commit is pasted, so a body that names no commit, or more
+    than one, is refused.
 
     Contract: the hash is 40 lower-case hex characters. The refusal is one line: more than one
     review section (counted past HTML comments; the review of #201, pass 1, finding 1), the
@@ -117,19 +121,40 @@ def outside_problem(sha: str, base: str, head: str, cwd: Path) -> str:
     return f"{sha[:SHORT_HASH]}: the commit the review names is not one of {base}..{head}"
 
 
+def changes_nothing(commit: str, parents: list[str], cwd: Path) -> bool:
+    """Say whether a commit has one parent whose tree is its own: an empty commit.
+
+    Why: after the review is pasted into the PR body, an empty commit is pushed so that every
+    check runs on a fresh last commit (Achia, 2026-11-24, "Drop the newest-run gate
+    (Recommended)", issue #176). It changes nothing the review read.
+
+    Contract: `git rev-parse <revision>^{tree}` of the commit and of its one parent, compared
+    as text. False for a commit with no parent or with more than one. Raises
+    CalledProcessError when git fails.
+
+    Known limits: `parents` is the caller's list, as `git rev-list --parents` printed it; it
+    is not checked against the commit, so a wrong list gives a wrong answer.
+    """
+    return len(parents) == 1 and git(["rev-parse", f"{commit}^{{tree}}"], cwd) == git(["rev-parse", f"{parents[0]}^{{tree}}"], cwd)
+
+
 def later_problem(sha: str, base: str, head: str, cwd: Path) -> str:
-    """Return the refusal of the oldest commit after the reviewed one that is not a merge of main, or "".
+    """Return the refusal of the oldest commit after the reviewed one that is neither a merge of main nor empty, or "".
 
     Why: the item allows only merges of main after the reviewed commit; main's own commits,
-    which such a merge brings in, are held by base and are not the branch's.
+    which such a merge brings in, are held by base and are not the branch's. An empty commit
+    is let through too (`changes_nothing`).
 
     Contract: the commits of `git rev-list --parents head ^sha ^base`, oldest first; a merge of
     main has two parents or more and `git rev-list base..<parent>` is empty for each after the
-    first. Raises CalledProcessError when git fails.
+    first. Each commit is judged by its own change: two commits that undo each other are
+    refused at the first. Raises CalledProcessError when git fails.
     """
     listed = git(["rev-list", "--reverse", "--topo-order", "--parents", head, f"^{sha}", f"^{base}"], cwd)
     for line in listed.splitlines():
         commit, *parents = line.split()
+        if changes_nothing(commit, parents, cwd):
+            continue
         if len(parents) < 2 or any(git(["rev-list", f"{base}..{parent}"], cwd).strip() for parent in parents[1:]):
             return f"{commit[:SHORT_HASH]}: comes after the reviewed commit {sha[:SHORT_HASH]} and is not a merge of {base}; review the last commit"
     return ""
