@@ -457,9 +457,11 @@ def _check_names(text: str) -> dict[str, str]:
 # changed-paths check refuses a workflow with a .py file). The guard patch that adds a name also
 # updates EC34's pin and takes the name off this list, in one patch. Achia, 2026-11-23, "A short
 # pending list (Recommended)". Each name added loosens EC35 and needs his decision on that check;
-# fast-pin, commit-order and reviewed-commit have it ("Yes, one workflow each (Recommended)").
-# fast-pin (#173) and commit-order (#175) left it when the gate named them.
-PENDING_CHECKS: dict[str, int] = {}
+# fast-pin, commit-order and reviewed-commit had it ("Yes, one workflow each (Recommended)").
+# fast-pin (#173) and commit-order (#175) left it when the gate named them; reviewed-commit never
+# came onto it: on 2026-11-24 he chose that it runs as a step of the one job pr-checks (#176).
+# pr-checks has it: Achia, 2026-11-25, "Yes, add it (Recommended)" (#209).
+PENDING_CHECKS: dict[str, int] = {"pr-checks": 209}
 
 
 def _workflow_problems(folder: Path, required: tuple[str, ...], pending: dict[str, int]) -> list[str]:
