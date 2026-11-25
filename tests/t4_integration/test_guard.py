@@ -46,10 +46,7 @@ GREEN = {"__typename": "CheckRun", "name": "fast-suite", "status": "COMPLETED", 
 RED = {"__typename": "CheckRun", "name": "lint", "status": "COMPLETED", "conclusion": "FAILURE"}
 # One green run of each check the gate asks for (scripts/guard.py, REQUIRED_CHECKS; issue #180),
 # written out here so that the program is tested against the list, not against itself.
-EVERY = [
-    {**GREEN, "name": name}
-    for name in ("changed-paths", "commit-order", "fast-pin", "fast-suite", "nightly", "pr-body", "pr-size", "ratchet", "waiver")
-]
+EVERY = [{**GREEN, "name": name} for name in ("fast-pin", "fast-suite", "nightly", "pr-checks")]
 
 
 def stand_in_gh(folder: Path, answer: str, exit_code: int = 0) -> None:
@@ -118,10 +115,11 @@ def test_a_merge_is_refused_when_gh_does_not_show_green_checks(tmp_path: Path, a
     assert b"PR 80 of o/r" in refused(hook(payload("Bash", command=MERGE), tmp_path))
 
 
-def test_m13_a_merge_with_a_required_check_missing_is_refused(tmp_path: Path) -> None:
-    stand_in_gh(tmp_path, rollup(*[check for check in EVERY if check["name"] != "waiver"]))
+@pytest.mark.parametrize("missing", [check["name"] for check in EVERY])
+def test_m13_a_merge_with_a_required_check_missing_is_refused(tmp_path: Path, missing: str) -> None:
+    stand_in_gh(tmp_path, rollup(*[check for check in EVERY if check["name"] != missing]))
     stderr = refused(hook(payload("Bash", command=MERGE), tmp_path))
-    assert b"PR 80 of o/r: there is no waiver check on the last commit" in stderr
+    assert f"PR 80 of o/r: there is no {missing} check on the last commit".encode() in stderr
 
 
 def test_m7_a_command_that_is_no_merge_does_not_start_gh(tmp_path: Path) -> None:
