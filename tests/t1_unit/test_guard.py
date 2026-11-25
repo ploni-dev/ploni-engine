@@ -458,18 +458,13 @@ def _check_names(text: str) -> dict[str, str]:
 # EC35 and needs his decision on that check. fast-pin (#173), commit-order (#175) and pr-checks
 # (#209) were here on their way in and left when the gate named them; reviewed-commit never came
 # onto it: on 2026-11-24 he chose that it runs as a step of the combined job (#176), which is
-# pr-checks. The six names below are here on their way out: since #229 pr-checks runs each as a
-# step, the gate asks for pr-checks in their place, and their own workflows run until they are
-# removed. Achia, 2026-11-25, "Yes, you apply it (Recommended)", with these six shown (#209).
-# Each leaves this list in the PR after its workflow is removed (step 7 of the plan on #209).
-PENDING_CHECKS: dict[str, int] = {
-    "changed-paths": 209,
-    "commit-order": 209,
-    "pr-body": 209,
-    "pr-size": 209,
-    "ratchet": 209,
-    "waiver": 209,
-}
+# pr-checks. The six old check names (changed-paths, commit-order, pr-body, pr-size, ratchet,
+# waiver) were here on their way out, from the guard patch that named pr-checks in their place
+# (#241; Achia, 2026-11-25, "Yes, you apply it (Recommended)") until their workflows were
+# deleted (#258; Achia, 2026-11-25, "Yes, after two safeguards (Recommended)": "the short
+# pending list emptied"). The list is empty: every job that runs on a pull request is one the
+# gate asks for.
+PENDING_CHECKS: dict[str, int] = {}
 
 
 def _workflow_problems(folder: Path, required: tuple[str, ...], pending: dict[str, int]) -> list[str]:

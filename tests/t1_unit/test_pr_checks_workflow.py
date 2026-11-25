@@ -19,8 +19,9 @@ Equivalence class:
      with all its history and main under main-copy/, both without credentials, the two pinned
      actions, then the seven checks, each with `if: ${{ !cancelled() }}`: commit-order and
      reviewed-commit first, main's scripts run with `python -P` on HEAD^1 HEAD^2 and PYTHONPATH
-     at main-copy, then changed-paths, pr-size, pr-body, ratchet and waiver with the commands of
-     their own workflows. Any changed, added, removed or moved line is red; a comment is not.
+     at main-copy, then changed-paths, pr-size, pr-body, ratchet and waiver with the commands
+     their own workflows had until those were deleted (#258). Any changed, added, removed or
+     moved line is red; a comment is not.
 Hebrew and document axes: do not apply; the input is a workflow file.
 Known limits: one PR with no .py file that edits fast.yml and fast-pin.yml together with
 pr-checks.yml stops this test with them, every check green (the fast suite runs the PR's copy of
@@ -29,9 +30,9 @@ Known limits); CI workflows are on the Level 3 list, so only the review stands a
 that edits pr-checks.yml together with a non-.py file that keeps this test from running (a
 `--deselect` in pyproject.toml's pytest options, the Makefile's `check` target) passes every
 check; those are on the Level 3 list too (PROMOTION.md section 4). The rule that a workflow and a
-.py file may not share a PR is the changed-paths check, which runs today in changed-paths.yml and
-as a step of this very file: if that workflow is removed, the rule that guards this pin is a step
-of the file it pins (the review of #229, pass 1).
+.py file may not share a PR is the changed-paths check, which runs as a step of this very file
+and, since its own workflow was deleted (#258), nowhere else: the rule that guards this pin is a
+step of the file it pins (the review of #229, pass 1).
 The test reads the file as git checked it out, and GitHub runs the file as git stores it. A PR
 with no .py file that edits pr-checks.yml together with .gitattributes could make the two
 differ: `working-tree-encoding=ASCII//TRANSLIT` writes a stored no-break space as a space, so a
