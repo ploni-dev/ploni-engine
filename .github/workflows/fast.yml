@@ -1,9 +1,10 @@
-# The fast suite, on every push and every PR, to any base branch (PROCESS.md section 5.1).
+# The fast suite, on every PR to any base branch and on every push to main (PROCESS.md section 5.1).
 # The merge gate reads the check this job reports (PROMOTION.md section 11).
 name: fast
 
 on:
   push:
+    branches: [main]
   pull_request:
 
 permissions:
