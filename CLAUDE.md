@@ -102,6 +102,9 @@
   its final diff. A commit that changes what the branch itself adds or removes makes
   that review stale: run it again and replace the output in the PR body before the
   merge. Taking main into the branch, with no other change, does not.
+  Checked: scripts/check_reviewed_commit.py, a step of the job pr-checks, which the
+  merge gate asks for: the PR's text names its last commit as reviewed, or only
+  merges of main and empty commits follow the named one.
 - Every finding accepted, or rejected with an ADR number from
   docs/adr/APPROVED_ABSTRACTIONS.md.
 - Ponytail never removes error handling, validation, safety/, a test, a fixture, or a
