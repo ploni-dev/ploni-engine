@@ -92,7 +92,7 @@ from typing import cast
 from scripts import check_ratchet as check
 from scripts.check_ratchet import Counts
 
-FILE ="tests/t1_unit/test_a.py"
+FILE = "tests/t1_unit/test_a.py"
 RATCHET = '{"suppressions_ceiling": 10}'
 
 
