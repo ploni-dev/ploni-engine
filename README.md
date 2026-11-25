@@ -25,3 +25,5 @@ Planning complete. No product code yet. Next: Phase 0 (build-plan.md section 16,
 
 - Engineering: Achia
 - Legal, regulatory and all external-facing claims, including the name's trademark check: Tomer (`ploni/i18n/claims/` once it exists). As of 2026-11-15 Tomer is not involved for now; these questions go to Achia (`CLAUDE.md`, "Who decides")
+
+Bad PR 8 of the closing test (#30).
