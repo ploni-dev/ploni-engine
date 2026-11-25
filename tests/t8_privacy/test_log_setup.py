@@ -643,3 +643,33 @@ def test_ec8_the_dotted_name_of_a_file() -> None:
 )
 def test_a6_an_escape_from_any_object(source: str) -> None:
     assert lines(source) == [3]
+
+
+@pytest.mark.parametrize(
+    ("source", "importer"),
+    [
+        ("from ploni.safety.logging import event\n\nevent(E.X, **counts)\n", "ploni.mod"),
+        ("import ploni.safety.logging as log\n\nlog.event(E.X, **counts)\n", "ploni.mod"),
+        ("import ploni.safety.logging\n\nploni.safety.logging.event(E.X, **counts)\n", "ploni.mod"),
+        ("from ploni.safety import logging\n\nlogging.event(E.X, windows=1, **counts)\n", "ploni.mod"),
+        ("from ..safety.logging import event as emit\n\nemit(E.X, **counts)\n", "ploni.detect.fusion"),
+        ("from ploni.safety.logging import event\n\nevent(E.X, **{'smith': 3})\n", "ploni.mod"),
+        ("from ploni.safety.logging import event\n\ndef run():\n    event(E.X, **counts)\n", "ploni.mod"),
+    ],
+)
+def test_a7_a_mapping_spread_into_event(source: str, importer: str) -> None:
+    assert setups(source, importer) == [f"{source.count(chr(10))}: spreads a mapping into ploni.safety.logging.event"]
+
+
+@pytest.mark.parametrize(
+    "source",
+    [
+        "from ploni.safety.logging import event\n\nevent(E.X, windows=12, seconds=0.41)\n",
+        "from ploni.safety.logging import event\n\nevent(E.X, level=WARNING)\n",
+        "from ploni.safety.logging import event\n\nreport(**counts)\n",
+        "from ploni.safety.logging import event\n\nevent(E.X)\nsummary = dict(**counts)\n",
+        "from ploni.obs import event\n\nevent(E.X, **counts)\n",
+    ],
+)
+def test_a7_what_is_no_spread_into_event(source: str) -> None:
+    assert setups(source) == []
