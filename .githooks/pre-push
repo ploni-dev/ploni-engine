@@ -9,7 +9,7 @@
 # then the .venv of the main checkout, for a worktree.
 # Known limits: a clone without core.hooksPath set runs none of it, and `git push --no-verify`
 # skips it; the merge gate's hook refuses that flag to Claude (scripts/guard.py), and the fast
-# suite in CI runs after the push. A hook is speed, not safety (PROMOTION.md, Level 0). A tag
+# suite in CI runs on the PR. A hook is speed, not safety (PROMOTION.md, Level 0). A tag
 # of another commit, sent with its branch, is refused: check that commit out and send it alone.
 common="$(git rev-parse --git-common-dir 2>/dev/null)"
 head="$(git rev-parse HEAD)"
