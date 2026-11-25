@@ -1,4 +1,4 @@
-"""Tests of scripts/check_pr_body.py and of the workflow that runs it on every PR.
+"""Tests of scripts/check_pr_body.py: a PR's text holds the orientation block and the Ponytail review, both filled.
 
 Why: issue #21 (PROCESS.md section 12 item 8; PROMOTION.md section 5.2): a PR body must hold the
 orientation block, with its goal, deliverable, gate and downstream-risk lines (the 5.2 row

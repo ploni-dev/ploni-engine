@@ -36,14 +36,18 @@ import pytest
 from tests.workflow_lines import code_lines
 
 WORKFLOWS = Path(__file__).resolve().parents[2] / ".github" / "workflows"
-# Pieces of pr-checks.yml, each in the file exactly once. Until the cut of #209 the cases edited
-# copies of two of the six small check workflows, which left with it.
-RUN = "        run: python scripts/check_changed_paths.py HEAD^1 HEAD\n"
-FETCH_DEPTH = "          fetch-depth: 0\n"
-TIMEOUT = "    timeout-minutes: 5\n"
-WAIVER_RUN = "        run: python -m scripts.check_waiver HEAD^1 HEAD\n"
-WAIVER_ENV = "        env:\n          PR_BODY: ${{ github.event.pull_request.body }}\n"
+RUN = "      - run: python scripts/check_changed_paths.py HEAD^1 HEAD\n"
+CHECKOUT = "      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1\n"
+TIMEOUT = "    timeout-minutes: 2\n"
+WAIVER_RUN = "      - run: python -m scripts.check_waiver HEAD^1 HEAD\n"
+WAIVER_ENV = (
+    "        env:\n"
+    "          # The body reaches the script only through the environment, never inside a shell command.\n"
+    "          PR_BODY: ${{ github.event.pull_request.body }}\n"
+)
 JOB_ENV = "    env:\n      PR_BODY: ${{ github.event.pull_request.body }}\n"
+# pr-checks.yml, for the classes added with issue #239: the six small workflows are on their way out.
+JOB_TIMEOUT = "    timeout-minutes: 5\n"
 # Every control character the reader refuses: both ends of the range and all between.
 CONTROLS = [chr(code) for code in range(0x20) if code not in (0x09, 0x0A, 0x0D)] + ["\x7f"]
 
@@ -61,7 +65,7 @@ def edited(tmp_path: Path, workflow: str, *pairs: tuple[str, str], crlf: bool = 
 @pytest.mark.parametrize(
     ("old", "new"),
     [
-        ("name: pr-checks\n", "# a comment line\nname: pr-checks\n"),
+        ("name: changed-paths\n", "# a comment line\nname: changed-paths\n"),
         (TIMEOUT, TIMEOUT + "      \n"),
         (RUN, RUN.rstrip("\n") + "  # a trailing comment\n"),
         (TIMEOUT, TIMEOUT),
@@ -69,24 +73,24 @@ def edited(tmp_path: Path, workflow: str, *pairs: tuple[str, str], crlf: bool = 
     ids=["comment-line", "blank-line-of-spaces", "trailing-comment", "unchanged"],
 )
 def test_w1_the_same_lines(tmp_path: Path, old: str, new: str) -> None:
-    merged, path = edited(tmp_path, "pr-checks.yml", (old, new))
+    merged, path = edited(tmp_path, "changed-paths.yml", (old, new))
     assert code_lines(path) == merged
 
 
 def test_w1_crlf(tmp_path: Path) -> None:
-    merged, path = edited(tmp_path, "pr-checks.yml", (TIMEOUT, TIMEOUT), crlf=True)
+    merged, path = edited(tmp_path, "changed-paths.yml", (TIMEOUT, TIMEOUT), crlf=True)
     assert code_lines(path) == merged
 
 
 @pytest.mark.parametrize(
     ("workflow", "pairs"),
     [
-        ("pr-checks.yml", [(FETCH_DEPTH, FETCH_DEPTH + "          ref: other\n")]),
-        ("pr-checks.yml", [(TIMEOUT, TIMEOUT + "    env:\n      BASH_ENV: /tmp/off\n")]),
-        ("pr-checks.yml", [(RUN, "      - run : sed -i s/1/0/ scripts/check_changed_paths.py\n" + RUN)]),
-        ("pr-checks.yml", [("  pull_request:\n", "  push:\n  pull_request:\n")]),
-        ("pr-checks.yml", [(WAIVER_RUN + WAIVER_ENV, WAIVER_RUN), (TIMEOUT, TIMEOUT + JOB_ENV)]),
-        ("pr-checks.yml", [(RUN, RUN.rstrip("\n") + "\t# a comment after a tab\n")]),
+        ("changed-paths.yml", [(CHECKOUT, CHECKOUT + "        with:\n          ref: main\n")]),
+        ("changed-paths.yml", [(TIMEOUT, TIMEOUT + "    env:\n      BASH_ENV: /tmp/off\n")]),
+        ("changed-paths.yml", [(RUN, "      - run : sed -i s/1/0/ scripts/check_changed_paths.py\n" + RUN)]),
+        ("changed-paths.yml", [("  pull_request:\n", "  push:\n  pull_request:\n")]),
+        ("waiver.yml", [(WAIVER_RUN + WAIVER_ENV, WAIVER_RUN), (TIMEOUT, TIMEOUT + JOB_ENV)]),
+        ("changed-paths.yml", [(RUN, RUN.rstrip("\n") + "\t# a comment after a tab\n")]),
     ],
     ids=["checkout-ref", "bash-env", "second-run-step", "push-trigger", "pr-body-off-the-run-step", "b1-tab"],
 )
@@ -101,12 +105,12 @@ def test_w2_other_lines(tmp_path: Path, workflow: str, pairs: list[tuple[str, st
         (TIMEOUT, TIMEOUT + "    # note     if: false\n"),
         (RUN, RUN.rstrip("\n") + " # x\u0085        continue-on-error: true\n"),
         (RUN, RUN.rstrip("\n") + " #|| true\n"),
-        ("name: pr-checks\n", "# יעקב\nname: pr-checks\n"),
+        ("name: changed-paths\n", "# יעקב\nname: changed-paths\n"),
     ],
     ids=["a1-line-separator", "a2-next-line", "a3-no-break-space", "w3-hebrew-in-a-comment"],
 )
 def test_w3_outside_ascii(tmp_path: Path, old: str, new: str) -> None:
-    _, path = edited(tmp_path, "pr-checks.yml", (old, new))
+    _, path = edited(tmp_path, "changed-paths.yml", (old, new))
     with pytest.raises(ValueError, match="outside ASCII"):
         code_lines(path)
 
@@ -114,14 +118,14 @@ def test_w3_outside_ascii(tmp_path: Path, old: str, new: str) -> None:
 @pytest.mark.parametrize("where", ["comment", "code"])
 @pytest.mark.parametrize("character", CONTROLS, ids=[f"0x{ord(character):02x}" for character in CONTROLS])
 def test_w4_a_control_character(tmp_path: Path, character: str, where: str) -> None:
-    new = TIMEOUT + f"    # note{character}\n" if where == "comment" else TIMEOUT.rstrip("\n") + f"{character}\n"
-    _, path = edited(tmp_path, "pr-checks.yml", (TIMEOUT, new))
+    new = JOB_TIMEOUT + f"    # note{character}\n" if where == "comment" else JOB_TIMEOUT.rstrip("\n") + f"{character}\n"
+    _, path = edited(tmp_path, "pr-checks.yml", (JOB_TIMEOUT, new))
     with pytest.raises(ValueError, match="a control character"):
         code_lines(path)
 
 
 def test_w4_a_tab_in_a_comment_and_crlf_are_none(tmp_path: Path) -> None:
-    merged, path = edited(tmp_path, "pr-checks.yml", (TIMEOUT, TIMEOUT + "    #\tnote\n"), crlf=True)
+    merged, path = edited(tmp_path, "pr-checks.yml", (JOB_TIMEOUT, JOB_TIMEOUT + "    #\tnote\n"), crlf=True)
     assert code_lines(path) == merged
 
 

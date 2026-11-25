@@ -87,14 +87,12 @@ Known limits:
 import pytest
 
 import ast
-from pathlib import Path
 from typing import cast
 
 from scripts import check_ratchet as check
 from scripts.check_ratchet import Counts
 
-ROOT = Path(__file__).resolve().parents[2]
-FILE = "tests/t1_unit/test_a.py"
+FILE ="tests/t1_unit/test_a.py"
 RATCHET = '{"suppressions_ceiling": 10}'
 
 
