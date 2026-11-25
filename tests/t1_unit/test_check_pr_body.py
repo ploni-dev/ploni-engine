@@ -1,4 +1,4 @@
-"""Tests of scripts/check_pr_body.py and of the workflow that runs it on every PR.
+"""Tests of scripts/check_pr_body.py: a PR's text holds the orientation block and the Ponytail review, both filled.
 
 Why: issue #21 (PROCESS.md section 12 item 8; PROMOTION.md section 5.2): a PR body must hold the
 orientation block, with its goal, deliverable, gate and downstream-risk lines (the 5.2 row
@@ -17,12 +17,9 @@ Equivalence classes:
   EC6  main: a good body / a bad one / no PR_BODY at all (GitHub gives no body for a PR opened
        with an empty description)    0 / 1, each line on the error stream / 1, both missing
   EC7  the repository's own template, unfilled    both sections are there, and all is empty
-  EC8  `.github/workflows/pr-body.yml`: its code lines, comments and blank lines left out,
-       exactly as merged; the body reaches the script only through the environment.
-       Why: a later workflow-only PR holds no .py file, so the changed-paths check
-       lets an edit through that switches this check off; the pin built from patterns let
-       most such edits through (#166, measured: a checkout of another ref, a BASH_ENV, a
-       second `- run :` step, a push trigger, more permissions). Not refused: a comment.
+  EC8  was the pin of pr-body.yml. It left with the cut of #209 (Achia, 2026-11-25,
+       "Yes, after two safeguards (Recommended)"): the check runs as a step of the job
+       pr-checks, whose file tests/t1_unit/test_pr_checks_workflow.py pins.
   EC9  heading_of(), section(), labelled(), filled() each on its own; problems() without a template file
        raises FileNotFoundError
 
@@ -43,7 +40,8 @@ Adversarial:
   A1  the heading inside a sentence ("see ## Ponytail review")    not the section
   A2  a section whose text is in Hebrew    filled
   A3  a body that tries to break out of the shell (`"; rm -rf ~; echo "`, `$(...)`, a backquote)
-      reaches the script as plain text (EC8: no `${{` in a run line)
+      reaches the script as plain text (pr-checks.yml gives it through `env:`, never inside a
+      run line; tests/t1_unit/test_pr_checks_workflow.py pins that)
   A4  both headings inside a fenced code block    counted as headings (the Known limit, pinned)
 
 Not applicable: the document axes; the Hebrew axes of the test-matrix skill other than A2, as
@@ -59,32 +57,8 @@ from pathlib import Path
 import pytest
 
 from scripts import check_pr_body
-from tests.workflow_lines import code_lines
 
 ROOT = Path(__file__).resolve().parents[2]
-WORKFLOW = ROOT / ".github" / "workflows" / "pr-body.yml"
-# The code lines of pr-body.yml as #108 merged them (code_lines()); any other line or one more
-# changes how the check runs.
-EXPECTED_WORKFLOW = [
-    'name: pr-body',
-    'on:',
-    '  pull_request:',
-    '    types: [opened, edited, synchronize, reopened]',
-    'permissions:',
-    '  contents: read',
-    'jobs:',
-    '  pr-body:',
-    '    runs-on: ubuntu-24.04',
-    '    timeout-minutes: 2',
-    '    steps:',
-    '      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
-    '      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0',
-    '        with:',
-    '          python-version: "3.13.5"',
-    '      - run: python scripts/check_pr_body.py',
-    '        env:',
-    '          PR_BODY: ${{ github.event.pull_request.body }}',
-]
 EMPTY_ORIENTATION = [
     "empty: ## Orientation, Goal:",
     "empty: ## Orientation, Deliverable:",
@@ -143,10 +117,6 @@ def test_ec6_main(capsys: pytest.CaptureFixture[str]) -> None:
 def test_ec7_the_template_unfilled() -> None:
     template = (ROOT / ".github" / "pull_request_template.md").read_text(encoding="utf-8")
     assert check_pr_body.problems(template) == [*EMPTY_ORIENTATION, "empty: ## Ponytail review"]
-
-
-def test_ec8_the_workflow() -> None:
-    assert code_lines(WORKFLOW) == EXPECTED_WORKFLOW
 
 
 def test_ec9_section_on_its_own() -> None:

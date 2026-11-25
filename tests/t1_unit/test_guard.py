@@ -461,6 +461,7 @@ def _check_names(text: str) -> dict[str, str]:
 # pr-checks. The six names below are here on their way out: since #229 pr-checks runs each as a
 # step, the gate asks for pr-checks in their place, and their own workflows run until they are
 # removed. Achia, 2026-11-25, "Yes, you apply it (Recommended)", with these six shown (#209).
+# Each leaves this list in the PR after its workflow is removed (step 7 of the plan on #209).
 PENDING_CHECKS: dict[str, int] = {
     "changed-paths": 209,
     "commit-order": 209,

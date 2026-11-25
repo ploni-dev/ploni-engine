@@ -33,12 +33,9 @@ Equivalence classes (the parts):
   EC12 closed_phases(): a dated row is closed, an undated one is open; the repository's own
        Phases table has its Date column where the check reads it
   EC14 main(), with git and the clock stubbed: it judges by today(), not the machine's date
-  EC16 `.github/workflows/waiver.yml`: its code lines, comments and blank lines left out,
-       exactly as merged, the body in PR_BODY under the run step itself.
-       Why: a later workflow-only PR holds no .py file, so the changed-paths check
-       lets an edit through that switches this check off; the pin built from patterns let
-       most such edits through (#166, measured: a checkout of another ref, a BASH_ENV, a
-       second `- run :` step, a push trigger, more permissions). Not refused: a comment.
+  EC16 was the pin of waiver.yml. It left with the cut of #209 (Achia, 2026-11-25,
+       "Yes, after two safeguards (Recommended)"): the check runs as a step of the job
+       pr-checks, whose file tests/t1_unit/test_pr_checks_workflow.py pins.
   EC13 covers(): an exact path; a folder ending in "/"; `*` within one folder; `**` across
        folders; several entries separated by commas, with spaces and backquotes
 
@@ -100,32 +97,6 @@ from pathlib import Path
 import pytest
 
 from scripts import check_waiver as check
-from tests.workflow_lines import code_lines
-
-# The code lines of waiver.yml as #128 merged them (code_lines()); any other line or one more
-# changes how the check runs.
-EXPECTED_WORKFLOW = [
-    'name: waiver',
-    'on:',
-    '  pull_request:',
-    '    types: [opened, edited, synchronize, reopened]',
-    'permissions:',
-    '  contents: read',
-    'jobs:',
-    '  waiver:',
-    '    runs-on: ubuntu-24.04',
-    '    timeout-minutes: 2',
-    '    steps:',
-    '      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
-    '        with:',
-    '          fetch-depth: 2',
-    '      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0',
-    '        with:',
-    '          python-version: "3.13.5"',
-    '      - run: python -m scripts.check_waiver HEAD^1 HEAD',
-    '        env:',
-    '          PR_BODY: ${{ github.event.pull_request.body }}',
-]
 
 ROOT = Path(__file__).resolve().parents[2]
 TODAY = date(2026, 11, 19)
@@ -464,10 +435,6 @@ def test_b16_the_id_alone_in_backquotes(body: str) -> None:
 )
 def test_b17_a_list_item_or_emphasis(body: str) -> None:
     assert problems(body, ["ploni/a.py"]) == ["WAIVER-999 is not in docs/WAIVERS.md"]
-
-
-def test_ec16_the_workflow() -> None:
-    assert code_lines(ROOT / ".github" / "workflows" / "waiver.yml") == EXPECTED_WORKFLOW
 
 
 def test_a5_a_hebrew_path() -> None:
