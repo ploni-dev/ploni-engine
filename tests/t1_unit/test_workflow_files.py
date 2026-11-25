@@ -119,8 +119,9 @@ def _problems(repository: Path) -> list[str]:
 def repository_with(tmp_path: Path, attributes: str = "", beside: bool = False) -> Path:
     """Make a repository with one workflow, a.yml, staged, and then the given .gitattributes text, staged.
 
-    The workflow is staged first, so that no attribute touches it on the way in: the cases ask
-    what git says about it, not what git does with an encoding this machine may not know.
+    The workflow is staged first, and then the attribute file alone, by its path, so that git
+    never runs an attribute on the workflow on the way in: the cases ask what git says about it,
+    not what git does with an encoding this machine may not know (`add -A` would run it again).
     """
     folder = tmp_path / WORKFLOWS
     folder.mkdir(parents=True)
@@ -128,8 +129,9 @@ def repository_with(tmp_path: Path, attributes: str = "", beside: bool = False) 
     git(["init", "-q"], tmp_path)
     git(ADD, tmp_path)
     if attributes:
-        ((folder if beside else tmp_path) / ".gitattributes").write_text(attributes, encoding="utf-8", newline="\n")
-        git(ADD, tmp_path)
+        name = f"{WORKFLOWS}/.gitattributes" if beside else ".gitattributes"
+        (tmp_path / name).write_text(attributes, encoding="utf-8", newline="\n")
+        git(["-c", "core.autocrlf=false", "add", "--", name], tmp_path)
     return tmp_path
 
 

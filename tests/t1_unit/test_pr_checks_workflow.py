@@ -40,10 +40,11 @@ with `|| true` (measured on the laptop's git in the review of this file, not on 
 runner). In the fast suite tests/t1_unit/test_workflow_files.py now holds every workflow to
 the file git stores: its mode, the attributes that rewrite a file on checkout, asked of the
 attribute files on disk and of the stored ones, and the stored bytes against the ones on disk.
-.gitattributes itself is still not on the Level 3 list (issue #239). An edit that keeps the code lines and would stop GitHub from running
-the file (a NUL character in a comment, the file as a symbolic link to a copy) is refused by
-the reader since #239, and a pr-checks job that does not run is refused by the merge gate since
-#241; what GitHub does with either file was not measured (the same review, findings 2 and 8).
+.gitattributes itself is still not on the Level 3 list (issue #239). An edit that keeps the
+code lines and would stop GitHub from running the file (a NUL character in a comment, the file
+as a symbolic link to a copy) is refused by the reader since #239, and a pr-checks job that
+does not run is refused by the merge gate since #241; what GitHub does with either file was
+not measured (the same review, findings 2 and 8).
 """
 
 from pathlib import Path

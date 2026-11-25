@@ -12,9 +12,9 @@ Equivalence classes:
   W3 a character outside ASCII anywhere, in a code line or a comment: ValueError
   W4 a control character other than tab and the line ends (each of 0x00 to 0x1f but tab, line
      feed and carriage return, and DEL), in a comment or in a code line: ValueError; a tab
-     inside a comment and CRLF
-     line ends are none (issue #239: a NUL in a comment leaves the code lines as they are, and
-     by the runner's YAML library the file is then no workflow at all)
+     inside a comment and CRLF line ends are none (issue #239: a NUL in a comment leaves the
+     code lines as they are, and by the runner's YAML library the file is then no workflow at
+     all)
   W5 the file is a symbolic link to a workflow: ValueError (issue #239: the reader would follow
      the link and read another file than the one GitHub runs)
 Boundaries:
