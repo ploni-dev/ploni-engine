@@ -220,7 +220,7 @@ None of this exists yet. There is no `pyproject.toml`, and neither tool is insta
 
 ### 5.1 Two workflows
 
-**Fast suite**, every push and PR, under five minutes: ruff, mypy, T0 contract including layering, T1 unit, T2 property at reduced example counts, T3 golden, T8 privacy, secret scan, docstring presence check. Also the per-PR recall check that Achia decided on 2026-11-15, from Phase 3 (`PROMOTION.md` section 11 says what it is and why Phase 3); whether the five minutes still hold with it is measured when it is built. And the held-out batch that he decided on 2026-11-16 and 2026-11-17, as far as it can run where the gate sees it (`PROMOTION.md` section 11).
+**Fast suite**, every PR and every push to `main`, under five minutes: ruff, mypy, T0 contract including layering, T1 unit, T2 property at reduced example counts, T3 golden, T8 privacy, secret scan, docstring presence check. Also the per-PR recall check that Achia decided on 2026-11-15, from Phase 3 (`PROMOTION.md` section 11 says what it is and why Phase 3); whether the five minutes still hold with it is measured when it is built. And the held-out batch that he decided on 2026-11-16 and 2026-11-17, as far as it can run where the gate sees it (`PROMOTION.md` section 11).
 
 **Full suite**, on a `run-full` label, on phase-close PRs, and nightly: everything above at full example counts, plus T4 integration, T5 system journeys, T6 metric gates, T7 performance.
 
