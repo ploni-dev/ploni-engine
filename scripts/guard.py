@@ -64,20 +64,20 @@ from collections.abc import Callable
 Check = dict[str, object]
 Fetch = Callable[[str, str], list[Check] | None]
 
-# The jobs every PR must carry: each workflow job that runs on every pull request; full-suite
-# starts on a label only. Achia, 2026-11-22, "Yes, name all seven (Recommended)" (issue #180);
-# fast-pin and commit-order by 2026-11-23, "Yes, one workflow each (Recommended)" (#173, #175).
+# The jobs every PR must carry, by name. The list is Achia's. 2026-11-22: "Yes, name all seven
+# (Recommended)" (issue #180). 2026-11-23: "Yes, one workflow each (Recommended)", which added
+# fast-pin and commit-order (#173, #175; the patch applied by Claude on his word of 2026-11-24).
+# 2026-11-25: "Yes, you apply it (Recommended)" (#209): pr-checks, the one job that runs
+# changed-paths, commit-order, pr-body, pr-size, ratchet, waiver and reviewed-commit as steps,
+# takes the place of the six of those names that were here; the patch applied by Claude on that
+# word. Their own workflows run until they are removed, and a run of any check that is not green
+# refuses a merge whether its name is here or not. full-suite starts on a label only.
 # fast-suite is the one CLAUDE.md, "Merging", asks for by name.
 REQUIRED_CHECKS = (
-    "changed-paths",
-    "commit-order",
     "fast-pin",
     "fast-suite",
     "nightly",
-    "pr-body",
-    "pr-size",
-    "ratchet",
-    "waiver",
+    "pr-checks",
 )
 # Under the 40 seconds that .claude/settings.json gives the hook, so that a slow GitHub
 # is as a rule a refusal with a reason. A hook that is cut off all the same refuses too
