@@ -56,14 +56,9 @@ Equivalence classes (the parts):
   EC13 is_test_file(): tests/**/test_*.py and tests/**/*_test.py, the files pytest collects
        by default
   EC15 decreases() and ceiling() on their own
-  EC16 `.github/workflows/ratchet.yml` (issue #136): its code lines, comments and blank lines left out,
-       exactly as merged, the body in PR_BODY under the run step itself.
-       Why: a later workflow-only PR holds no .py file, so the changed-paths check
-       lets an edit through that switches this check off; the pin built from patterns let
-       most such edits through (#166, measured: a checkout of another ref, a BASH_ENV, a
-       second `- run :` step, a push trigger, more permissions). The first pin of it: the review of #134,
-       finding 2; Achia's option of 2026-11-20: "A test then pins it, as for the other
-       two." Not refused: a comment.
+  EC16 was the pin of ratchet.yml. It left with the cut of #209 (Achia, 2026-11-25,
+       "Yes, after two safeguards (Recommended)"): the check runs as a step of the job
+       pr-checks, whose file tests/t1_unit/test_pr_checks_workflow.py pins.
 
 Boundaries:
   B1  an override with the wrong delta (-2 for -1)    the decrease, and "names no decrease"
@@ -97,32 +92,6 @@ from typing import cast
 
 from scripts import check_ratchet as check
 from scripts.check_ratchet import Counts
-from tests.workflow_lines import code_lines
-
-# The code lines of ratchet.yml as #134 merged them (code_lines()); any other line or one more
-# changes how the check runs.
-EXPECTED_WORKFLOW = [
-    'name: ratchet',
-    'on:',
-    '  pull_request:',
-    '    types: [opened, edited, synchronize, reopened]',
-    'permissions:',
-    '  contents: read',
-    'jobs:',
-    '  ratchet:',
-    '    runs-on: ubuntu-24.04',
-    '    timeout-minutes: 2',
-    '    steps:',
-    '      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
-    '        with:',
-    '          fetch-depth: 2',
-    '      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0',
-    '        with:',
-    '          python-version: "3.13.5"',
-    '      - run: python -m scripts.check_ratchet HEAD^1 HEAD',
-    '        env:',
-    '          PR_BODY: ${{ github.event.pull_request.body }}',
-]
 
 ROOT = Path(__file__).resolve().parents[2]
 FILE = "tests/t1_unit/test_a.py"
@@ -430,10 +399,6 @@ def test_a2_what_is_under_ploni(other: str, refused: bool) -> None:
     body = f"ratchet-override: {FILE} -1 merged\n"
     found = problems(body, {FILE: Counts(2, 3)}, {FILE: Counts(1, 3)}, paths=[FILE, other])
     assert (found != []) is refused
-
-
-def test_ec16_the_workflow() -> None:
-    assert code_lines(ROOT / ".github" / "workflows" / "ratchet.yml") == EXPECTED_WORKFLOW
 
 
 def test_a3_a_renamed_test_is_not_seen() -> None:

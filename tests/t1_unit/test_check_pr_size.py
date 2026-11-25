@@ -32,44 +32,17 @@ main. Equivalence classes:
                                                                      as its lines are not counted
 
 The workflow. Equivalence classes:
-  EC14 .github/workflows/pr-size.yml    its code lines, comments and blank lines left out, exactly
-       as merged in #163: any changed or added line is red, a comment is not
+  EC14 was the pin of pr-size.yml. It left with the cut of #209 (Achia, 2026-11-25,
+       "Yes, after two safeguards (Recommended)"): the check runs as a step of the job
+       pr-checks, whose file tests/t1_unit/test_pr_checks_workflow.py pins.
 
 Not applicable: the Hebrew axes and the document axes: the input is git's paths and counts. A
 Hebrew file name is a path like any other (t4).
 """
 
-from pathlib import Path
-
 import pytest
 
 from scripts import check_pr_size as check
-from tests.workflow_lines import code_lines
-
-WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "pr-size.yml"
-# The workflow's code lines as #163 merged them, comments and blank lines left out, indentation
-# kept. Any other line, or one more, is a change to how the check runs: a key spelled to slip past
-# a pattern, a checkout of another ref, an env that runs first, a second step, another trigger.
-EXPECTED = [
-    'name: pr-size',
-    'on:',
-    '  pull_request:',
-    '    types: [opened, edited, synchronize, reopened]',
-    'permissions:',
-    '  contents: read',
-    'jobs:',
-    '  pr-size:',
-    '    runs-on: ubuntu-24.04',
-    '    timeout-minutes: 2',
-    '    steps:',
-    '      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
-    '        with:',
-    '          fetch-depth: 2',
-    '      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0',
-    '        with:',
-    '          python-version: "3.13.5"',
-    '      - run: python -m scripts.check_pr_size HEAD^1 HEAD',
-]
 
 
 @pytest.mark.parametrize("path", ["ploni/a.py", "ploni/detect/b/c.py", "ui/server.py", "ui/static/app.js"])
@@ -175,7 +148,3 @@ def test_ec11_within_the_limits(monkeypatch: pytest.MonkeyPatch, capsys: pytest.
     monkeypatch.setattr(check, "numstat", lambda base, head, cwd: [("20", "3", "ploni/a.py"), ("900", "0", "tests/t1_unit/test_a.py")])
     assert check.main(["base", "head"]) == 0
     assert capsys.readouterr() == ("", "")
-
-
-def test_ec14_the_workflow() -> None:
-    assert code_lines(WORKFLOW) == EXPECTED

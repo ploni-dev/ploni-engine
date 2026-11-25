@@ -23,12 +23,9 @@ Equivalence classes (is_code):
   EC10 Markdown, JSON, YAML, TOML, a Makefile, a requirements file    not code
 
 Equivalence class (the workflow that runs the check, issue #121):
-  EC11 `.github/workflows/changed-paths.yml`: its code lines, comments and blank lines left
-       out, exactly as merged (#119).
-       Why: a later workflow-only PR holds no .py file, so the changed-paths check
-       lets an edit through that switches this check off; the pin built from patterns let
-       most such edits through (#166, measured: a checkout of another ref, a BASH_ENV, a
-       second `- run :` step, a push trigger, more permissions). Not refused: a comment.
+  EC11 was the pin of changed-paths.yml. It left with the cut of #209 (Achia, 2026-11-25,
+       "Yes, after two safeguards (Recommended)"): the check runs as a step of the job
+       pr-checks, whose file tests/t1_unit/test_pr_checks_workflow.py pins.
 
 Boundaries:
   B1  no changed path                               no line
@@ -64,36 +61,9 @@ Known limits:
     `pyproject.toml` (`max-complexity`, `max-statements`), later a `config.py` of Phase 3.
 """
 
-from pathlib import Path
-
 import pytest
 
 from scripts import check_changed_paths as check
-from tests.workflow_lines import code_lines
-
-WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "changed-paths.yml"
-# The code lines of changed-paths.yml as #119 merged them (code_lines()); any other line or one more
-# changes how the check runs.
-EXPECTED = [
-    'name: changed-paths',
-    'on:',
-    '  pull_request:',
-    '    types: [opened, edited, synchronize, reopened]',
-    'permissions:',
-    '  contents: read',
-    'jobs:',
-    '  changed-paths:',
-    '    runs-on: ubuntu-24.04',
-    '    timeout-minutes: 2',
-    '    steps:',
-    '      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1',
-    '        with:',
-    '          fetch-depth: 2',
-    '      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0',
-    '        with:',
-    '          python-version: "3.13.5"',
-    '      - run: python scripts/check_changed_paths.py HEAD^1 HEAD',
-]
 
 BASELINES = "eval/baselines.json"
 FAST = ".github/workflows/fast.yml"
@@ -205,7 +175,3 @@ def test_a1_an_upper_case_end_is_code(path: str) -> None:
 
 def test_a2_a_hebrew_path() -> None:
     assert check.problems(["ploni/שם.py", FAST]) == [f"CI workflow changed in a code PR: {FAST}"]
-
-
-def test_ec11_the_workflow() -> None:
-    assert code_lines(WORKFLOW) == EXPECTED
