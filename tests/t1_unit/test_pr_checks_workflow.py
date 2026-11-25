@@ -4,10 +4,11 @@ Why: pr-checks runs the small checks of a PR as steps of one job (issue #209; Ac
 "Yes, add it (Recommended)", with its lines shown to him, and "Yes, trusted checks first
 (Recommended)" to their order). A later workflow-only PR holds no .py file, so the changed-paths
 check lets an edit of pr-checks.yml alone through that switches a check off (`run: true`, a step
-removed, `if: ${{ !cancelled() }}` dropped, the edited trigger dropped) or weakens the two checks
-that run main's copies (the order changed back so that the PR's files run before them, `-P`
-dropped, PYTHONPATH pointed at the PR, `pip-version` given to setup-python, which would run
-`python -m pip` in the PR's folder before them: the review of #229, findings 1 and 8). The PR's
+removed, the edited trigger dropped), hides a check's report behind an earlier failure
+(`if: ${{ !cancelled() }}` dropped) or weakens the two checks that run main's copies (the order
+changed back so that the PR's files run before them, `-P` dropped, PYTHONPATH pointed at the PR,
+`pip-version` given to setup-python, which would run `python -m pip` in the PR's folder before
+them: the review of #229, findings 1 and 8). The PR's
 fast suite runs this test on every PR, so such an edit goes red (the pattern of the other check
 workflows, #166, #171, #186, #197, #200).
 
@@ -31,6 +32,16 @@ check; those are on the Level 3 list too (PROMOTION.md section 4). The rule that
 .py file may not share a PR is the changed-paths check, which runs today in changed-paths.yml and
 as a step of this very file: if that workflow is removed, the rule that guards this pin is a step
 of the file it pins (the review of #229, pass 1).
+The test reads the file as git checked it out, and GitHub runs the file as git stores it. A PR
+with no .py file that edits pr-checks.yml together with .gitattributes can make the two differ:
+`working-tree-encoding=ASCII//TRANSLIT` writes a stored no-break space as a space, so a stored
+`HEAD<U+00A0>#|| true` reads here as a trailing comment and passes, while YAML runs it with
+`|| true`. .gitattributes is not on the Level 3 list. Measured on the laptop's git in the review
+of this file, not on GitHub's runner; every pin that reads through tests/workflow_lines.py
+shares it (issue #239). And until the gate asks for pr-checks by name, an edit that keeps the
+code lines and stops GitHub from running the file (a NUL character in a comment, the file as a
+symbolic link to a copy) is green everywhere; what GitHub does with either is not measured (the
+same review, finding 2; issue #239).
 """
 
 from pathlib import Path
