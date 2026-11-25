@@ -33,15 +33,16 @@ check; those are on the Level 3 list too (PROMOTION.md section 4). The rule that
 as a step of this very file: if that workflow is removed, the rule that guards this pin is a step
 of the file it pins (the review of #229, pass 1).
 The test reads the file as git checked it out, and GitHub runs the file as git stores it. A PR
-with no .py file that edits pr-checks.yml together with .gitattributes can make the two differ:
-`working-tree-encoding=ASCII//TRANSLIT` writes a stored no-break space as a space, so a stored
-`HEAD<U+00A0>#|| true` reads here as a trailing comment and passes, while YAML runs it with
-`|| true`. .gitattributes is not on the Level 3 list. Measured on the laptop's git in the review
-of this file, not on GitHub's runner; every pin that reads through tests/workflow_lines.py
-shares it (issue #239). And until the gate asks for pr-checks by name, an edit that keeps the
-code lines and stops GitHub from running the file (a NUL character in a comment, the file as a
-symbolic link to a copy) is green everywhere; what GitHub does with either is not measured (the
-same review, finding 2; issue #239).
+with no .py file that edits pr-checks.yml together with .gitattributes could make the two
+differ: `working-tree-encoding=ASCII//TRANSLIT` writes a stored no-break space as a space, so a
+stored `HEAD<U+00A0>#|| true` reads here as a trailing comment and passes, while YAML runs it
+with `|| true` (measured on the laptop's git in the review of this file, not on GitHub's
+runner). tests/t1_unit/test_workflow_files.py now refuses that attribute, `filter` and `ident`
+for every workflow, and a workflow stored as a link; .gitattributes itself is still not on the
+Level 3 list (issue #239). An edit that keeps the code lines and would stop GitHub from running
+the file (a NUL character in a comment, the file as a symbolic link to a copy) is refused by
+the reader since #239, and a pr-checks job that does not run is refused by the merge gate since
+#241; what GitHub does with either file was not measured (the same review, findings 2 and 8).
 """
 
 from pathlib import Path
