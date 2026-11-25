@@ -15,6 +15,12 @@ Equivalence class:
      pull_request triggers, read-only contents, the job fast-suite with its runner and its five
      minutes, the two pinned actions, the hashed install and `make check`. Any changed or added
      line is red; a comment is not.
+  F2 in the fast-pin job, where main is checked out at the root and the PR under pr/, the
+     fast.yml under test holds the bytes that the PR's commit stores, line ends apart: the job
+     copies the PR's checked-out file, and a .gitattributes line of the PR could have rewritten
+     it on checkout (issue #239). Outside that job there is no pr/ and the case asks nothing;
+     the comparison itself is tested on a small repository: the stored bytes, the same with CRLF,
+     other bytes.
 Hebrew and document axes: do not apply; the input is a workflow file.
 Known limits: `make check` is pinned by its name only. A PR that changes only the `Makefile`'s
 `check` target, or adds a pytest configuration file (`pytest.ini`, say, with `--collect-only` in
@@ -35,9 +41,19 @@ tests/t1_unit/test_fast_pin_workflow.py.
 
 from pathlib import Path
 
+import pytest
+
+from scripts.check_commit_order import git
 from tests.workflow_lines import code_lines
 
-WORKFLOW = Path(__file__).resolve().parents[2] / ".github" / "workflows" / "fast.yml"
+REPOSITORY = Path(__file__).resolve().parents[2]
+WORKFLOW = REPOSITORY / ".github" / "workflows" / "fast.yml"
+STORED_NAME = ".github/workflows/fast.yml"
+# In the fast-pin job main is checked out at the root and the PR under this folder (fast-pin.yml).
+PR_FOLDER = "pr"
+# The names git lists as a repository's own (GIT_DIR and the rest): a test started under a hook
+# would otherwise ask the hook's repository (as tests/t1_unit/test_workflow_files.py).
+LOCAL_VARIABLES = git(["rev-parse", "--local-env-vars"], REPOSITORY).split()
 # The code lines of fast.yml as on main (code_lines()); any other line or one more changes what
 # the fast suite runs or when.
 EXPECTED = [
@@ -62,5 +78,80 @@ EXPECTED = [
 ]
 
 
+@pytest.fixture(autouse=True)
+def no_local_variables(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Drop git's repository-local variables for the test, in this process and in what it starts."""
+    for name in LOCAL_VARIABLES:
+        monkeypatch.delenv(name, raising=False)
+
+
 def test_f1_the_workflow() -> None:
     assert code_lines(WORKFLOW) == EXPECTED
+
+
+def _is_the_stored_file(workflow: Path, checkout: Path) -> bool:
+    """Say whether a workflow file holds the bytes that the checkout's last commit stores for fast.yml.
+
+    Why: the fast-pin job copies the PR's checked-out fast.yml beside main's tests, and a
+    .gitattributes line of the PR can make that copy differ from the stored file, which is the
+    one GitHub runs (issue #239; the review of its fix, finding 1). Contract: workflow, the
+    file under test; checkout, a git checkout whose HEAD stores STORED_NAME. Line ends apart.
+    Raises CalledProcessError when git fails, as when the commit stores no such file;
+    UnicodeDecodeError when the stored file is not UTF-8; OSError when the file under test
+    cannot be read.
+    """
+    stored = git(["cat-file", "blob", f"HEAD:{STORED_NAME}"], checkout).replace("\r\n", "\n")
+    return workflow.read_bytes().decode("utf-8", errors="replace").replace("\r\n", "\n") == stored
+
+
+def _held_to_the_stored_file(root: Path) -> bool:
+    """Say whether, in the fast-pin job's layout under root, fast.yml holds the bytes the PR stores.
+
+    Why: F2 must bite in the job and ask nothing outside it, and both halves need a case that
+    runs (the review of the fix of #239, pass 2, finding 10: with the choice inside the test,
+    three one-line edits switched it off and every test passed). Contract: root, a folder with
+    STORED_NAME in it. True where no git checkout stands under PR_FOLDER; otherwise what
+    _is_the_stored_file says of root's file and that checkout.
+    """
+    checkout = root / PR_FOLDER
+    return not (checkout / ".git").exists() or _is_the_stored_file(root / STORED_NAME, checkout)
+
+
+def test_f2_in_the_fast_pin_job_the_file_is_the_stored_one() -> None:
+    assert _held_to_the_stored_file(REPOSITORY)
+
+
+def test_f2_the_job_checks_the_pr_out_under_that_folder() -> None:
+    assert f"          path: {PR_FOLDER}" in code_lines(REPOSITORY / ".github" / "workflows" / "fast-pin.yml")
+
+
+def stored_fast_yml(repository: Path) -> None:
+    """Make a repository whose one commit stores fast.yml as the line `x`."""
+    folder = repository / ".github" / "workflows"
+    folder.mkdir(parents=True)
+    (folder / "fast.yml").write_bytes(b"x\n")
+    git(["init", "-q"], repository)
+    git(["-c", "core.autocrlf=false", "add", "-A"], repository)
+    git(["-c", "user.name=test", "-c", "user.email=test@example.invalid", "commit", "-q", "-m", "x"], repository)
+
+
+@pytest.mark.parametrize(("on_disk", "same"), [("x\n", True), ("x\r\n", True), ("x #|| true\n", False)], ids=["as-stored", "crlf", "rewritten"])
+def test_f2_the_comparison(tmp_path: Path, on_disk: str, same: bool) -> None:
+    stored_fast_yml(tmp_path)
+    copy = tmp_path / "copy.yml"
+    copy.write_bytes(on_disk.encode("utf-8"))
+    assert _is_the_stored_file(copy, tmp_path) is same
+
+
+@pytest.mark.parametrize(
+    ("layout", "on_disk", "held"),
+    [("pr", "x\n", True), ("pr", "x #|| true\n", False), ("none", "x #|| true\n", True), ("pull", "x #|| true\n", True)],
+    ids=["the-job-as-stored", "the-job-rewritten", "no-checkout", "a-checkout-under-another-name"],
+)
+def test_f2_the_layout(tmp_path: Path, layout: str, on_disk: str, held: bool) -> None:
+    root = tmp_path / "root"
+    (root / ".github" / "workflows").mkdir(parents=True)
+    (root / STORED_NAME).write_bytes(on_disk.encode("utf-8"))
+    if layout != "none":
+        stored_fast_yml(root / layout)
+    assert _held_to_the_stored_file(root) is held
