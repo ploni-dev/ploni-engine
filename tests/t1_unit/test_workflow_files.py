@@ -122,9 +122,12 @@ def repository_with(tmp_path: Path, attributes: str = "", beside: bool = False) 
 
     The workflow is staged first, and then the attribute file alone, by its path, so that git
     does not stage the workflow again under the attribute: the cases ask what git says about it,
-    not what git does with an encoding this machine may not know. For an encoding it does not
-    know git still prints an error line here, and does not refuse; `add -A` would stage the
-    workflow again and fail (measured on git 2.49: exit 128; the case unknown-encoding holds it).
+    not what git does with an encoding this machine may not know. Where the workflow was
+    written in the same second as it was staged, git reads it once more: for an encoding it does
+    not know that is an error line here, not a refusal, and `add -A` would stage the workflow
+    again and fail (measured on git 2.49: exit 128 in 37 of 40 runs; in the other 3 the two were
+    a second apart and `add -A` passed; the case unknown-encoding holds it in the same-second
+    runs only).
     """
     folder = tmp_path / WORKFLOWS
     folder.mkdir(parents=True)
