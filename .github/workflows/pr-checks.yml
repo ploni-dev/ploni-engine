@@ -1,0 +1,101 @@
+# The small checks of a PR in one job (issue #209). Achia, 2026-11-24, "Yes, prepare it locally
+# (Recommended)", to cutting the Actions minutes; 2026-11-25, "Yes, add it (Recommended)", with
+# these lines shown to him, and "Yes, trusted checks first (Recommended)" to their order;
+# 2026-11-24, "Go with your recommendation": the reviewed-commit check of issue #176 runs here as
+# a step and has no workflow of its own.
+# Six of the seven checks are the command of a workflow that runs today (changed-paths, pr-size,
+# pr-body, ratchet, waiver, commit-order); the seventh is scripts/check_reviewed_commit.py, which
+# ran on no PR before. One job starts one machine where six did; a job is billed in whole minutes.
+# The checkout is GitHub's merge of the PR into its base, with all its history: commit-order and
+# reviewed-commit read every commit of the PR (base HEAD^1, the PR's head HEAD^2); of the other
+# five, four read HEAD^1...HEAD and need two commits, and pr-body reads the body and the PR's
+# template only. Main is checked out a second time under main-copy/.
+# The order matters. commit-order and reviewed-commit run main's copies of their scripts
+# (PYTHONPATH main-copy, `python -P`, so the PR's folder is not put on the import path), and they
+# run first, before any file of the PR is run: a step that runs the PR's files can rewrite
+# main-copy/ (the review of this file, finding 1, measured with a planted file; the fault the
+# review of #195 named in its finding 1). The five steps after them run the PR's own copies of
+# their scripts, as their workflows do today. Nothing is installed: the scripts need the standard
+# library only.
+# Dry runs on the laptop, on #209 and in this file's review: the seven checks pass and refuse as
+# the six jobs and the script run by hand do; a planted script of the same name does not run in
+# the two first checks; a file planted for a later step does not reach them in this order, and
+# did in the order of this file's first version.
+# The PR's body reaches the scripts only through the environment, never inside a shell command,
+# so that no text in a PR body can run as code (as pr-body.yml).
+# `if: ${{ !cancelled() }}` on each check: every check runs and reports even when an earlier one
+# failed, and the job is red when any step is. The failed rule is in the job's log. A refusal of
+# the first two checks says HEAD^1 where it means main, and HEAD^1..HEAD^2 for the PR's commits.
+# Known limits:
+# - GitHub runs the PR's own copy of this file on a pull request, so a PR with no .py file that
+#   edits it switches it off, every check green; only the review stands against it, until this
+#   file's pin (the next PR), which a PR can only change together with a .py file.
+# - The last five checks run the PR's own copies of their scripts, and any file Python imports
+#   from the PR's folder, as their workflows do today.
+# - Until the guard patch that names pr-checks, the merge gate does not require this check
+#   (PENDING_CHECKS in tests/t1_unit/test_guard.py); once the job runs, a run of it that is not
+#   green refuses the merge all the same, as any check does. The six workflows it gathers run
+#   beside it until they are removed, each step asked of Achia on its own.
+# - Not measured before this file ran on GitHub: `!cancelled()` on a step after a failed one; the
+#   first checkout with the whole history together with a second under a path (each half ran:
+#   commit-order.yml, and run 45114576168 of #195 with the first checkout one commit deep);
+#   whether setup-python runs anything from the PR's folder; that the job stays under one billed
+#   minute.
+name: pr-checks
+
+on:
+  pull_request:
+    # edited: a body that was edited, or a new base, is judged again (as the six workflows).
+    types: [opened, edited, synchronize, reopened]
+
+permissions:
+  contents: read
+
+jobs:
+  pr-checks:
+    runs-on: ubuntu-24.04
+    # The seven scripts took under 3 s together on the laptop; commit-order's job took 17 to 24 s
+    # on GitHub (the eight check runs of #198). Room for a long PR's history.
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          # commit-order and reviewed-commit read every commit of the PR, not the last one only.
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          ref: main
+          path: main-copy
+          persist-credentials: false
+      - uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          # build-plan.md Phase 0: Python 3.13; the laptop runs 3.13.5.
+          python-version: "3.13.5"
+      # Main's copies first: no file of the PR has run when these two start.
+      - if: ${{ !cancelled() }}
+        env:
+          PYTHONPATH: ${{ github.workspace }}/main-copy
+        run: python -P -m scripts.check_commit_order HEAD^1 HEAD^2
+      - if: ${{ !cancelled() }}
+        env:
+          PYTHONPATH: ${{ github.workspace }}/main-copy
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: python -P -m scripts.check_reviewed_commit HEAD^1 HEAD^2
+      # The PR's own copies, as their five workflows run them today.
+      - if: ${{ !cancelled() }}
+        run: python scripts/check_changed_paths.py HEAD^1 HEAD
+      - if: ${{ !cancelled() }}
+        run: python -m scripts.check_pr_size HEAD^1 HEAD
+      - if: ${{ !cancelled() }}
+        run: python scripts/check_pr_body.py
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+      - if: ${{ !cancelled() }}
+        run: python -m scripts.check_ratchet HEAD^1 HEAD
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
+      - if: ${{ !cancelled() }}
+        run: python -m scripts.check_waiver HEAD^1 HEAD
+        env:
+          PR_BODY: ${{ github.event.pull_request.body }}
