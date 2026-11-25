@@ -189,7 +189,7 @@ class Redacting(logging.Formatter):
         """
         head = f"{self._time(record)} {self._level(record)} {self._place(record)}"
         if not issubclass(type(record.msg), Event):
-            body = WITHHELD
+            body = record.getMessage()
         else:
             fields = record.__dict__.get(FIELDS)
             pairs = dict.items(fields) if type(fields) is dict else ()
