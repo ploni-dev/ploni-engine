@@ -11,19 +11,23 @@ Contract: `code_lines(path)` reads the file as UTF-8 and raises ValueError, nami
 it holds any character outside ASCII, so no character with another meaning for GitHub reaches
 the comparison; when it holds a control character other than tab and the line ends (a NUL in a
 comment leaves the code lines as they are, and by the runner's YAML library the file is then
-no workflow at all); and when the path is a symbolic link, which it would follow to another
-file than the one GitHub runs (issue #239; the review of #240, finding 2). Otherwise it returns the file's lines, split at LF, CR and CRLF (`read_text`
-turns each into LF), without comment lines and blank lines, with a trailing comment (one or more
-spaces, then `#`) cut and trailing spaces dropped, indentation kept.
+no workflow at all); and when the path itself is a symbolic link, which it would follow to
+another file than the one GitHub runs (issue #239; the review of #240, finding 2). Otherwise it
+returns the file's lines, split at LF, CR and CRLF (`read_text` turns each into LF), without
+comment lines and blank lines, with a trailing comment (one or more spaces, then `#`) cut and
+trailing spaces dropped, indentation kept.
 
 Known limits: a tab is kept where YAML takes it as whitespace (before a trailing comment, or at
 the end of a line), so the same workflow with a tab there reads as other lines: a pin fails
 closed. A ` #` inside a quoted value would be cut too; no workflow pinned here has one. The
 pinned workflows are ASCII (measured in #166 for the five there were then); a non-ASCII
-character in one of them, even in a comment, makes its pin raise. The file is read as git
-checked it out, and GitHub runs it as git stores it: tests/t1_unit/test_workflow_files.py
-refuses the git attributes that rewrite a workflow on checkout, and a workflow stored as a link
-(issue #239).
+character in one of them, even in a comment, makes its pin raise. Only the file itself is
+looked at for a link; a linked folder above it is read through. The file is read as git checked
+it out, and GitHub runs it as git stores it: in the fast suite
+tests/t1_unit/test_workflow_files.py holds the two together (the mode each workflow is stored
+with, the git attributes that rewrite a file on checkout, the stored bytes against the ones on
+disk), and in the fast-pin job, which reads the PR's fast.yml outside that suite,
+tests/t1_unit/test_fast_workflow.py does (issue #239).
 """
 
 from __future__ import annotations
@@ -42,7 +46,8 @@ def code_lines(path: Path) -> list[str]:
     Why: the pin tests compare a whole workflow, not patterns in it (the module docstring).
     Contract: args, the workflow file; returns its code lines as the module docstring says;
     raises ValueError on a character outside ASCII, on a control character other than tab and
-    the line ends, and on a path that is a symbolic link; OSError when the file cannot be read.
+    the line ends, and on a path that is itself a symbolic link; OSError when the file cannot be
+    read.
     Known limits: those of the module docstring.
     """
     if path.is_symlink():

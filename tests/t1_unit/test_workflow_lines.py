@@ -10,8 +10,9 @@ Equivalence classes:
   W2 a code line changed or added (a checkout of another ref, a job BASH_ENV, a second step
      written `- run :`, a push trigger, PR_BODY moved from the run step to the job): other lines
   W3 a character outside ASCII anywhere, in a code line or a comment: ValueError
-  W4 a control character other than tab and the line ends (NUL, SOH, vertical tab, form feed,
-     escape, DEL), in a comment or in a code line: ValueError; a tab inside a comment and CRLF
+  W4 a control character other than tab and the line ends (each of 0x00 to 0x1f but tab, line
+     feed and carriage return, and DEL), in a comment or in a code line: ValueError; a tab
+     inside a comment and CRLF
      line ends are none (issue #239: a NUL in a comment leaves the code lines as they are, and
      by the runner's YAML library the file is then no workflow at all)
   W5 the file is a symbolic link to a workflow: ValueError (issue #239: the reader would follow
@@ -47,6 +48,8 @@ WAIVER_ENV = (
 JOB_ENV = "    env:\n      PR_BODY: ${{ github.event.pull_request.body }}\n"
 # pr-checks.yml, for the classes added with issue #239: the six small workflows are on their way out.
 JOB_TIMEOUT = "    timeout-minutes: 5\n"
+# Every control character the reader refuses: both ends of the range and all between.
+CONTROLS = [chr(code) for code in range(0x20) if code not in (0x09, 0x0A, 0x0D)] + ["\x7f"]
 
 
 def edited(tmp_path: Path, workflow: str, *pairs: tuple[str, str], crlf: bool = False) -> tuple[list[str], Path]:
@@ -113,7 +116,7 @@ def test_w3_outside_ascii(tmp_path: Path, old: str, new: str) -> None:
 
 
 @pytest.mark.parametrize("where", ["comment", "code"])
-@pytest.mark.parametrize("character", ["\x00", "\x01", "\x0b", "\x0c", "\x1b", "\x7f"], ids=["nul", "soh", "vertical-tab", "form-feed", "escape", "del"])
+@pytest.mark.parametrize("character", CONTROLS, ids=[f"0x{ord(character):02x}" for character in CONTROLS])
 def test_w4_a_control_character(tmp_path: Path, character: str, where: str) -> None:
     new = JOB_TIMEOUT + f"    # note{character}\n" if where == "comment" else JOB_TIMEOUT.rstrip("\n") + f"{character}\n"
     _, path = edited(tmp_path, "pr-checks.yml", (JOB_TIMEOUT, new))
