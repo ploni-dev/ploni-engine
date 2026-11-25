@@ -27,11 +27,18 @@ Boundaries:
      skips the top of a file would otherwise pass
   B3 the file's last line: a trailing comment on it is cut (W1), a tab before a comment on it
      shows (B1), U+0085 and U+00A0 on it are refused (A2, A3)
+  B4 the kind of line. On changed-paths.yml, which these cases edited until the cut of #209,
+     one line was the last line, a step line and a run line at once; pr-checks.yml has no
+     such line. So the trailing comment stands on every line of the last step (W1); A2 and
+     A3 move the last step's run line to the end of the file and stand on it, and A2 stands
+     on a step line too; the tab before a comment stands on the last line, on a run line and
+     on a step line (B1)
 Adversarial (the reviews of #164, pass 2, and #166, pass 1): characters that end a line or a
 comment for GitHub's parser and not for Python's split, or count as whitespace for Python only:
   A1 U+2028 inside a comment, then `if: false`
-  A2 U+0085 inside a trailing comment of the file's last line, then `continue-on-error: true`
-  A3 U+00A0 before `#|| true` at the end of the file's last line
+  A2 U+0085 inside a trailing comment of the run line that ends the file (B4), and of a step
+     line, then `continue-on-error: true`
+  A3 U+00A0 before `#|| true` at the end of the run line that ends the file (B4)
 Hebrew and document axes: do not apply; the input is a workflow file. A Hebrew word in a comment
 is outside ASCII, so it is refused (W3).
 """
@@ -57,7 +64,9 @@ WAIVER_ENV = "        env:\n          PR_BODY: ${{ github.event.pull_request.bod
 JOB_ENV = "    env:\n      PR_BODY: ${{ github.event.pull_request.body }}\n"
 # The waiver step ends the file; its last line is the file's last line.
 LAST_STEP = STEP_IF + WAIVER_RUN + WAIVER_ENV
-# Read from the file, so that a reworded first comment of the workflow does not break a case.
+# Read from the file, so that a reworded first comment of the workflow does not break a case
+# (unless its whole text also ends another line). Read at import: without pr-checks.yml this
+# file is not collected, which is red too.
 FIRST = (WORKFLOWS / "pr-checks.yml").read_text(encoding="utf-8").split("\n", 1)[0] + "\n"
 # Every control character the reader refuses: both ends of the range and all between.
 CONTROLS = [chr(code) for code in range(0x20) if code not in (0x09, 0x0A, 0x0D)] + ["\x7f"]
@@ -68,7 +77,8 @@ def edited(tmp_path: Path, workflow: str, *pairs: tuple[str, str], crlf: bool = 
     for old, new in pairs:
         assert text.count(old) == 1, old
         text = text.replace(old, new)
-    path = tmp_path / workflow
+    # Not the workflow's own name: a reader that keeps a rule for one file name only must fail.
+    path = tmp_path / "copy.yml"
     path.write_bytes((text.replace("\n", "\r\n") if crlf else text).encode("utf-8"))
     return code_lines(WORKFLOWS / workflow), path
 
@@ -78,7 +88,7 @@ def edited(tmp_path: Path, workflow: str, *pairs: tuple[str, str], crlf: bool = 
     [
         ("name: pr-checks\n", "# a comment line\nname: pr-checks\n"),
         (TIMEOUT, TIMEOUT + "      \n"),
-        (LAST_STEP, STEP_IF.rstrip("\n") + "  # a trailing comment\n" + (WAIVER_RUN + WAIVER_ENV).rstrip("\n") + "  # a trailing comment\n"),
+        (LAST_STEP, "".join(line + "  # a trailing comment\n" for line in LAST_STEP.splitlines())),
         (TIMEOUT, TIMEOUT),
     ],
     ids=["comment-line", "blank-line-of-spaces", "trailing-comment", "unchanged"],
@@ -104,8 +114,10 @@ def test_w1_crlf(tmp_path: Path) -> None:
         [(WAIVER_RUN + WAIVER_ENV, WAIVER_RUN), (TIMEOUT, TIMEOUT + JOB_ENV)],
         # The file's last line: a reader that drops the end of the file must fail here.
         [(WAIVER_RUN + WAIVER_ENV, (WAIVER_RUN + WAIVER_ENV).rstrip("\n") + "\t# a comment after a tab\n")],
+        [(RUN, RUN.rstrip("\n") + "\t# a comment after a tab\n")],
+        [(STEP_IF + RUN, STEP_IF.rstrip("\n") + "\t# a comment after a tab\n" + RUN)],
     ],
-    ids=["first-line", "checkout-ref", "bash-env", "second-run-step", "push-trigger", "pr-body-off-the-run-step", "b1-tab"],
+    ids=["first-line", "checkout-ref", "bash-env", "second-run-step", "push-trigger", "pr-body-off-the-run-step", "b1-tab", "b1-tab-on-a-run-line", "b1-tab-on-a-step-line"],
 )
 def test_w2_other_lines(tmp_path: Path, pairs: list[tuple[str, str]]) -> None:
     merged, path = edited(tmp_path, "pr-checks.yml", *pairs)
@@ -116,11 +128,12 @@ def test_w2_other_lines(tmp_path: Path, pairs: list[tuple[str, str]]) -> None:
     ("old", "new"),
     [
         (TIMEOUT, TIMEOUT + "    # note     if: false\n"),
-        (LAST_STEP, LAST_STEP.rstrip("\n") + " # x\u0085        continue-on-error: true\n"),
-        (LAST_STEP, LAST_STEP.rstrip("\n") + " #|| true\n"),
+        (LAST_STEP, STEP_IF + WAIVER_ENV + WAIVER_RUN.rstrip("\n") + " # x\u0085        continue-on-error: true\n"),
+        (LAST_STEP, STEP_IF + WAIVER_ENV + WAIVER_RUN.rstrip("\n") + " #|| true\n"),
+        (STEP_IF + RUN, STEP_IF.rstrip("\n") + " # x\u0085        continue-on-error: true\n" + RUN),
         (FIRST, "# יעקב\n" + FIRST),
     ],
-    ids=["a1-line-separator", "a2-next-line", "a3-no-break-space", "w3-hebrew-in-a-comment"],
+    ids=["a1-line-separator", "a2-next-line", "a3-no-break-space", "a2-on-a-step-line", "w3-hebrew-in-a-comment"],
 )
 def test_w3_outside_ascii(tmp_path: Path, old: str, new: str) -> None:
     _, path = edited(tmp_path, "pr-checks.yml", (old, new))
