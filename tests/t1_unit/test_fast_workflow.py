@@ -1,4 +1,4 @@
-"""Tests of .github/workflows/fast.yml: its code lines, exactly as on main since #77.
+"""Tests of .github/workflows/fast.yml: its code lines, exactly as on main since #253.
 
 Why: fast-suite is the check the merge gate has asked for by name since #80, and a workflow-only
 PR holds no .py file, so the changed-paths check lets an edit through that keeps it green while
@@ -11,11 +11,11 @@ goes red if someone edits that robot to run fewer tests"; 2026-11-23, "Yes, one 
 
 Equivalence class:
   F1 the workflow's code lines (tests/workflow_lines.py: comments and blank lines left out, a
-     character outside ASCII refused) equal EXPECTED, the 18 lines on main: the push and
-     pull_request triggers, read-only contents, the job fast-suite with its runner and its five
-     minutes, the two pinned actions, the hashed install and `make check`. Any changed or added
-     line is red; a comment is not. Until step 10 of the plan on issue #209 the lines may also
-     equal NEXT: EXPECTED with the one line that keeps the push trigger to main.
+     character outside ASCII refused) equal EXPECTED, the 19 lines on main: the push trigger,
+     kept to main (Achia, 2026-11-25, "Yes, once per PR push (Recommended)", issue #209), and the
+     pull_request trigger, read-only contents, the job fast-suite with its runner and its five
+     minutes, the two pinned actions, the hashed install and `make check`. Any changed, added
+     or missing line is red; a comment is not.
   F2 in the fast-pin job, where main is checked out at the root and the PR under pr/, the
      fast.yml under test holds the bytes that the PR's commit stores, line ends apart: the job
      copies the PR's checked-out file, and a .gitattributes line of the PR could have rewritten
@@ -61,6 +61,7 @@ EXPECTED = [
     "name: fast",
     "on:",
     "  push:",
+    "    branches: [main]",
     "  pull_request:",
     "permissions:",
     "  contents: read",
@@ -77,11 +78,6 @@ EXPECTED = [
     "      - run: python -m pip install --require-hashes -r requirements-dev.txt",
     "      - run: make check",
 ]
-# Step 8 of the plan on issue #209 (Achia, 2026-11-25, "Yes, once per PR push (Recommended)"): the
-# next PR adds this one line under `push:`, after the first three lines (name, on, push), so that
-# a push to a PR's branch runs the suite once, for the PR. Until the third PR drops the old
-# shape, the pin accepts either exact shape and no other.
-NEXT = [*EXPECTED[:3], "    branches: [main]", *EXPECTED[3:]]
 
 
 @pytest.fixture(autouse=True)
@@ -92,7 +88,7 @@ def no_local_variables(monkeypatch: pytest.MonkeyPatch) -> None:
 
 
 def test_f1_the_workflow() -> None:
-    assert code_lines(WORKFLOW) in (EXPECTED, NEXT)
+    assert code_lines(WORKFLOW) == EXPECTED
 
 
 def _is_the_stored_file(workflow: Path, checkout: Path) -> bool:
