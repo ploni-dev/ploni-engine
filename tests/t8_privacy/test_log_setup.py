@@ -74,6 +74,11 @@ Adversarial:
   A5  the attribute `logging` of another module (`concurrent.futures._base.logging`)    refused
   A6  an escape from any object (ESCAPES), as an attribute or by getattr: every class, a
       function's globals or builtins, a frame's or a traceback's globals, locals, frame   refused
+  A7  a `**` argument in a call of `event`, however `event` is bound, a literal mapping too:
+      the filter writes every key that is a lower-case word, so a mapping built from a
+      document would write its words (issue #216)                          refused;
+      keyword arguments written in the call, `**` in a call of another function, and an
+      `event` of a project module outside ploni/safety/                    no line
 
 Not applicable: the Hebrew axes and the document axes of the test-matrix skill, as the input
 is Python source and no document is handled.
@@ -144,6 +149,9 @@ ALLOWED = {
 # The two functions of the filter that a file may only call, as a statement of its own: handed on,
 # they carry the filter's globals, and `install` returns the filter's own handler.
 CALLED_ONLY = ("ploni.safety.logging.event", "ploni.safety.logging.install")
+# The function whose field keys are written: a `**` in its call spreads keys taken from data
+# (the filter's Known limits, issue #216), so every key must be written in the call.
+EVENT = "ploni.safety.logging.event"
 # The attribute by which a module that imports logging hands it on (`concurrent.futures._base.logging`).
 LOGGING_ATTRIBUTE = "logging"
 # The project's own modules, whose attribute `logging` is their own (they cannot import the module
@@ -277,8 +285,12 @@ def _uses(tree: ast.AST, bound: dict[str, str]) -> list[tuple[int, str]]:
             attributes, outer = _chain(node, parents)
             call = parents.get(outer)
             stated = isinstance(call, ast.Call) and call.func is outer and isinstance(parents.get(call), ast.Expr)
-            if why := _judge(".".join([bound[node.id], *attributes]), stated):
+            dotted = ".".join([bound[node.id], *attributes])
+            if why := _judge(dotted, stated):
                 found.append((node.lineno, why))
+            spread = isinstance(call, ast.Call) and call.func is outer and any(k.arg is None for k in call.keywords)
+            if dotted == EVENT and spread:
+                found.append((node.lineno, f"spreads a mapping into {EVENT}"))
     return found
 
 
