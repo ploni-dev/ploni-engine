@@ -67,23 +67,26 @@ merges(command): the `gh pr merge` commands in a shell command, as (number, repo
   A8m   a number with a letter (80x); `merge` before `pr`                 no number; no merge
 
 red(checks): why the checks of a PR's last commit are not green. "Every check" is one green
-run of each of REQUIRED_CHECKS (Achia, 2026-11-22, "Yes, name all seven (Recommended)", #180;
-fast-pin and commit-order added by 2026-11-23, "Yes, one workflow each (Recommended)", #173, #175).
+run of each of REQUIRED_CHECKS. The list is Achia's: 2026-11-22, "Yes, name all seven
+(Recommended)" (#180); 2026-11-23, "Yes, one workflow each (Recommended)", which added fast-pin
+and commit-order (#173, #175); 2026-11-25, "Yes, you apply it (Recommended)" (#209): pr-checks,
+the one job that runs the six small checks and reviewed-commit as steps, in place of the six
+names changed-paths, commit-order, pr-body, pr-size, ratchet and waiver.
   EC7   every check, and a second green fast-suite run    green
   EC8   every check and a green commit status       green
   EC9   a finished check with any conclusion but SUCCESS    red, named with its conclusion
   EC10  a check that has not finished               red, named with its status
   EC11  a commit status in any state but SUCCESS    red
   EC12  every check green but fast-suite, which is missing  red
-  EC34  every check but one of the nine             red, one reason that names the missing one
+  EC34  every check but one of the four             red, one reason that names the missing one
   EC35  REQUIRED_CHECKS is every job of the workflows that run on each pull request: all jobs
         but full-suite, which starts on a label only; .yml and .yaml, a job line with a comment,
         any indentation under jobs:; a job with a name: of its own is red (the review of #187)
-        a job named on PENDING_CHECKS (a new check on its way, with its issue) may run on PRs
-        before its name is in REQUIRED_CHECKS, by one job only; a pending name that is already
+        a job named on PENDING_CHECKS (a check on its way in or out, with its issue) may run on
+        PRs while its name is not in REQUIRED_CHECKS, by one job only; a pending name that is
         required or full-suite, or has no issue number (an int over 0), is red; each case is
         tested on workflows made in a temporary folder
-  B4    no check at all, or no list                 red, one reason for each of the nine
+  B4    no check at all, or no list                 red, one reason for each of the four
   A6    a required check only as a commit status, which can be set by hand    red
   A7    one of two fast-suite runs red              red
   A8    an entry with no known shape                red
@@ -393,15 +396,10 @@ def test_red_gives_one_reason_for_each_of_these(checks: list[dict[str, str]] | N
 
 def test_ec34_each_required_check_that_is_missing_is_named() -> None:
     assert guard.REQUIRED_CHECKS == (
-        "changed-paths",
-        "commit-order",
         "fast-pin",
         "fast-suite",
         "nightly",
-        "pr-body",
-        "pr-size",
-        "ratchet",
-        "waiver",
+        "pr-checks",
     )
     for name in guard.REQUIRED_CHECKS:
         assert guard.red(every_check(name)) == [f"there is no {name} check on the last commit"]
@@ -452,16 +450,25 @@ def _check_names(text: str) -> dict[str, str]:
     return names
 
 
-# New checks on their way, each with its issue: a job named here may run on PRs before its name is
-# in REQUIRED_CHECKS, as its workflow and the guard patch that names it come in two PRs (the
-# changed-paths check refuses a workflow with a .py file). The guard patch that adds a name also
-# updates EC34's pin and takes the name off this list, in one patch. Achia, 2026-11-23, "A short
-# pending list (Recommended)". Each name added loosens EC35 and needs his decision on that check;
-# fast-pin, commit-order and reviewed-commit had it ("Yes, one workflow each (Recommended)").
-# fast-pin (#173) and commit-order (#175) left it when the gate named them; reviewed-commit never
-# came onto it: on 2026-11-24 he chose that it runs as a step of the one job pr-checks (#176).
-# pr-checks has it: Achia, 2026-11-25, "Yes, add it (Recommended)" (#209).
-PENDING_CHECKS: dict[str, int] = {"pr-checks": 209}
+# Checks the gate does not ask for by name, each with its issue: a job named here may run on PRs
+# while its name is not in REQUIRED_CHECKS. A new check is here on its way in, as its workflow
+# and the guard patch that names it come in two PRs (the changed-paths check refuses a workflow
+# with a .py file); that guard patch also updates EC34's pin and takes the name off this list,
+# in one patch. Achia, 2026-11-23, "A short pending list (Recommended)". Each name added loosens
+# EC35 and needs his decision on that check. fast-pin (#173), commit-order (#175) and pr-checks
+# (#209) were here on their way in and left when the gate named them; reviewed-commit never came
+# onto it: on 2026-11-24 he chose that it runs as a step of the combined job (#176), which is
+# pr-checks. The six names below are here on their way out: since #229 pr-checks runs each as a
+# step, the gate asks for pr-checks in their place, and their own workflows run until they are
+# removed. Achia, 2026-11-25, "Yes, you apply it (Recommended)", with these six shown (#209).
+PENDING_CHECKS: dict[str, int] = {
+    "changed-paths": 209,
+    "commit-order": 209,
+    "pr-body": 209,
+    "pr-size": 209,
+    "ratchet": 209,
+    "waiver": 209,
+}
 
 
 def _workflow_problems(folder: Path, required: tuple[str, ...], pending: dict[str, int]) -> list[str]:
@@ -516,8 +523,8 @@ def test_ec35_workflow_problems_in_each_case(tmp_path: Path, workflows: dict[str
 def _pending_problems(pending: dict[str, int], required: tuple[str, ...]) -> list[str]:
     """Return why PENDING_CHECKS holds a name it may not.
 
-    Why: a name on the list is new, so it may not be one the gate requires or full-suite, and it
-    names its issue. Contract: pending, PENDING_CHECKS; required, REQUIRED_CHECKS. Returns one
+    Why: a name on the list is one the gate does not ask for, on its way in or out, so it may
+    not be one the gate requires or full-suite, and it names its issue. Contract: pending, PENDING_CHECKS; required, REQUIRED_CHECKS. Returns one
     line per problem, empty when the list is fine.
     """
     problems = [f"{name} is already a check of the gate" for name in pending if name in {*required, "full-suite"}]
