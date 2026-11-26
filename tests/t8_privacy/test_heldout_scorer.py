@@ -16,12 +16,26 @@ Test matrix (each case on the batch of SEED):
       which keeps the real error stream: no planted text anywhere (scorer review 1, finding 1)
   O4  main on a detector that exits with a document's text as its message: exit 1, one ASCII
       line on the error stream, no planted text anywhere (scorer review 1, finding 1)
+The cases below read the process's file handles 1 and 2 (capfd), where the interpreter's own
+streams write:
+  O5  a detector that prints every document to the interpreter's original output and error
+      streams (sys.__stdout__, sys.__stderr__): no planted text (scorer review 2, finding 4)
+  O6  a detector that writes every document to file handles 1 and 2 with os.write: no planted
+      text
+  O7  a detector that raises an error derived from BaseException alone, with a document's
+      text: exit 1, one ASCII line, no planted text (scorer review 2, finding 5)
+  O8  a detector that names its type, and the class of its error, by a document's text: no
+      planted text
+  O9  a detector that turns logging back on and logs every document to the error stream: no
+      planted text
 
-Known limits: a detector that writes to the process's own file handles, not through sys.stdout,
-sys.stderr or logging, is not held back (the scorer's Known limits).
+Known limits: what a detector writes after main has returned (a thread, an atexit handler, a
+process it started) and what it writes to a console it opens itself are not held back (the
+scorer's Known limits).
 """
 
 import logging
+import os
 import sys
 
 import pytest
@@ -62,6 +76,46 @@ def logging_detector(text: str) -> list[tuple[int, int, str]]:
 def exiting_detector(text: str) -> list[tuple[int, int, str]]:
     """A detector that exits with the start of the document as its message."""
     sys.exit(text[:80])
+
+
+def original_streams_detector(text: str) -> list[tuple[int, int, str]]:
+    """A detector that prints the document to the interpreter's original streams."""
+    print(text, file=sys.__stdout__, flush=True)
+    print(text, file=sys.__stderr__, flush=True)
+    return []
+
+
+def handle_detector(text: str) -> list[tuple[int, int, str]]:
+    """A detector that writes the document to file handles 1 and 2."""
+    os.write(1, text.encode("utf-8"))
+    os.write(2, text.encode("utf-8"))
+    return []
+
+
+class Outside(BaseException):
+    """An error of a class derived from BaseException alone."""
+
+
+def outside_detector(text: str) -> list[tuple[int, int, str]]:
+    """A detector that raises an error outside Exception with the document's start."""
+    raise Outside(text[:80])
+
+
+def naming_detector(text: str) -> list[tuple[int, int, str]]:
+    """A detector that raises an error of a class named by the document's first line."""
+    raise type(text.splitlines()[0].replace(" ", "_"), (Exception,), {})()
+
+
+def typing_detector(text: str) -> list[tuple[int, int, str]]:
+    """A detector that names the type of its one detection by the document's start."""
+    return [(0, 1, text[:40])]
+
+
+def relogging_detector(text: str) -> list[tuple[int, int, str]]:
+    """A detector that turns logging back on and logs the document's start."""
+    logging.disable(logging.NOTSET)
+    LOGGER.warning("seen: %s", text[:80])
+    return []
 
 
 def leaked(shown: str) -> list[int]:
@@ -112,4 +166,43 @@ def test_o4_main_holds_back_a_detectors_exit_message(capsys: pytest.CaptureFixtu
     streams = capsys.readouterr()
     shown = (code, streams.out, len(streams.err.splitlines()), streams.err.isascii())
     assert shown == (1, "", 1, True)
+    assert leaked(streams.out + streams.err) == []
+
+
+@pytest.mark.parametrize("detector", ["original_streams_detector", "handle_detector"])
+def test_o5_o6_main_holds_back_what_reaches_the_file_handles(detector: str, capfd: pytest.CaptureFixture[str]) -> None:
+    code = scorer.main([f"{__name__}:{detector}"])
+    streams = capfd.readouterr()
+    assert (code, streams.err) == (0, "")
+    assert leaked(streams.out + streams.err) == []
+
+
+def test_o7_main_holds_back_an_error_outside_exception(capfd: pytest.CaptureFixture[str]) -> None:
+    code = scorer.main([f"{__name__}:outside_detector"])
+    streams = capfd.readouterr()
+    shown = (code, streams.out, len(streams.err.splitlines()), streams.err.isascii())
+    assert shown == (1, "", 1, True)
+    assert leaked(streams.out + streams.err) == []
+
+
+@pytest.mark.parametrize("detector", ["naming_detector", "typing_detector"])
+def test_o8_main_prints_no_name_a_detector_makes(detector: str, capfd: pytest.CaptureFixture[str]) -> None:
+    scorer.main([f"{__name__}:{detector}"])
+    streams = capfd.readouterr()
+    shown = (streams.out + streams.err).isascii()
+    assert shown
+    assert leaked(streams.out + streams.err) == []
+
+
+def test_o9_main_holds_back_logging_turned_back_on(capfd: pytest.CaptureFixture[str]) -> None:
+    handler = logging.StreamHandler(sys.__stderr__)
+    LOGGER.addHandler(handler)
+    LOGGER.propagate = False
+    try:
+        code = scorer.main([f"{__name__}:relogging_detector"])
+    finally:
+        LOGGER.removeHandler(handler)
+        logging.disable(logging.NOTSET)
+    streams = capfd.readouterr()
+    assert code == 0
     assert leaked(streams.out + streams.err) == []

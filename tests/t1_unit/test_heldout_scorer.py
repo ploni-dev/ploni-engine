@@ -35,10 +35,18 @@ Error paths (ValueError, and the message holds no text of the document):
       the branch, finding 2)
   E8  the detector exits with the document's text as its message: DetectorError as E7
       (scorer review 1, finding 1)
+  E9  the detector raises an error of a class derived from BaseException alone, with the text:
+      DetectorError (scorer review 2, finding 5)
+  E10 the detector raises an error of a class of its own whose name is the document's text:
+      DetectorError, whose message names no class of the detector's own
+  E11 the detector raises KeyboardInterrupt with the text: KeyboardInterrupt again, with no
+      message and nothing chained, so that an interrupt still stops the run
 
 The report:
   R1  one line per type, sorted, then TOTAL; names and numbers only
   R2  no text of a document in it
+  R3  a type the batch does not hold is shown as OTHER and its number, not by its name, so that
+      a detector cannot print text through a type's name
 
 A group (GROUPED below: the item of document 1 that starts at 0 is of group g; review 2 of the
 generator's branch, finding 21):
@@ -300,6 +308,51 @@ def test_g4_the_right_span_with_another_type() -> None:
 def exits_with_text(text: str) -> list[tuple[int, int, str]]:
     """A detector that exits with the start of the document's text as its message."""
     sys.exit(text[:60])
+
+
+class Outside(BaseException):
+    """An error of a class derived from BaseException alone."""
+
+
+def raises_outside(text: str) -> list[tuple[int, int, str]]:
+    """A detector that raises an error outside Exception, with the start of the text."""
+    raise Outside(text[:60])
+
+
+def raises_named(text: str) -> list[tuple[int, int, str]]:
+    """A detector that raises an error of a class named by the start of the text."""
+    raise type(text.split()[0], (Exception,), {})()
+
+
+def interrupts(text: str) -> list[tuple[int, int, str]]:
+    """A detector that raises KeyboardInterrupt with the start of the text."""
+    raise KeyboardInterrupt(text[:60])
+
+
+def test_e9_an_error_outside_exception() -> None:
+    with pytest.raises(DetectorError) as raised:
+        score(raises_outside, BATCH)
+    shown = (str(raised.value), raised.value.__cause__ is None, raised.value.__suppress_context__)
+    assert shown == ("document 0: the detector raised an error of its own class", True, True)
+
+
+def test_e10_an_error_of_a_class_named_by_the_text() -> None:
+    with pytest.raises(DetectorError) as raised:
+        score(raises_named, BATCH)
+    assert str(raised.value) == "document 0: the detector raised an error of its own class"
+
+
+def test_e11_an_interrupt_stops_the_run_without_its_message() -> None:
+    with pytest.raises(KeyboardInterrupt) as raised:
+        score(interrupts, BATCH)
+    shown = (raised.value.args, raised.value.__cause__ is None, raised.value.__suppress_context__)
+    assert shown == ((), True, True)
+
+
+def test_r3_a_type_the_batch_does_not_hold_is_not_named() -> None:
+    lines = report(score(detector_of({DOCUMENTS[2]: [(0, 4, "zeta words"), (0, 1, "Z")]}), BATCH))
+    assert [line.split()[0] for line in lines] == ["X", "Y", "OTHER_1", "OTHER_2", "TOTAL"]
+    assert not any(word in "\n".join(lines) for word in ("zeta", "words"))
 
 
 def test_e8_the_detector_exits() -> None:
