@@ -34,7 +34,7 @@ sweep. Equivalence classes:
                                 with the prefix, a folder with the prefix one level deeper: left alone
   EC13 a root that does not exist, an empty root    0
   EC14 a folder of a block that is still open (its lock beside it held, issue #212)    left,
-      not counted; the block still ends as before
+      not counted, and the sweep goes on to the folders after it; the block still ends as before
   EC15 a folder that a killed run left with its lock file beside it, not held    the folder and
       its lock file are removed, counted once
 private_dir and the lock (issue #212). Equivalence classes:
@@ -862,3 +862,11 @@ def test_ec16_the_lock_file_goes_when_the_block_ends_with_not_removed(tmp_path: 
     with pytest.raises(tempfiles.NotRemoved), tempfiles.private_dir(tmp_path) as folder:
         pass
     assert not folder.with_name(folder.name + tempfiles.LOCK_SUFFIX).exists()
+
+
+def test_ec14_sweep_goes_on_past_a_live_folder_to_a_dead_one(tmp_path: Path) -> None:
+    with tempfiles.private_dir(tmp_path) as folder:
+        dead = leftover(tmp_path, "zzz-dead")
+        assert tempfiles.sweep(tmp_path) == 1
+        assert not dead.exists()
+        assert folder.is_dir()

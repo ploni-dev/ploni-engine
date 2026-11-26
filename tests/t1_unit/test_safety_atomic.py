@@ -59,7 +59,8 @@ sweep_partials. Equivalence classes:
        file is still removed, then the first error is raised, not the last
   EC6  a folder that does not exist, an empty folder, a path that is a file    0
   EC12 a partial file that a live write holds (issue #212): the sweep runs between the write
-       and the rename    left, not counted; the write ends and the target holds all its bytes
+       and the rename    left, not counted, and a dead partial file after it is removed; the
+       write ends and the target holds all its bytes
 """
 
 import os
@@ -410,3 +411,22 @@ def test_ec12_sweep_partials_leaves_the_partial_file_of_a_live_write(tmp_path: P
     assert seen[0] == 0  # the partial file's fsync; POSIX also flushes the folder after the rename
     assert (tmp_path / "out.docx").read_bytes() == TEXT
     assert os.listdir(tmp_path) == ["out.docx"]
+
+
+def test_ec12_sweep_partials_goes_on_past_a_live_write_to_a_dead_partial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dead = tmp_path / f"{atomic.PARTIAL_PREFIX}zzz.docx.0000000000000000"
+    dead.write_bytes(b"left by a crash")
+    seen: list[int] = []
+    real_fsync = os.fsync
+
+    def sweep_while_writing(descriptor: int) -> None:
+        real_fsync(descriptor)
+        seen.append(atomic.sweep_partials(tmp_path))
+
+    monkeypatch.setattr(atomic.os, "fsync", sweep_while_writing)
+    atomic.write_atomic(tmp_path / "out.docx", TEXT)
+    assert seen[0] == 1  # the dead partial file, not the live one
+    assert not dead.exists()
+    assert (tmp_path / "out.docx").read_bytes() == TEXT
