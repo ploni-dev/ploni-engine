@@ -65,11 +65,11 @@ Adversarial:
 
 Known limits:
   - The helper's binding of tempfile reached as an attribute, not imported:
-    `from ploni.safety import tempfiles` then `tempfiles.tempfile.mkstemp()`: this test
-    reads imports only. And a star import of the helper, which binds it too: the reader gives
-    that import as `ploni.safety.tempfiles` only, not the names it binds. Both are to be closed
-    in the helper itself, in a PR of its own (#278, as the question of
-    issuecomment-7186453908 promised).
+    `from ploni.safety import tempfiles` then `tempfiles._tempfile.mkstemp()`: this test
+    reads imports only. Since #278 the helper binds the module under a private name and lists
+    its public names in `__all__`, so a star import of it binds no module and the route takes
+    a name that begins with an underscore: a deliberate act (ADR-0005's bar), tested by EC26
+    of tests/t1_unit/test_safety_tempfiles.py.
   - `sys.modules["tempfile"]` is no import, so it is not read, and no change to the helper
     closes it: any import of the module, under any name, puts it there. Reaching it is a
     deliberate act (ADR-0005's bar), like code given to exec.
@@ -95,8 +95,9 @@ ROOT = Path(__file__).resolve().parents[2]
 HELPER = "ploni/safety/tempfiles.py"
 HELPER_MODULE = "ploni.safety.tempfiles"
 BANNED = "tempfile"
-# The helper's own binding of the module: importing it from the helper goes around the helper.
-HELPER_BINDING = f"{HELPER_MODULE}.{BANNED}"
+# The helper's own bindings of the module, the old public name and the private one of #278:
+# importing either from the helper goes around the helper.
+HELPER_BINDINGS = (f"{HELPER_MODULE}.{BANNED}", f"{HELPER_MODULE}._{BANNED}")
 
 # The packages and the top modules of the plan's layout (build-plan.md section 4.7), and the
 # command line, `__main__`, which 4.7 does not list.
@@ -120,7 +121,7 @@ PLACES = TOP + tuple(
 
 def as_banned(item: Import) -> Import:
     """Return an import of the helper's binding of tempfile as an import of tempfile; any other as it is."""
-    if item.module == HELPER_BINDING or item.module.startswith(f"{HELPER_BINDING}."):
+    if any(item.module == binding or item.module.startswith(f"{binding}.") for binding in HELPER_BINDINGS):
         return item._replace(module=BANNED)
     return item
 
@@ -205,6 +206,8 @@ def test_ec2_the_helper_may_import_tempfile(form: str) -> None:
     ("source", "file", "importer", "is_package"),
     [
         ("from ploni.safety.tempfiles import tempfile\n", "ploni/api.py", "ploni.api", False),
+        ("from ploni.safety.tempfiles import _tempfile\n", "ploni/api.py", "ploni.api", False),
+        ("from .tempfiles import _tempfile as t\n", "ploni/safety/atomic.py", "ploni.safety.atomic", False),
         ("from ploni.safety.tempfiles import tempfile as tf\n", "ploni/api.py", "ploni.api", False),
         ("import ploni.safety.tempfiles.tempfile\n", "ploni/api.py", "ploni.api", False),
         ("from .tempfiles import tempfile\n", "ploni/safety/atomic.py", "ploni.safety.atomic", False),
