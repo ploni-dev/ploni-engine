@@ -61,6 +61,8 @@ sweep_partials. Equivalence classes:
   EC12 a partial file that a live write holds (issue #212): the sweep runs between the write
        and the rename    left, not counted, and a dead partial file after it is removed; the
        write ends and the target holds all its bytes
+  EC13 a sweep that takes the partial file before the writer holds it (the review of b7390ae,
+       finding 1)    the write fails with OSError before it writes; the target keeps its bytes
 """
 
 import os
@@ -68,7 +70,7 @@ from pathlib import Path
 
 import pytest
 
-from ploni.safety import atomic
+from ploni.safety import atomic, locks
 
 TEXT = "ישראל ישראלי, ת.ז. 123456782".encode()
 
@@ -430,3 +432,25 @@ def test_ec12_sweep_partials_goes_on_past_a_live_write_to_a_dead_partial(
     assert seen[0] == 1  # the dead partial file, not the live one
     assert not dead.exists()
     assert (tmp_path / "out.docx").read_bytes() == TEXT
+
+
+def test_ec13_a_sweep_that_takes_the_partial_file_first(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    target = tmp_path / "out.docx"
+    target.write_bytes(b"old")
+    real_open = atomic._open_partial
+    taken: list[object] = []
+
+    def opened_then_taken(path: Path) -> object:
+        handle = real_open(path)
+        taken.append(locks.take(path))
+        return handle
+
+    monkeypatch.setattr(atomic, "_open_partial", opened_then_taken)
+    try:
+        with pytest.raises(OSError):
+            atomic.write_atomic(target, TEXT)
+    finally:
+        for handle in taken:
+            if handle is not None:
+                handle.close()
+    assert target.read_bytes() == b"old"

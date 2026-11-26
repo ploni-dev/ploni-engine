@@ -41,6 +41,15 @@ private_dir and the lock (issue #212). Equivalence classes:
   EC16 inside the block the lock file `<folder>.lock` stands beside the folder in the root and
        is held; the folder itself is still empty; after the block both are gone, also when the
        block ends with NotRemoved
+The race of a run's start (the review of b7390ae, finding 1). Equivalence classes:
+  EC17 the sweep holds a folder's lock while it removes the folder
+  EC18 a run whose lock file a sweep already made (it holds it while it removes the folder)
+       -> FileExistsError at the start, before the block runs; the folder is not left
+  EC19 a run whose folder a sweep removed before the run held its lock -> FileNotFoundError at
+       the start, before the block runs
+  EC20 a lock path that cannot be opened (a folder in its place) -> the sweep goes on to the
+       folders after it, and raises that OSError at the end
+  EC21 a lock file with no folder, not held -> removed by the sweep, not counted
 
 Boundaries:
   B1  a block that makes nothing
@@ -99,6 +108,7 @@ if sys.platform == "win32":
 import pytest
 
 from ploni.safety import locks, tempfiles
+from tests.locking import held
 
 TEXT = "יעקב כהן / John Smith"
 # The kinds of link to a folder that this system has. A junction is the folder link of Windows and needs no
@@ -853,7 +863,7 @@ def test_ec16_the_lock_file_beside_the_folder(tmp_path: Path) -> None:
     with tempfiles.private_dir(tmp_path) as folder:
         lock = folder.with_name(folder.name + tempfiles.LOCK_SUFFIX)
         assert lock.is_file()
-        assert locks.is_held(lock) is True
+        assert held(lock) is True
         assert list(folder.iterdir()) == []
     assert list(tmp_path.iterdir()) == []
 
@@ -870,3 +880,67 @@ def test_ec14_sweep_goes_on_past_a_live_folder_to_a_dead_one(tmp_path: Path) -> 
         assert tempfiles.sweep(tmp_path) == 1
         assert not dead.exists()
         assert folder.is_dir()
+
+
+def test_ec17_the_sweep_holds_the_lock_while_it_removes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    folder = leftover(tmp_path, "dead")
+    seen: list[bool] = []
+    real_remove = tempfiles._remove
+
+    def remove_and_look(path: Path) -> None:
+        seen.append(held(path.with_name(path.name + tempfiles.LOCK_SUFFIX)))
+        real_remove(path)
+
+    monkeypatch.setattr(tempfiles, "_remove", remove_and_look)
+    assert tempfiles.sweep(tmp_path) == 1
+    assert seen == [True]
+    assert not folder.exists()
+
+
+def test_ec18_a_run_whose_lock_file_a_sweep_made(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    real_mkdtemp = tempfile.mkdtemp
+    ran: list[bool] = []
+
+    def made_and_taken(*arguments: object, **keywords: object) -> str:
+        name = real_mkdtemp(*arguments, **keywords)
+        Path(name + tempfiles.LOCK_SUFFIX).write_bytes(b"")
+        return name
+
+    monkeypatch.setattr(tempfiles.tempfile, "mkdtemp", made_and_taken)
+    with pytest.raises(FileExistsError), tempfiles.private_dir(tmp_path):
+        ran.append(True)
+    assert ran == []
+    assert [entry.is_dir() for entry in tmp_path.iterdir()] == [False]
+
+
+def test_ec19_a_run_whose_folder_a_sweep_removed_before_the_hold(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    real_hold = locks.hold
+    ran: list[bool] = []
+
+    def removed_then_held(handle: object) -> None:
+        for folder in tmp_path.iterdir():
+            if folder.is_dir():
+                folder.rmdir()
+        real_hold(handle)
+
+    monkeypatch.setattr(tempfiles.locks, "hold", removed_then_held)
+    with pytest.raises(FileNotFoundError), tempfiles.private_dir(tmp_path):
+        ran.append(True)
+    assert ran == []
+
+
+def test_ec20_a_lock_path_that_cannot_be_opened_does_not_stop_the_sweep(tmp_path: Path) -> None:
+    first = leftover(tmp_path, "a")
+    (tmp_path / f"{first.name}{tempfiles.LOCK_SUFFIX}").mkdir()
+    later = leftover(tmp_path, "b")
+    with pytest.raises(OSError) as raised:
+        tempfiles.sweep(tmp_path)
+    assert not isinstance(raised.value, tempfiles.NotRemoved)
+    assert not later.exists()
+    assert first.is_dir()
+
+
+def test_ec21_a_lock_file_with_no_folder_is_removed(tmp_path: Path) -> None:
+    (tmp_path / f"{tempfiles.PREFIX}gone{tempfiles.LOCK_SUFFIX}").write_bytes(b"")
+    assert tempfiles.sweep(tmp_path) == 0
+    assert list(tmp_path.iterdir()) == []

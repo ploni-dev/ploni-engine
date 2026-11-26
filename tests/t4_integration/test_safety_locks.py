@@ -34,7 +34,8 @@ import sys
 import time
 from pathlib import Path
 
-from ploni.safety import atomic, locks, tempfiles
+from ploni.safety import atomic, tempfiles
+from tests.locking import held
 
 ROOT = Path(__file__).resolve().parents[2]
 CONTENT = b"what a live run is still working on"
@@ -101,7 +102,7 @@ def killed(child: subprocess.Popen[str]) -> None:
 def freed(path: Path) -> bool:
     """Wait until no one holds the lock of a file, as the next start of a run would; say whether it came."""
     deadline = time.monotonic() + FREED_WITHIN_SECONDS
-    while locks.is_held(path):
+    while held(path):
         if time.monotonic() > deadline:
             return False
         time.sleep(0.01)
@@ -120,7 +121,7 @@ def test_ec1_a_lock_of_another_process_and_a_crash(tmp_path: Path) -> None:
     child, line = started(HOLDER, str(path))
     try:
         assert line == "ready"
-        assert locks.is_held(path) is True
+        assert held(path) is True
     finally:
         killed(child)
     assert freed(path)
