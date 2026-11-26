@@ -82,6 +82,43 @@ jobs:
           PYTHONPATH: ${{ github.workspace }}/main-copy
           PR_BODY: ${{ github.event.pull_request.body }}
         run: python -P -m scripts.check_reviewed_commit HEAD^1 HEAD^2
+      # The held-out batch (issue #170; Achia, 2026-11-26, "Score main live (Recommended)").
+      # Main is scored from main's copy, before any file of the PR runs. Main's report leaves
+      # the step as a step output, which no later step can rewrite. The same step copies what
+      # the next step trusts: main's scorer and batch, made regular packages (an __init__.py
+      # in each) so that a package file the PR adds cannot take their place, and main's check.
+      - if: ${{ !cancelled() }}
+        id: main-score
+        env:
+          PYTHONPATH: ${{ github.workspace }}/main-copy
+        run: |
+          {
+            echo 'report<<END_OF_REPORT'
+            python -P -m eval.heldout.scorer eval.detectors:detect_all
+            echo 'END_OF_REPORT'
+          } >> "$GITHUB_OUTPUT"
+          mkdir -p "$RUNNER_TEMP/main-eval/eval" "$RUNNER_TEMP/main-check/scripts"
+          cp -r main-copy/eval/heldout "$RUNNER_TEMP/main-eval/eval/heldout"
+          touch "$RUNNER_TEMP/main-eval/eval/__init__.py" "$RUNNER_TEMP/main-eval/eval/heldout/__init__.py"
+          cp main-copy/scripts/check_scores.py "$RUNNER_TEMP/main-check/scripts/"
+      # The PR scored with main's scorer and batch and the PR's detectors, then compared by
+      # main's check: any drop is red, unless a score-drop-accepted line of the body lifts it.
+      # The first step that runs a file of the PR. Only the PR's ploni/ and eval/detectors.py
+      # are put on the path, copied out of the checkout, so no other file of the PR (a
+      # sitecustomize.py at its root, which Python runs at start) is on it. Main's report is
+      # written to disk after the PR's code has run, from the environment, as the body is
+      # read. If the main-score step failed, the report is empty and the check refuses it.
+      - if: ${{ !cancelled() }}
+        env:
+          MAIN_REPORT: ${{ steps.main-score.outputs.report }}
+          PR_BODY: ${{ github.event.pull_request.body }}
+        run: |
+          mkdir -p "$RUNNER_TEMP/pr-code"
+          cp -r ploni "$RUNNER_TEMP/pr-code/ploni"
+          cp eval/detectors.py "$RUNNER_TEMP/main-eval/eval/"
+          PYTHONPATH="$RUNNER_TEMP/main-eval:$RUNNER_TEMP/pr-code" python -P -m eval.heldout.scorer eval.detectors:detect_all > "$RUNNER_TEMP/pr-report.txt"
+          printf '%s\n' "$MAIN_REPORT" > "$RUNNER_TEMP/main-report.txt"
+          PYTHONPATH="$RUNNER_TEMP/main-check" python -P -m scripts.check_scores "$RUNNER_TEMP/main-report.txt" "$RUNNER_TEMP/pr-report.txt"
       # The PR's own copies, as their five workflows run them today.
       - if: ${{ !cancelled() }}
         run: python scripts/check_changed_paths.py HEAD^1 HEAD
