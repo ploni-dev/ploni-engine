@@ -38,6 +38,7 @@ from itertools import product
 
 import pytest
 
+from eval import detectors
 from ploni.detect.base import DetectContext, Detector
 from tests.detector_contract import BeforeTheStart, Digits, PastTheEnd, Undeclared, breaks, projection
 from tests.sizes import INVARIANT_FULL, full
@@ -52,8 +53,8 @@ PIECES = (
 ALL = ["".join(pieces) for count in range(MOST_PIECES + 1) for pieces in product(PIECES, repeat=count)]
 TEXTS = ALL if full() else ALL[:: len(ALL) // FAST]
 
-# Each detector of ploni/ is added here as it is written.
-DETECTORS: tuple[Detector, ...] = (Digits(),)
+# The detectors of ploni/ come from the one list the held-out batch scores (eval.detectors).
+DETECTORS: tuple[Detector, ...] = (*detectors.DETECTORS, Digits())
 CTX = DetectContext()
 
 
