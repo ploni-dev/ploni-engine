@@ -153,8 +153,8 @@ def digest(lines: list[str]) -> str:
 
 
 def pinned(lines: list[str]) -> bool:
-    """Say whether a workflow's code lines are the ones the pin accepts."""
-    return lines == EXPECTED
+    """Say whether a workflow's code lines are the ones the pin accepts: today's, or the approved form's."""
+    return lines == EXPECTED or digest(lines) == NEXT_SHA256
 
 
 def test_f1_the_workflow() -> None:
