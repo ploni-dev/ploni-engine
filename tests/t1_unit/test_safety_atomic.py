@@ -641,3 +641,25 @@ def test_ec19_a_rename_refused_every_time(tmp_path: Path, monkeypatch: pytest.Mo
     assert len(opened) == 1
     assert target.read_bytes() == b"old"
     assert os.listdir(tmp_path) == ["out.docx"]
+
+
+def test_ec17_young_is_sixty_seconds() -> None:
+    # "older than 60 seconds" (Achia, 2026-11-26, "Skip young files (Recommended)", #212).
+    assert atomic.YOUNG_SECONDS == 60
+
+
+def test_ec17_a_partial_file_exactly_young_seconds_old_is_removed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / f"{atomic.PARTIAL_PREFIX}a.docx.1"
+    path.write_bytes(b"part")
+    then = path.stat().st_mtime
+    monkeypatch.setattr(atomic.time, "time", lambda: then + atomic.YOUNG_SECONDS)
+    assert atomic.sweep_partials(tmp_path) == 1
+
+
+def test_ec17_the_sweep_goes_on_past_a_young_partial_file(tmp_path: Path) -> None:
+    young, old = (tmp_path / f"{atomic.PARTIAL_PREFIX}{name}.docx.1" for name in ("a", "b"))
+    old.write_bytes(b"part")
+    aged(tmp_path)
+    young.write_bytes(b"part")
+    assert atomic.sweep_partials(tmp_path) == 1
+    assert os.listdir(tmp_path) == [young.name]
