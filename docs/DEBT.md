@@ -6,7 +6,7 @@ Each item needs a named reason and an issue number. Debt with neither is not deb
 
 | # | What | Reason carried | Issue | Opened | Phase to fix |
 |---|---|---|---|---|---|
-| 1 | The program never switches the safety helpers on: nothing calls the log setup or the two start-up sweeps | Nothing reads a document, logs or writes a temp file yet. The pass: "It is cheap enough to do at the close" | #211 | 2026-11-24 | Phase 1, first: before the first PR that makes product code read a document, log or write a temp file |
+| 1 | The program never switches the safety helpers on: nothing calls the two start-up sweeps (the log setup is called by `main` since the PR of #211) | Nothing reads a document, logs or writes a temp file yet. The pass: "It is cheap enough to do at the close" | #211 | 2026-11-24 | Phase 1, first: before the first PR that makes product code read a document, log or write a temp file |
 | 2 | A second process's start-up sweep destroys the temp files of a run that is still working | No caller of the sweep exists yet. The pass does not assume one process at a time, and asks that this be decided before the first caller is written | #212 | 2026-11-24 | Phase 1, first: the same deadline |
 | 3 | An uncaught error prints its message, and the core types show document text when printed | No code builds these types from a document yet. The second half changes how the core types print, which is Achia's to decide before it is built | #213 | 2026-11-24 | Phase 1, first: the same deadline |
 | 4 | Product code can still use Python's `tempfile` directly | The ban was approved on 2026-11-18 and is not built; no product code writes a temp file yet | #214 | 2026-11-24 | Phase 1, first: the same deadline |

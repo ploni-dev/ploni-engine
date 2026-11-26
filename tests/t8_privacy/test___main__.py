@@ -17,12 +17,14 @@ Test matrix:
 Equivalence classes:
   EC1  a record logged while `selftest` runs, its message the canary, at each level the
        handler of last resort writes (WARNING, ERROR, CRITICAL)
-       -> the error stream holds one line for it, the filter's, ending `<withheld>` and
-          naming the level; the canary is not on either stream
+       -> the error stream holds one line for it, the filter's whole line (time, level,
+          place, `<withheld>`); the canary is not on either stream, in UTF-8, in cp1255 or
+          as backslash escapes
   EC2  a record logged at INFO while `selftest` runs -> the same: the filter's level, at
        which the handler of last resort writes nothing
-  EC3  a record logged after a stub (`scan`) and after a usage error returned -> the same: the
-       filter is installed by every command, and before the arguments are read
+  EC3  a record logged after a stub (`scan`) returned and after a usage error stopped `main`
+       (SystemExit 2) -> the same: the filter is installed by every command, and before the
+       arguments are read
 Boundaries:
   B1  the canary given as an argument of the record, not in its format string -> not written
 Adversarial:
@@ -39,6 +41,7 @@ Known limits:
 Not applicable: the document-structure axes of the test-matrix skill; no document is read.
 """
 
+import re
 import subprocess
 import sys
 from pathlib import Path
@@ -88,19 +91,18 @@ def run(when: str, command: str, level: str, message: str, argument: str = "") -
     )  # fmt: skip
 
 
-def withheld(stream: bytes) -> list[bytes]:
-    """Return the lines of a stream that end with the filter's mark for a record's message."""
-    return [line for line in stream.splitlines() if line.endswith(b"<withheld>")]
+def withheld(stream: bytes, level: str) -> list[bytes]:
+    """Return the lines of a stream that are the filter's whole line for a record at a level, its message withheld."""
+    shape = re.compile(rb"\d{4}-\d\d-\d\dT\d\d:\d\d:\d\d " + level.encode() + rb" <string>:\d+ <withheld>")
+    return [line for line in stream.splitlines() if shape.fullmatch(line)]
 
 
 def assert_withheld(done: subprocess.CompletedProcess[bytes], level: str, *canaries: str) -> None:
     """Assert one filtered line for the record, at its level, and no canary on either stream."""
-    lines = withheld(done.stderr)
-    assert len(lines) == 1, done.stderr
-    assert f" {level} ".encode() in lines[0]
+    assert len(withheld(done.stderr, level)) == 1, done.stderr
     for canary in canaries:
-        for encoding in ENCODINGS:
-            assert canary.encode(encoding) not in done.stderr + done.stdout
+        for form in [canary.encode(encoding) for encoding in ENCODINGS] + [canary.encode("ascii", "backslashreplace")]:
+            assert form not in done.stderr + done.stdout
 
 
 @pytest.mark.parametrize("level", ["WARNING", "ERROR", "CRITICAL"])
