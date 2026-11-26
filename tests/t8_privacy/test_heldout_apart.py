@@ -28,7 +28,8 @@ Test matrix:
                                                         one line each, with the file
   EC3  in the same tree: an own test, a file under eval/heldout/, a test that imports eval
        only, a word that only holds part of the name ("held out", "held-out"), a test of
-       UNREADABLE_ALLOWED                                 no line
+       UNREADABLE_ALLOWED, and a file in a virtual environment or a cache folder under a code
+       folder, which R2 does not read (review 3, finding 38)          no line
   EC4  every file of OWN and of UNREADABLE_ALLOWED exists, so that the lists are not stale
   B1   a tree with no ploni/ and no tests/ folder, and a helper under scripts/ that imports the
        batch                                            the import line only
@@ -148,6 +149,8 @@ TREE = {
     "pyproject.toml": "[tool.pytest.ini_options]\naddopts = ['-p', 'eval.HELDOUT.plugin']\n",
     "scripts/helper.py": "from eval.heldout.generator import build\n",
     "run_batch.py": "import eval.heldout.scorer\n",
+    "experiments/.venv/Lib/site-packages/tool/run.py": "from eval.heldout.generator import build\n",
+    "experiments/e9/__pycache__/run.py": "from eval.heldout.generator import build\n",
     "eval/heldout/generator.py": "SEED = 1\n",
     "eval/heldout/scorer.py": "from eval.heldout.generator import build\n",
 }
