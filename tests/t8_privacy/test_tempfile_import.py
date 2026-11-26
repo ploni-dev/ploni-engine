@@ -85,8 +85,9 @@ Known limits:
     what is written inside a `private_dir` block.
   - Source text handed to exec or eval is not read (tests/project_imports.py).
 
-The Hebrew and document-structure axes of the test-matrix skill do not apply: this code
-reads import statements and the text of each product file, and handles no document.
+The Hebrew axis of the test-matrix skill applies to EC7 (names with Hebrew letters, a file in
+cp1255); the document-structure axes do not: this code reads import statements and the text
+of each product file, and handles no document.
 """
 
 import re
