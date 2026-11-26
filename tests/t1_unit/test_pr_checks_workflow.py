@@ -134,6 +134,4 @@ def test_f2c_other_lines_are_refused(lines: list[str]) -> None:
 
 
 def test_f2d_the_old_48_lines_are_refused() -> None:
-    lines = code_lines(WORKFLOW)
-    old = lines[:AFTER] + lines[AFTER + STEPS :]
-    assert len(old) == 48 and not pinned(old)
+    assert len(OLD) == 48 and not pinned(OLD)
