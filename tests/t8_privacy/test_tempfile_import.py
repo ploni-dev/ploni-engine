@@ -1,11 +1,12 @@
-"""No file under ploni/ but the temp-file helper imports Python's `tempfile` module, or the helper's copy of it.
+"""No file under ploni/ but the temp-file helper imports Python's `tempfile` module, or imports the helper's copy of it by name.
 
 Why: a temp file made with `tempfile` outside a `ploni.safety.tempfiles.private_dir` block
 lands in the system's temp folder and stays there after a crash, with document text in it
 (ADR-0005: going around the helper must take a deliberate act). Achia approved the ban on
 2026-11-18 ("Ban plain temp files", `build-plan.md` Phase 0), worded as a linter rule in one
-settings file. Ruff cannot do it in that one file: its product-only ban list is the no-network
-list that `selftest` is held to, and its other list covers the whole repository. Asked on
+settings file. Ruff cannot do it in that one file without lifting the PyMuPDF ban outside
+ploni/: its product-only ban list is the no-network list that `selftest` is held to, and its
+other list covers the whole repository. Asked on
 2026-11-25 how to build it, and asked again the same night after the first question was found
 to hold a false line, he chose "Keep the test (Recommended)": "The privacy test as built: it
 reads every product file and fails on any use of tempfile outside the helper, including an
@@ -25,16 +26,19 @@ Equivalence classes:
        change their result; EC6 is where it does
   EC6  ten relative imports from each of the 59 places, climbing to `ploni` by as many dots
        as the place needs (RELATIVE, 59 x 10 = 590 cases): the helper's binding, plain, under
-       another name, beside another name and a module below it, one line each (four forms);
-       the helper's module, its other names, a project module named tempfile, and the
-       helper's binding written with one dot too few, which names a module one package below
-       `ploni` (at a top module, an absolute name), not the helper, no line (six forms). This
-       class holds the floor of 500 cases, as its
-       result depends on the place
+       another name, beside another name, and named as a module path (which Python itself
+       refuses at run time), one line each (four forms); the helper's module, a name of the
+       helper (`private_dir`), a name it does not have (`tempfiles`), a project module named
+       tempfile in two forms, and the helper's binding written with one dot too few, which
+       names a module one package below `ploni` (at a top module, an absolute name), not the
+       helper, no line (six forms). This class holds the floor of 500 cases, as its result
+       depends on the place
   EC2  the helper itself, `ploni/safety/tempfiles.py`, in each of the ten ways: no line
   EC3  the helper's own binding of tempfile imported from it, absolute and relative, plain,
-       under another name and a module below it: one line each, as `tempfile`
-  EC4  a tree on disk: the lines, with file and line, of every file but the helper
+       under another name, and named as a module path (which Python itself refuses at run
+       time): one line each, as `tempfile`
+  EC4  a tree on disk: the lines, with file and line, of every file under ploni/ but the
+       helper
   EC5  the repository: no line
 
 Boundaries:
@@ -49,19 +53,21 @@ Boundaries:
 Negative cases (no line):
   N1  the helper's own module imported by others (`from ploni.safety import tempfiles`,
       `import ploni.safety.tempfiles`, a relative import of a module named tempfile, a name of
-      the helper that is not its binding of tempfile)
+      the helper (`private_dir`), and one it does not have (`tempfiles`))
   N2  look-alikes: `import tempfiles`, `import tempfile_helpers`, `from mytempfile import x`
 
 Adversarial:
   A1  inside a function, inside try/except, by `importlib.import_module` and by `__import__`
       (four of the ten ways of EC1)
-  A2  an import whose name cannot be read is refused by the no-network test's EC6 (every
-      import under ploni/ can be read), so it cannot hide a `tempfile` import here
+  A2  an import whose name cannot be read is refused by
+      `test_ec6_every_import_under_ploni_can_be_read` of tests/t8_privacy/test_imports.py, so
+      it cannot hide a `tempfile` import here
 
 Known limits:
   - The helper's binding of tempfile reached as an attribute, not imported:
-    `from ploni.safety import tempfiles` then `tempfiles.tempfile.mkstemp()`, and a star
-    import of the helper, which binds it too. This test reads imports only. It is to be closed
+    `from ploni.safety import tempfiles` then `tempfiles.tempfile.mkstemp()`: this test
+    reads imports only. And a star import of the helper, which binds it too: the reader gives
+    that import as `ploni.safety.tempfiles` only, not the names it binds. Both are to be closed
     in the helper itself, in a PR of its own (#278, as the question of
     issuecomment-7186453908 promised).
   - `sys.modules["tempfile"]` is no import, so it is not read, and no change to the helper
