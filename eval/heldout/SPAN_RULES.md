@@ -50,3 +50,4 @@ Some PERSON items are names that stand once in their document with no trigger or
 - A key item that no detection matches exactly is a false negative (fn), also when a detection overlaps it.
 - `partial` counts the fp of a type that share at least one character with a key item of the same type in the same document. It is not a hit; it shows how many fp are a border that differs from these rules, as against a detection with nothing under it.
 - The same detection returned twice counts once.
+- A group's line counts its key items only: tp, those a detection of their type matches exactly, and fn, the rest. A detection is no item of a group, so the line has no fp and no precision; its fp stay on the type's line.
