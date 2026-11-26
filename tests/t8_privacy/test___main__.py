@@ -38,12 +38,16 @@ Equivalence classes:
   EC7  an exit raised inside a command (SystemExit(5)) -> passes through: exit code 5, nothing
        written
   EC8  `error_name`: a plain type name -> the name; a name with a line break, a name in
-       Hebrew letters, and a metaclass that answers with any text -> `<value>`
+       Hebrew letters, a name that is a subclass of str -> `<value>`; a metaclass that
+       answers any text, or raises, when asked for the name -> the class's own name, not
+       what the metaclass answers, and no error
 Boundaries:
   B1  the canary given as an argument of the record, not in its format string -> not written
   B2  an error whose own text cannot be made (its `__str__` raises, with the canary) -> the
       same line, its type
   B3  an error of a class whose name holds a line break and the canary -> one line, `<value>`
+  B4  an error of a class whose metaclass raises, with the canary, when asked the name, raised
+      while an error with the canary is handled -> one line with the class's own name
 Adversarial:
   A1  the canary in Hebrew -> not written, in UTF-8 or in the laptop's code page (cp1255)
   A2  the canary in Hebrew in an error's message -> the same as EC4
@@ -192,6 +196,15 @@ def selftest(models, out):
             int(message)
         except ValueError:
             raise KeyboardInterrupt
+    if kind == "refusing-name":
+        class Refuses(type):
+            @property
+            def __name__(cls):
+                raise ValueError(message)
+        try:
+            int(message)
+        except ValueError:
+            raise Refuses("Bad", (Exception,), {})()
     try:
         raise KeyError(message)
     except KeyError as inner:
@@ -214,7 +227,7 @@ def crash(kind: str, message: str) -> subprocess.CompletedProcess[bytes]:
 
 
 def assert_failed(done: subprocess.CompletedProcess[bytes], name: str, canary: str, code: int = FAILED) -> None:
-    """Assert the exit code, the one line naming the error's type, and no canary on either stream."""
+    """Assert the exit code, the one line (the error's type, or interrupted), and no canary on either stream."""
     assert done.returncode == code, done.stderr
     line = f"ploni selftest: failed: {name}" if code == FAILED else "ploni selftest: interrupted"
     assert done.stderr.splitlines() == [line.encode()]
@@ -263,14 +276,45 @@ class Answers(type):
         return "CANARY shown by a metaclass"
 
 
-@pytest.mark.parametrize(
-    ("error", "name"),
-    [
-        (ValueError("x"), "ValueError"),
-        (type("Line1\nTraceback", (Exception,), {})(), "<value>"),
-        (type("שגיאה", (Exception,), {})(), "<value>"),
-        (Answers("Odd", (Exception,), {})(), "<value>"),
-    ],
-)
-def test_ec8_error_name(error: BaseException, name: str) -> None:
-    assert cli.error_name(error) == name
+class Refuses(type):
+    """A metaclass whose classes raise when asked for their name, with the canary."""
+
+    @property
+    def __name__(cls) -> str:
+        raise ValueError(CANARY)
+
+
+class Sly(str):
+    """A text that formats itself as other text."""
+
+    def __format__(self, spec: str) -> str:
+        return f"Jacob {CANARY}"
+
+
+def named_by(name: str) -> BaseException:
+    """Return an error of a class whose `__name__` was set to the text given."""
+    kind = type("Plain", (Exception,), {})
+    kind.__name__ = name
+    return kind()
+
+
+# Each error is made inside its case: an object whose class refuses its name cannot be
+# printed, and pytest prints the parameters of a case that fails.
+ERRORS = {
+    "plain": (lambda: ValueError("x"), "ValueError"),
+    "line break": (lambda: type("Line1\nTraceback", (Exception,), {})(), "<value>"),
+    "hebrew": (lambda: type("שגיאה", (Exception,), {})(), "<value>"),
+    "metaclass answers": (lambda: Answers("Odd", (Exception,), {})(), "Odd"),
+    "metaclass raises": (lambda: Refuses("Bad", (Exception,), {})(), "Bad"),
+    "str subclass": (lambda: named_by(Sly("Ok")), "<value>"),
+}
+
+
+@pytest.mark.parametrize("case", list(ERRORS))
+def test_ec8_error_name(case: str) -> None:
+    make, name = ERRORS[case]
+    assert cli.error_name(make()) == name
+
+
+def test_b4_an_error_whose_class_raises_when_asked_its_name() -> None:
+    assert_failed(crash("refusing-name", CANARY), "Bad", CANARY)
