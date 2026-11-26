@@ -37,8 +37,16 @@ Written by the batch's writer, by Achia's answer of 2026-11-26 on issue 283 ("Ye
 | MILITARY_ID | The number only. Not the label. |
 | PASSPORT_NUMBER | The number only, and letters that are part of it when it has them. Not the label. |
 
-Every type's rule is given; none is "not given". How a detection is counted against these spans is the scorer's, and is written with it.
+Every type's rule is given; none is "not given".
 
 ## The group of names that stand once
 
 Some PERSON items are names that stand once in their document with no trigger or title before them (build-plan.md section 7; Achia, 2026-11-16, "Yes, as its own line from the start"). They are PERSON, and a detector returns them as PERSON, under the PERSON rule above. The batch marks them as a group, and their score is shown on a line of its own beside the type's.
+
+## How the scorer counts
+
+- A detection is a hit (tp) only when its document, start, end and type are all exactly those of a key item.
+- Any other detection is a false positive (fp) of the type it names: a span one character longer or shorter, a span that takes in a label, a right span with the wrong type, and a detection of a near miss.
+- A key item that no detection matches exactly is a false negative (fn), also when a detection overlaps it.
+- `partial` counts the fp of a type that share at least one character with a key item of the same type in the same document. It is not a hit; it shows how many fp are a border that differs from these rules, as against a detection with nothing under it.
+- The same detection returned twice counts once.
