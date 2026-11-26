@@ -23,11 +23,13 @@ Equivalence classes:
        deep and a package two deep, its six top modules and `__main__`; 10 x 59 = 590
        cases): one line each. The ten ways name the module absolutely, so the place does not
        change their result; EC6 is where it does
-  EC6  nine relative imports from each of the 59 places, climbing to `ploni` by as many dots
-       as the place needs (RELATIVE, 59 x 9 = 531 cases): the helper's binding, plain, under
-       another name, beside another name and a module below it, one line each; the helper's
-       module, its other names, and a project module named tempfile, no line. This class holds
-       the floor of 500 cases, as its result depends on the place
+  EC6  ten relative imports from each of the 59 places, climbing to `ploni` by as many dots
+       as the place needs (RELATIVE, 59 x 10 = 590 cases): the helper's binding, plain, under
+       another name, beside another name and a module below it, one line each (four forms);
+       the helper's module, its other names, a project module named tempfile, and the
+       helper's binding written with one dot too few, which names a module inside the place's
+       own package, no line (six forms). This class holds the floor of 500 cases, as its
+       result depends on the place
   EC2  the helper itself, `ploni/safety/tempfiles.py`, in each of the ten ways: no line
   EC3  the helper's own binding of tempfile imported from it, absolute and relative, plain,
        under another name and a module below it: one line each, as `tempfile`
@@ -60,8 +62,10 @@ Known limits:
     `from ploni.safety import tempfiles` then `tempfiles.tempfile.mkstemp()`, and a star
     import of the helper, which binds it too. This test reads imports only. It is to be closed
     in the helper itself, in a PR of its own (#278, as the question of
-    issuecomment-7186453908 promised). So is `sys.modules["tempfile"]`, the module reached with
-    no import at all.
+    issuecomment-7186453908 promised).
+  - `sys.modules["tempfile"]` is no import, so it is not read, and no change to the helper
+    closes it: any import of the module, under any name, puts it there. Reaching it is a
+    deliberate act (ADR-0005's bar), like code given to exec.
   - A temp file can be made without `tempfile`: `open` on a path under the system's temp
     folder, `os.open`, or a library that calls `tempfile` itself. The temp-file canary covers
     what is written inside a `private_dir` block.
@@ -159,8 +163,11 @@ def climb(importer: str, is_package: bool) -> str:
     return "." * (package.count(".") + 1)
 
 
-# Nine relative imports, written from any place: the source, and whether it must give a line.
+# Ten relative imports, written from any place: the source, and whether it must give a line.
+# `{short}` is one dot fewer than the place needs, so it names a module inside the place's own
+# package (at a top module, an absolute name), not the helper.
 RELATIVE = (
+    ("from {short}safety.tempfiles import tempfile\n", False),
     ("from {dots}safety.tempfiles import tempfile\n", True),
     ("from {dots}safety.tempfiles import tempfile as t\n", True),
     ("from {dots}safety.tempfiles import private_dir, tempfile\n", True),
@@ -176,7 +183,8 @@ RELATIVE = (
 @pytest.mark.parametrize(("source", "reported"), RELATIVE)
 @pytest.mark.parametrize(("importer", "is_package"), PLACES)
 def test_ec6_a_relative_import_from_each_place(source: str, reported: bool, importer: str, is_package: bool) -> None:
-    text = source.format(dots=climb(importer, is_package))
+    dots = climb(importer, is_package)
+    text = source.format(dots=dots, short=dots[:-1])
     assert judged(text, "file.py", importer, is_package) == (["file.py:1: imports tempfile"] if reported else [])
 
 
