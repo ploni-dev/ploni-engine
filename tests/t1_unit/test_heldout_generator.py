@@ -64,6 +64,12 @@ Private helpers with logic of their own:
   P4  _iban: 23 characters, starts IL, mod-97 of the rearranged number is 1
   P5  _part_passes: a failing value with a passing group; a passing whole; no passing group;
       a group of one digit repeated
+  P6  _group: groups and the rest; one group as long as the digits; digits shorter than the
+      groups; no separator (review 7, finding 43)
+  P7  _with_trigger: the trigger first in the frame; after ל, ב and כ a trigger's ה falls;
+      after ו it stays; a trigger with no ה after ל
+  P8  _alone: a name of the group whose word stands elsewhere in the document is drawn again
+      until none does; a near miss of the group and a name of another line are left as they are
 
 Boundaries:
   B1  every document holds at least one item; the first and the last items lie inside their text
@@ -110,6 +116,12 @@ PATTERN_SHAPES = {"HEALTH_FUND_ID": r"\d{6,9}", "MILITARY_ID": r"\d{7}", "PASSPO
 GLUED_PARTIES = tuple(f"{proclitic}{trigger}" for trigger in PARTY_TRIGGERS for proclitic in "לבכ")
 NIQQUD = re.compile("[ְ-ׇ]")
 HEBREW_LETTER = re.compile("[א-ת]")
+TRIGGER_CASES = [
+    ("@ {} הגיע.", "מר", "מר {} הגיע."), ("נמסר ל@ {}.", "התובע", "נמסר לתובע {}."), ("נכח ב@ {}.", "המשיב", "נכח במשיב {}."),
+    ("כ@ {}.", "העד", "כעד {}."), ("ו@ {}.", "הנתבע", "והנתבע {}."), ("ל@ {}.", "מר", "למר {}."),
+]  # fmt: skip
+# P8: a name of the group that shares a word with another sentence of its document.
+ALONE_FRAME, ALONE_OTHER, ALONE_TAKEN, ALONE_WORD = "{} חתם על ההסכם.", "מר {} הגיע.", "דנה כהן", "כהן"
 HEBREW_NUMBERS = [(1, "א'"), (10, "י'"), (15, 'ט"ו'), (16, 'ט"ז'), (21, 'כ"א'), (30, "ל'"), (786, 'תשפ"ו'), (733, 'תשל"ג'), (400, "ת'")]
 
 
@@ -367,6 +379,48 @@ def test_p5_part_passes() -> None:
         generator._part_passes("000000000-7"),
     )
     assert cases == (True, False, False, False)
+
+
+@pytest.mark.parametrize(
+    ("digits", "sizes", "separator", "grouped"),
+    [("123456789", (3, 3), "-", "123-456-789"), ("123456789", (9,), "-", "123456789"), ("12345", (3, 3), "-", "123-45"), ("1234567", (2, 3), "", "1234567")],
+    ids=["groups and the rest", "one whole group", "shorter than the groups", "no separator"],
+)
+def test_p6_group(digits: str, sizes: tuple[int, ...], separator: str, grouped: str) -> None:
+    same = generator._group(digits, sizes, separator) == grouped
+    assert same
+
+
+@pytest.mark.parametrize(("frame", "trigger", "filled"), TRIGGER_CASES, ids=["first", "after lamed", "after bet", "after kaf", "after vav", "no he"])
+def test_p7_with_trigger(frame: str, trigger: str, filled: str) -> None:
+    same = generator._with_trigger(frame, trigger) == filled
+    assert same
+
+
+class TurnRandom:
+    """A stand-in for random.Random that takes each choice in turn and draws 0.9, the same on every run."""
+
+    def __init__(self) -> None:
+        """Start at the first choice."""
+        self.turn = 0
+
+    def random(self) -> float:
+        """Draw a share above every share the generator compares with."""
+        return 0.9
+
+    def choice(self, options: tuple[str, ...]) -> str:
+        """Take the next option in turn."""
+        self.turn += 1
+        return options[self.turn % len(options)]
+
+
+def test_p8_alone() -> None:
+    planned = [(generator.UNTITLED, True, ALONE_FRAME, ALONE_TAKEN), ("PERSON", True, ALONE_OTHER, ALONE_WORD), (generator.UNTITLED, False, ALONE_FRAME, ALONE_WORD)]
+    result = generator._alone(TurnRandom(), planned)
+    others = {word for _, _, frame, value in result[1:] for word in generator.WORD.findall(frame.replace("{}", value))}
+    drawn = result[0][3]
+    shown = (drawn != ALONE_TAKEN, any(word in others for word in drawn.split()), result[1:] == planned[1:])
+    assert shown == (True, False, True)
 
 
 def test_b1_every_document_holds_an_item_and_the_ends_lie_inside() -> None:
