@@ -35,6 +35,9 @@ The cases below run the command itself, `python -m eval.heldout.scorer`, in a ch
       (scorer review 3, finding 7)
   O12 a detector that closes the output stream it kept at import: the command still writes
       something, and no planted text (scorer review 3, finding 8)
+  O13 a detector that does so and also registers an atexit handler that writes a document, so
+      that main itself raises: exit 1, the error written, no planted text (scorer review 4,
+      finding 12)
 
 Known limits: what a detector writes through a copy of a file handle it made before main ran,
 from a process it started that outlives the command, or to a console it opens itself is not
@@ -67,6 +70,7 @@ CHILD_TIMEOUT_SECONDS = 300
 LATE_SECONDS = 2
 HEBREW_LETTER = re.compile("[א-ת]")
 KEPT_OUT = sys.stdout
+KEPT_ERR = sys.stderr
 STARTED: set[str] = set()
 LISTED: dict[str, list[tuple[int, int, str]]] = {}
 for _item in BATCH.key:
@@ -163,6 +167,15 @@ def at_exit_detector(text: str) -> list[tuple[int, int, str]]:
 
 def closing_detector(text: str) -> list[tuple[int, int, str]]:
     """A detector that closes the output stream it kept at import."""
+    KEPT_OUT.close()
+    return []
+
+
+def closing_at_exit_detector(text: str) -> list[tuple[int, int, str]]:
+    """A detector that closes the output stream it kept, and registers, once, a handler that writes the document's start at exit."""
+    if "closing exit" not in STARTED:
+        STARTED.add("closing exit")
+        atexit.register(KEPT_ERR.write, text[:80])
     KEPT_OUT.close()
     return []
 
@@ -275,3 +288,8 @@ def test_o10_o11_the_command_ends_before_a_detectors_late_writes(detector: str) 
 def test_o12_the_command_writes_when_its_stream_was_closed() -> None:
     _, shown = run_command("closing_detector")
     assert (shown != "", len(HEBREW_LETTER.findall(shown))) == (True, 0)
+
+
+def test_o13_the_command_ends_at_once_also_when_main_raises() -> None:
+    code, shown = run_command("closing_at_exit_detector")
+    assert (code, shown != "", len(HEBREW_LETTER.findall(shown))) == (1, True, 0)
