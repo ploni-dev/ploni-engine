@@ -20,6 +20,13 @@ take. Equivalence classes:
   EC6  a missing file -> made, empty, for its owner only on POSIX, and held
   EC7  a file another handle holds -> None, and the other keeps it
   EC8  a file opened for reading only by someone who does not hold it -> taken
+again (issue #212, the four retries). Equivalence classes:
+  EC10 an action that succeeds -> its value, no pause
+  EC11 an action that fails with an error named, then succeeds -> its value, one pause of
+       PAUSE_SECONDS between the tries
+  EC12 an action that fails with an error named every time -> that error after ATTEMPTS tries,
+       ATTEMPTS - 1 pauses
+  EC13 an action that fails with an error not named -> that error at once, no pause
 Boundaries:
   B1  an empty file, held and taken -> the same as a file with bytes
   B2  a file whose name is Hebrew -> the same
@@ -153,3 +160,59 @@ def test_e1_a_folder(tmp_path: Path) -> None:
         locks.take(tmp_path / "folder")
     assert not isinstance(raised.value, FileNotFoundError)
     assert (tmp_path / "folder").is_dir()
+
+
+class Flaky:
+    """An action that raises the errors given, one per call, then returns a value."""
+
+    def __init__(self, *errors: BaseException) -> None:
+        self.errors = list(errors)
+        self.calls = 0
+
+    def __call__(self) -> str:
+        self.calls += 1
+        if self.errors:
+            raise self.errors.pop(0)
+        return "done"
+
+
+@pytest.fixture
+def pauses(monkeypatch: pytest.MonkeyPatch) -> list[float]:
+    """Record each pause of `again` in place of sleeping."""
+    seen: list[float] = []
+    monkeypatch.setattr(locks.time, "sleep", seen.append)
+    return seen
+
+
+def test_ec10_an_action_that_succeeds(pauses: list[float]) -> None:
+    action = Flaky()
+    assert locks.again(action, (PermissionError,)) == "done"
+    assert (action.calls, pauses) == (1, [])
+
+
+def test_ec11_an_action_that_fails_once(pauses: list[float]) -> None:
+    action = Flaky(PermissionError(13, "in use"))
+    assert locks.again(action, (PermissionError,)) == "done"
+    assert (action.calls, pauses) == (2, [locks.PAUSE_SECONDS])
+
+
+def test_ec12_an_action_that_always_fails(pauses: list[float]) -> None:
+    last = PermissionError(13, "the last")
+    action = Flaky(*[PermissionError(13, "in use")] * (locks.ATTEMPTS - 1), last)
+    with pytest.raises(PermissionError) as raised:
+        locks.again(action, (PermissionError,))
+    assert raised.value is last
+    assert (action.calls, pauses) == (locks.ATTEMPTS, [locks.PAUSE_SECONDS] * (locks.ATTEMPTS - 1))
+
+
+def test_ec13_an_error_not_named(pauses: list[float]) -> None:
+    action = Flaky(FileNotFoundError(2, "gone"))
+    with pytest.raises(FileNotFoundError):
+        locks.again(action, (PermissionError,))
+    assert (action.calls, pauses) == (1, [])
+
+
+def test_ec12_the_tries_are_a_few_hundredths_of_a_second() -> None:
+    # Achia's option: "waits a few hundredths of a second and tries again, a few times".
+    assert 2 <= locks.ATTEMPTS <= 10
+    assert 0.01 <= locks.PAUSE_SECONDS <= 0.09

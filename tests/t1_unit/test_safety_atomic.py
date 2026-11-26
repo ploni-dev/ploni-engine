@@ -55,8 +55,14 @@ sweep_partials. Equivalence classes:
        tail is removed (it begins with the prefix)
   EC11 a symbolic link with the prefix, to a file and to a folder outside    the link is removed,
        what it points to is not (skipped where links cannot be made)
-  E9  two partial files that cannot be removed, with two kinds of OSError    every other partial
-       file is still removed, then the first error is raised, not the last
+  E9  two partial files that cannot be removed, with two kinds of OSError that a retry does not
+       end    every other partial file is still removed, then the first error is raised, not
+       the last
+  EC14 the rename, or a partial file's removal or take, refused once with PermissionError (the
+       moment another run's sweep has it open, issue #212)    tried again: the write ends
+       whole, the partial file is removed
+  EC15 a partial file gone when the sweep removes it (its writer renamed it in that moment)
+       no error, not counted
   EC6  a folder that does not exist, an empty folder, a path that is a file    0
   EC12 a partial file that a live write holds (issue #212): the sweep runs between the write
        and the rename    left, not counted, and a dead partial file after it is removed; the
@@ -381,7 +387,9 @@ def test_e9_the_sweep_tries_every_file(tmp_path: Path, monkeypatch: pytest.Monke
     real_unlink = atomic.os.unlink
 
     order = sorted(entry.name for entry in os.scandir(tmp_path))
-    errors = {order[0]: PermissionError(32, "in use"), order[1]: FileNotFoundError(2, "gone meanwhile")}
+    # Two kinds of OSError that a retry does not end (a FileNotFoundError is a partial file its
+    # writer renamed: no error, EC15).
+    errors = {order[0]: IsADirectoryError(21, "a folder now"), order[1]: OSError(5, "input or output")}
 
     def unlink(path: str) -> None:
         name = Path(path).name
@@ -458,3 +466,54 @@ def test_ec13_a_sweep_that_takes_the_partial_file_first(tmp_path: Path, monkeypa
             if handle is not None:
                 handle.close()
     assert target.read_bytes() == b"old"
+
+
+@pytest.fixture
+def no_pause(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let `locks.again` try again with no pause."""
+    monkeypatch.setattr(locks.time, "sleep", lambda seconds: None)
+
+
+def refused_once(monkeypatch: pytest.MonkeyPatch, owner: object, name: str) -> list[int]:
+    """Make a function of a module raise PermissionError on its first call only; return the call count."""
+    real = getattr(owner, name)
+    calls: list[int] = []
+
+    def once(*arguments: object, **keywords: object) -> object:
+        calls.append(1)
+        if len(calls) == 1:
+            raise PermissionError(13, "in use")
+        return real(*arguments, **keywords)
+
+    monkeypatch.setattr(owner, name, once)
+    return calls
+
+
+def test_ec14_a_rename_refused_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_pause: None) -> None:
+    calls = refused_once(monkeypatch, atomic.os, "replace")
+    atomic.write_atomic(tmp_path / "out.docx", TEXT)
+    assert (tmp_path / "out.docx").read_bytes() == TEXT
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("name", ["unlink", "take"])
+def test_ec14_a_partial_files_removal_or_take_refused_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_pause: None, name: str
+) -> None:
+    (tmp_path / f"{atomic.PARTIAL_PREFIX}a.docx.1").write_bytes(b"part")
+    calls = refused_once(monkeypatch, atomic.os if name == "unlink" else atomic.locks, name)
+    assert atomic.sweep_partials(tmp_path) == 1
+    assert os.listdir(tmp_path) == []
+    assert len(calls) == 2
+
+
+def test_ec15_a_partial_file_gone_when_it_is_removed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / f"{atomic.PARTIAL_PREFIX}a.docx.1").write_bytes(b"part")
+    real_unlink = atomic.os.unlink
+
+    def renamed_first(path: str) -> None:
+        real_unlink(path)
+        raise FileNotFoundError(2, "renamed by its writer")
+
+    monkeypatch.setattr(atomic.os, "unlink", renamed_first)
+    assert atomic.sweep_partials(tmp_path) == 0
