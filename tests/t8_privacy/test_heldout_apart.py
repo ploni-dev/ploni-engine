@@ -36,6 +36,8 @@ Test matrix:
   EC4  every file of OWN and of UNREADABLE_ALLOWED exists, so that the lists are not stale
   B1   a tree with no ploni/ and no tests/ folder, and a helper under scripts/ that imports the
        batch                                            the import line only
+  E1   a Python file at the root that is not Python     SyntaxError that names the file, as
+       project_imports names a file of a folder (review 5, finding 42)
 
 Known limits (what no reading of the source sees, left to the reviewer of a detector PR, who may
 read the batch; the author may not, by Claude's reading of issue 283):
@@ -49,6 +51,8 @@ read the batch; the author may not, by Claude's reading of issue 283):
 """
 
 from pathlib import Path
+
+import pytest
 
 from tests.project_imports import UNREADABLE, Import, imported, project_imports
 
@@ -213,3 +217,9 @@ def test_b1_a_tree_with_no_guarded_folder(tmp_path: Path) -> None:
     assert by_text(tmp_path) == []
     assert by_import(tmp_path) == ["scripts/helper.py:1: imports eval.heldout.generator", "scripts/helper.py:1: imports eval.heldout.generator.build"]
     assert by_unreadable(tmp_path) == []
+
+
+def test_e1_a_root_file_that_is_not_python_is_named(tmp_path: Path) -> None:
+    (tmp_path / "broken.py").write_text("def (:\n", encoding="utf-8")
+    with pytest.raises(SyntaxError, match="broken.py: "):
+        by_import(tmp_path)
