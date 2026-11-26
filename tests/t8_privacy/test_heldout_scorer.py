@@ -28,15 +28,28 @@ streams write:
       planted text
   O9  a detector that turns logging back on and logs every document to the error stream: no
       planted text
+The cases below run the command itself, `python -m eval.heldout.scorer`, in a child process:
+  O10 a detector that starts a thread which prints a document after main returns: no planted
+      text (scorer review 3, finding 7)
+  O11 a detector that registers an atexit handler which prints a document: no planted text
+      (scorer review 3, finding 7)
+  O12 a detector that closes the output stream it kept at import: the command still writes
+      something, and no planted text (scorer review 3, finding 8)
 
-Known limits: what a detector writes after main has returned (a thread, an atexit handler, a
-process it started), through a copy of a file handle it made before main ran, or to a console
-it opens itself is not held back (the scorer's Known limits).
+Known limits: what a detector writes through a copy of a file handle it made before main ran,
+from a process it started that outlives the command, or to a console it opens itself is not
+held back (the scorer's Known limits).
 """
 
+import atexit
 import logging
 import os
+import re
+import subprocess
 import sys
+import threading
+import time
+from pathlib import Path
 
 import pytest
 
@@ -47,6 +60,14 @@ from tests.t8_privacy.test_heldout_disk import no_writes
 
 BATCH = build(SEED)
 SHORTEST_LEAK = 4
+ROOT = Path(__file__).resolve().parents[2]
+# The child command is given this long; it takes a few seconds.
+CHILD_TIMEOUT_SECONDS = 300
+# The thread of O10 waits this long, so that it prints after main has returned.
+LATE_SECONDS = 2
+HEBREW_LETTER = re.compile("[א-ת]")
+KEPT_OUT = sys.stdout
+STARTED: set[str] = set()
 LISTED: dict[str, list[tuple[int, int, str]]] = {}
 for _item in BATCH.key:
     LISTED.setdefault(BATCH.documents[_item.doc], []).append((_item.start, _item.end, _item.type))
@@ -116,6 +137,43 @@ def relogging_detector(text: str) -> list[tuple[int, int, str]]:
     logging.disable(logging.NOTSET)
     LOGGER.warning("seen: %s", text[:80])
     return []
+
+
+def _late_print(text: str) -> None:
+    """Print a text after main has returned."""
+    time.sleep(LATE_SECONDS)
+    print(text, flush=True)
+
+
+def late_thread_detector(text: str) -> list[tuple[int, int, str]]:
+    """A detector that starts, once, a thread which prints the document's start later."""
+    if "thread" not in STARTED:
+        STARTED.add("thread")
+        threading.Thread(target=_late_print, args=(text[:80],)).start()
+    return []
+
+
+def at_exit_detector(text: str) -> list[tuple[int, int, str]]:
+    """A detector that registers, once, a handler which prints the document's start at exit."""
+    if "exit" not in STARTED:
+        STARTED.add("exit")
+        atexit.register(print, text[:80])
+    return []
+
+
+def closing_detector(text: str) -> list[tuple[int, int, str]]:
+    """A detector that closes the output stream it kept at import."""
+    KEPT_OUT.close()
+    return []
+
+
+def run_command(detector: str) -> tuple[int, str]:
+    """Run `python -m eval.heldout.scorer` on a detector of this module; return its exit code and output."""
+    env = {key: value for key, value in os.environ.items() if not key.startswith("PYTEST_")}
+    env |= {"PYTHONPATH": str(ROOT), "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
+    command = [sys.executable, "-m", "eval.heldout.scorer", f"tests.t8_privacy.test_heldout_scorer:{detector}"]
+    done = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, timeout=CHILD_TIMEOUT_SECONDS, check=False)  # noqa: S603 fixed argv, no shell
+    return done.returncode, (done.stdout + done.stderr).decode("utf-8", errors="replace")
 
 
 def leaked(shown: str) -> list[int]:
@@ -206,3 +264,14 @@ def test_o9_main_holds_back_logging_turned_back_on(capfd: pytest.CaptureFixture[
     streams = capfd.readouterr()
     assert code == 0
     assert leaked(streams.out + streams.err) == []
+
+
+@pytest.mark.parametrize("detector", ["late_thread_detector", "at_exit_detector"])
+def test_o10_o11_the_command_ends_before_a_detectors_late_writes(detector: str) -> None:
+    code, shown = run_command(detector)
+    assert (code, len(HEBREW_LETTER.findall(shown))) == (0, 0)
+
+
+def test_o12_the_command_writes_when_its_stream_was_closed() -> None:
+    _, shown = run_command("closing_detector")
+    assert (shown != "", len(HEBREW_LETTER.findall(shown))) == (True, 0)

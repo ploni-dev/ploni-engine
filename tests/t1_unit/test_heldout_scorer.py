@@ -41,6 +41,10 @@ Error paths (ValueError, and the message holds no text of the document):
       DetectorError, whose message names no class of the detector's own
   E11 the detector raises KeyboardInterrupt with the text: KeyboardInterrupt again, with no
       message and nothing chained, so that an interrupt still stops the run
+  E12 a start or an end of an int subclass of the detector's that formats as the text: refused,
+      as a bool is, and the message holds no text (scorer review 3, finding 6)
+  E13 a type of a str subclass of the detector's, equal to a type of the key, that formats as
+      the text: refused the same way (the same kind of way, found by the writer)
 
 The report:
   R1  one line per type, sorted, then TOTAL; names and numbers only
@@ -347,6 +351,33 @@ def test_e11_an_interrupt_stops_the_run_without_its_message() -> None:
         score(interrupts, BATCH)
     shown = (raised.value.args, raised.value.__cause__ is None, raised.value.__suppress_context__)
     assert shown == ((), True, True)
+
+
+class ShownInt(int):
+    """An int that formats as words of a document."""
+
+    def __format__(self, spec: str) -> str:
+        """Format as the words."""
+        return DOCUMENTS[0]
+
+
+class ShownStr(str):
+    """A str equal to a type of the key that formats as words of a document."""
+
+    __slots__ = ()
+
+    def __format__(self, spec: str) -> str:
+        """Format as the words."""
+        return DOCUMENTS[0]
+
+
+@pytest.mark.parametrize(
+    "detection", [(ShownInt(0), 99, "X"), (0, ShownInt(99), "X"), (0, 5, ShownStr("X"))], ids=["E12 start", "E12 end", "E13 type"]
+)
+def test_e12_e13_a_position_or_a_type_of_a_class_of_the_detectors(detection: tuple[int, int, str]) -> None:
+    with pytest.raises(ValueError, match="document 0, detection 0") as raised:
+        score(lambda text: [detection] if text == DOCUMENTS[0] else [], BATCH)
+    assert not any(word in str(raised.value) for word in DOCUMENTS[0].split())
 
 
 def test_r3_a_type_the_batch_does_not_hold_is_not_named() -> None:
