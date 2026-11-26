@@ -63,6 +63,8 @@ sweep_partials. Equivalence classes:
        whole, the partial file is removed
   EC15 a partial file gone when the sweep removes it (its writer renamed it in that moment)
        no error, not counted
+  EC16 a rename that finds its partial file gone (another run's sweep removed it between its
+       close and its rename, #212)    the write is made again; the target holds all its bytes
   EC6  a folder that does not exist, an empty folder, a path that is a file    0
   EC12 a partial file that a live write holds (issue #212): the sweep runs between the write
        and the rename    left, not counted, and a dead partial file after it is removed; the
@@ -517,3 +519,23 @@ def test_ec15_a_partial_file_gone_when_it_is_removed(tmp_path: Path, monkeypatch
 
     monkeypatch.setattr(atomic.os, "unlink", renamed_first)
     assert atomic.sweep_partials(tmp_path) == 0
+
+
+def test_ec16_a_rename_that_finds_its_partial_file_gone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_pause: None) -> None:
+    # Another run's sweep removed the partial file between its close and its rename (#212): the
+    # write is made again from its bytes.
+    real_replace = atomic.os.replace
+    calls: list[int] = []
+
+    def swept_first(source: str, destination: str) -> None:
+        calls.append(1)
+        if len(calls) == 1:
+            os.unlink(source)
+            raise FileNotFoundError(2, "swept by another run")
+        real_replace(source, destination)
+
+    monkeypatch.setattr(atomic.os, "replace", swept_first)
+    atomic.write_atomic(tmp_path / "out.docx", TEXT)
+    assert (tmp_path / "out.docx").read_bytes() == TEXT
+    assert len(calls) == 2
+    assert os.listdir(tmp_path) == ["out.docx"]
