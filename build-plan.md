@@ -304,7 +304,7 @@ class TextProjection:
 
 @dataclass
 class Detection:
-    detection_id: str            # content-based, see below
+    detection_id: str            # content-based and keyed, see below; "" until made
     part: PartId
     span: Span
     surface: str
@@ -334,7 +334,7 @@ class Surrogate:
 
 @dataclass
 class Entity:
-    entity_id: str               # stable hash of canonical + type
+    entity_id: str               # stable keyed hash of canonical + type
     entity_type: str
     canonical: str
     variants: set[str]
@@ -358,10 +358,11 @@ class ReviewItem:
     resolution: str | None = None
 ```
 
-**Identifiers are content-based, not offset-based.**
-`detection_id = sha256(part || type || normalized_surface || ordinal)`.
-`entity_id = sha256(canonical || type)`.
-The user edits the source and re-runs; offset-based ids would discard every prior decision. Content-based ids let the session reapply "the user already decided this one".
+**Identifiers are content-based, not offset-based, and keyed with the matter key.**
+`detection_id = HMAC-SHA256(matter_key, part || type || normalized_surface || ordinal)`.
+`entity_id = HMAC-SHA256(matter_key, canonical || type)`.
+The user edits the source and re-runs; offset-based ids would discard every prior decision. Content-based ids let the session reapply "the user already decided this one". The key is the matter's secret key, the one the surrogates come from (section 4.4), so an id that leaves the machine, in an error message or a report, tells nothing to someone who holds a list of names but not the key (Achia, 2026-11-26, issue 169, "Use the secret key (Recommended)"). Ids are made just after detection, by the step that receives the detectors' output, never inside a detector, so no detector holds the key: a detector returns its detections with an empty `detection_id`, and that step fills it in.
+`normalized_surface` is the surface after exactly three rules (Achia, 2026-11-26, issue 169, "Agree, as proposed (Recommended)"): Hebrew vowel marks (niqqud) are left out; the two forms of the gershayim (`"` and `״`) count as one, and the two forms of the geresh (`'` and `׳`) as one; separators (spaces, dashes, dots) inside a number are left out. So `123-456-782` and `123456782` are one number, and `שָׂרָה` and `שרה` are one name. A proclitic letter glued before a name (ו, ב) stays part of it until the name finder of Phase 3 learns to split it off. Changing these rules later changes every saved id.
 
 ---
 
