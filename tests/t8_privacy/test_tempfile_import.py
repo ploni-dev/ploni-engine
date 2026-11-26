@@ -28,7 +28,8 @@ Equivalence classes:
        another name, beside another name and a module below it, one line each (four forms);
        the helper's module, its other names, a project module named tempfile, and the
        helper's binding written with one dot too few, which names a module one package below
-       `ploni`, not the helper, no line (six forms). This class holds the floor of 500 cases, as its
+       `ploni` (at a top module, an absolute name), not the helper, no line (six forms). This
+       class holds the floor of 500 cases, as its
        result depends on the place
   EC2  the helper itself, `ploni/safety/tempfiles.py`, in each of the ten ways: no line
   EC3  the helper's own binding of tempfile imported from it, absolute and relative, plain,
