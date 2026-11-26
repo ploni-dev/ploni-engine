@@ -68,10 +68,10 @@ from pathlib import Path
 
 from ploni.safety import locks
 
-# How the name of every folder made here begins. `sweep` removes folders with this beginning
-# and nothing else.
 __all__ = ["CHUNK", "LOCK_SUFFIX", "NotRemoved", "OWNER_ONLY", "PREFIX", "private_dir", "sweep"]
 
+# How the name of every folder made here begins. `sweep` removes folders with this beginning
+# and nothing else.
 PREFIX = "ploni-"
 # The lock file of a private folder stands beside it in the root, named for it with this ending:
 # held while the block runs, so that another run's `sweep` leaves the folder (issue #212). It
