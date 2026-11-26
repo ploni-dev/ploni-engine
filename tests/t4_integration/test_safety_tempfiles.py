@@ -12,8 +12,9 @@ Matrix (each program gets a root in a temp folder of the test):
                                          the root holds nothing
   M3  programs are killed inside their block, one after the other, and then one ends normally.
       Every program sweeps when it starts
-                                         a killed program leaves its folder; the next one
-                                         reports 1 swept; after the last the root holds nothing
+                                         a killed program leaves its folder and its lock
+                                         file; the next one reports 1 swept; after the last
+                                         the root holds nothing
 
 Not in the fast suite: PROCESS.md section 5.1 puts t4 in the full suite. Until the full
 workflow exists it is run by hand: python -m pytest tests/t4_integration
@@ -67,8 +68,12 @@ def test_m2_a_program_that_ends_in_an_error_leaves_nothing(tmp_path: Path) -> No
 
 def test_m3_the_next_program_sweeps_what_killed_ones_left(tmp_path: Path) -> None:
     assert [run(tmp_path, "kill").returncode, run(tmp_path, "kill").returncode] == [9, 9]
-    # The second killed program swept the first one's folder before it made its own.
-    assert len(list(tmp_path.iterdir())) == 1
+    # The second killed program swept the first one's folder before it made its own: one
+    # folder is left, with its lock file beside it (issue #212).
+    entries = list(tmp_path.iterdir())
+    assert len([entry for entry in entries if entry.is_dir()]) == 1
+    assert len([entry for entry in entries if entry.name.endswith(".lock")]) == 1
+    assert len(entries) == 2
     assert run(tmp_path, "kill").stdout == b"swept=1 inside=2"
     ended = run(tmp_path, "normal")
     assert (ended.returncode, ended.stdout) == (0, b"swept=1 inside=2")

@@ -33,6 +33,33 @@ sweep. Equivalence classes:
   EC12 other entries of the root      a folder with another name, a file with the prefix, a link
                                 with the prefix, a folder with the prefix one level deeper: left alone
   EC13 a root that does not exist, an empty root    0
+  EC14 a folder of a block that is still open (its lock beside it held, issue #212)    left,
+      not counted, and the sweep goes on to the folders after it; the block still ends as before
+  EC15 a folder that a killed run left with its lock file beside it, not held    the folder and
+      its lock file are removed, counted once
+private_dir and the lock (issue #212). Equivalence classes:
+  EC16 inside the block the lock file `<folder>.lock` stands beside the folder in the root and
+       is held; the folder itself is still empty; after the block both are gone, also when the
+       block ends with NotRemoved
+The race of a run's start (the review of b7390ae, finding 1). Equivalence classes:
+  EC17 the sweep holds a folder's lock while it removes the folder
+  EC18 a run whose lock file a sweep already made (it holds it while it removes the folder)
+       -> FileExistsError at the start, before the block runs; the folder is not left
+  EC19 a run whose folder a sweep removed before the run held its lock -> FileNotFoundError at
+       the start, before the block runs
+  EC20 a lock path that cannot be opened (a folder in its place) -> the sweep goes on to the
+       folders after it, and raises that OSError at the end
+  EC21 a lock file with no folder, not held -> removed by the sweep, not counted
+       (also when it comes after a lock file that a run holds, which stays)
+  EC22 a symbolic link named like a lone lock file, to a file outside and to nothing -> left;
+       nothing outside is made or changed
+  EC23 a symbolic link in the place of a dead folder's lock file, to a file outside and to
+       nothing, and on Windows a junction to a folder outside -> not followed: the link and the folder are removed, nothing outside is made or
+       changed (the review of 5d1ee74, finding 14)
+  EC24 an unheld lock file beside a live folder (a run between its "xb" open and its hold),
+       met by the lone-lock pass alone -> left
+  EC25 a held lock file with no folder (a block between its folder's removal and its close)
+       -> left, and the sweep raises nothing
 
 Boundaries:
   B1  a block that makes nothing
@@ -90,7 +117,8 @@ if sys.platform == "win32":
 
 import pytest
 
-from ploni.safety import tempfiles
+from ploni.safety import locks, tempfiles
+from tests.locking import held
 
 TEXT = "יעקב כהן / John Smith"
 # The kinds of link to a folder that this system has. A junction is the folder link of Windows and needs no
@@ -823,3 +851,170 @@ def test_a8_the_temp_folder_of_the_process_is_changed_only_under_the_lock(tmp_pa
     assert len(changes) == 10
     assert held == []
     assert tempfile.tempdir == before
+
+
+def test_ec14_sweep_leaves_the_folder_of_a_block_that_is_still_open(tmp_path: Path) -> None:
+    with tempfiles.private_dir(tmp_path) as folder:
+        (folder / "work.txt").write_text(TEXT, encoding="utf-8")
+        assert tempfiles.sweep(tmp_path) == 0
+        assert (folder / "work.txt").read_text(encoding="utf-8") == TEXT
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_ec15_sweep_removes_a_killed_run_and_its_lock_file(tmp_path: Path) -> None:
+    folder = leftover(tmp_path, "killed")
+    lock = folder.with_name(folder.name + tempfiles.LOCK_SUFFIX)
+    lock.write_bytes(b"")
+    assert tempfiles.sweep(tmp_path) == 1
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_ec16_the_lock_file_beside_the_folder(tmp_path: Path) -> None:
+    with tempfiles.private_dir(tmp_path) as folder:
+        lock = folder.with_name(folder.name + tempfiles.LOCK_SUFFIX)
+        assert lock.is_file()
+        assert held(lock) is True
+        assert list(folder.iterdir()) == []
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_ec16_the_lock_file_goes_when_the_block_ends_with_not_removed(tmp_path: Path, stuck: None) -> None:
+    with pytest.raises(tempfiles.NotRemoved), tempfiles.private_dir(tmp_path) as folder:
+        pass
+    assert not folder.with_name(folder.name + tempfiles.LOCK_SUFFIX).exists()
+
+
+def test_ec14_sweep_goes_on_past_a_live_folder_to_a_dead_one(tmp_path: Path) -> None:
+    with tempfiles.private_dir(tmp_path) as folder:
+        dead = leftover(tmp_path, "zzz-dead")
+        assert tempfiles.sweep(tmp_path) == 1
+        assert not dead.exists()
+        assert folder.is_dir()
+
+
+def test_ec17_the_sweep_holds_the_lock_while_it_removes(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    folder = leftover(tmp_path, "dead")
+    seen: list[bool] = []
+    real_remove = tempfiles._remove
+
+    def remove_and_look(path: Path) -> None:
+        seen.append(held(path.with_name(path.name + tempfiles.LOCK_SUFFIX)))
+        real_remove(path)
+
+    monkeypatch.setattr(tempfiles, "_remove", remove_and_look)
+    assert tempfiles.sweep(tmp_path) == 1
+    assert seen == [True]
+    assert not folder.exists()
+
+
+def test_ec18_a_run_whose_lock_file_a_sweep_made(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    real_mkdtemp = tempfile.mkdtemp
+    ran: list[bool] = []
+
+    def made_and_taken(*arguments: object, **keywords: object) -> str:
+        name = real_mkdtemp(*arguments, **keywords)
+        Path(name + tempfiles.LOCK_SUFFIX).write_bytes(b"")
+        return name
+
+    monkeypatch.setattr(tempfiles.tempfile, "mkdtemp", made_and_taken)
+    with pytest.raises(FileExistsError), tempfiles.private_dir(tmp_path):
+        ran.append(True)
+    assert ran == []
+    assert [entry.is_dir() for entry in tmp_path.iterdir()] == [False]
+
+
+def test_ec19_a_run_whose_folder_a_sweep_removed_before_the_hold(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    real_hold = locks.hold
+    ran: list[bool] = []
+
+    def removed_then_held(handle: object) -> None:
+        for folder in tmp_path.iterdir():
+            if folder.is_dir():
+                folder.rmdir()
+        real_hold(handle)
+
+    monkeypatch.setattr(tempfiles.locks, "hold", removed_then_held)
+    with pytest.raises(FileNotFoundError), tempfiles.private_dir(tmp_path):
+        ran.append(True)
+    assert ran == []
+
+
+def test_ec20_a_lock_path_that_cannot_be_opened_does_not_stop_the_sweep(tmp_path: Path) -> None:
+    first = leftover(tmp_path, "a")
+    (tmp_path / f"{first.name}{tempfiles.LOCK_SUFFIX}").mkdir()
+    later = leftover(tmp_path, "b")
+    with pytest.raises(OSError) as raised:
+        tempfiles.sweep(tmp_path)
+    assert not isinstance(raised.value, tempfiles.NotRemoved)
+    assert not later.exists()
+    assert first.is_dir()
+
+
+def test_ec21_a_lock_file_with_no_folder_is_removed(tmp_path: Path) -> None:
+    (tmp_path / f"{tempfiles.PREFIX}gone{tempfiles.LOCK_SUFFIX}").write_bytes(b"")
+    assert tempfiles.sweep(tmp_path) == 0
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_ec21_the_sweep_goes_on_past_a_held_lock_file_to_a_lone_one(tmp_path: Path) -> None:
+    lone = tmp_path / f"{tempfiles.PREFIX}zzzz-gone{tempfiles.LOCK_SUFFIX}"
+    lone.write_bytes(b"")
+    with tempfiles.private_dir(tmp_path) as folder:
+        assert tempfiles.sweep(tmp_path) == 0
+        assert not lone.exists()
+        assert held(folder.with_name(folder.name + tempfiles.LOCK_SUFFIX)) is True
+
+
+@pytest.mark.parametrize("target_exists", [True, False])
+def test_ec22_a_link_named_like_a_lone_lock_file_is_left(tmp_path: Path, target_exists: bool) -> None:
+    root, outside = tmp_path / "root", outside_tree(tmp_path)
+    root.mkdir()
+    target = outside / ("kept.txt" if target_exists else "made-by-no-one.txt")
+    at = root / f"{tempfiles.PREFIX}gone{tempfiles.LOCK_SUFFIX}"
+    link(at, target, "symlink")
+    assert tempfiles.sweep(root) == 0
+    assert at.is_symlink()
+    assert target.exists() is target_exists
+    assert untouched(outside)
+
+
+# A link in a lock file's place: a symbolic link to a file outside, to nothing, and on Windows a
+# junction to a folder outside (FOLDER_LINKS gives the kinds of each system).
+LOCK_LINKS = [("symlink", True), ("symlink", False)] + [("junction", True)] * ("junction" in FOLDER_LINKS)
+
+
+@pytest.mark.parametrize(("kind", "target_exists"), LOCK_LINKS)
+def test_ec23_a_link_in_the_place_of_a_dead_folders_lock_file(tmp_path: Path, kind: str, target_exists: bool) -> None:
+    root, outside = tmp_path / "root", outside_tree(tmp_path)
+    root.mkdir()
+    folder = leftover(root, "dead")
+    target = outside if kind == "junction" else outside / ("kept.txt" if target_exists else "made-by-no-one.txt")
+    link(folder.with_name(folder.name + tempfiles.LOCK_SUFFIX), target, kind)
+    assert tempfiles.sweep(root) == 1
+    assert list(root.iterdir()) == []
+    assert target.exists() is target_exists
+    assert untouched(outside)
+
+
+def test_ec24_a_lone_lock_pass_leaves_an_unheld_lock_file_beside_a_live_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The state of a run between its "xb" open and its hold; _sweep_one is set aside so that the
+    # lone-lock pass alone meets it.
+    folder = tmp_path / f"{tempfiles.PREFIX}starting"
+    folder.mkdir()
+    lock = folder.with_name(folder.name + tempfiles.LOCK_SUFFIX)
+    lock.write_bytes(b"")
+    monkeypatch.setattr(tempfiles, "_sweep_one", lambda folder: 0)
+    assert tempfiles.sweep(tmp_path) == 0
+    assert lock.exists()
+
+
+def test_ec25_a_held_lock_file_with_no_folder_is_left(tmp_path: Path) -> None:
+    # The state of a block between its folder's removal and the close of its lock file.
+    lock = tmp_path / f"{tempfiles.PREFIX}ending{tempfiles.LOCK_SUFFIX}"
+    lock.write_bytes(b"")
+    with open(lock, "r+b") as handle:
+        locks.hold(handle)
+        assert tempfiles.sweep(tmp_path) == 0
+        assert lock.exists()

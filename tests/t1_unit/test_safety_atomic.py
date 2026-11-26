@@ -58,6 +58,11 @@ sweep_partials. Equivalence classes:
   E9  two partial files that cannot be removed, with two kinds of OSError    every other partial
        file is still removed, then the first error is raised, not the last
   EC6  a folder that does not exist, an empty folder, a path that is a file    0
+  EC12 a partial file that a live write holds (issue #212): the sweep runs between the write
+       and the rename    left, not counted, and a dead partial file after it is removed; the
+       write ends and the target holds all its bytes
+  EC13 a sweep that takes the partial file before the writer holds it (the review of b7390ae,
+       finding 1)    the write fails with OSError before it writes; the target keeps its bytes
 """
 
 import os
@@ -65,7 +70,7 @@ from pathlib import Path
 
 import pytest
 
-from ploni.safety import atomic
+from ploni.safety import atomic, locks
 
 TEXT = "ישראל ישראלי, ת.ז. 123456782".encode()
 
@@ -111,6 +116,14 @@ class Broken:
     def write(self, data: bytes) -> int:
         self.handle.write(data[:10])  # type: ignore[attr-defined]
         raise OSError(28, "No space left on device")
+
+    def fileno(self) -> int:
+        # The partial file is held through its descriptor (issue #212).
+        return int(self.handle.fileno())
+
+    def tell(self) -> int:
+        # The partial file is held from position 0 (issue #212).
+        return int(self.handle.tell())
 
 
 def test_e1_the_write_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -389,3 +402,59 @@ def test_ec12_the_folder_of_the_target_is_flushed(tmp_path: Path, monkeypatch: p
     monkeypatch.setattr(atomic, "_sync_folder", flushed.append)
     atomic.write_atomic(tmp_path / "out.docx", TEXT)
     assert flushed == [tmp_path] and (tmp_path / "out.docx").read_bytes() == TEXT
+
+
+def test_ec12_sweep_partials_leaves_the_partial_file_of_a_live_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[int] = []
+    real_fsync = os.fsync
+
+    def sweep_while_writing(descriptor: int) -> None:
+        real_fsync(descriptor)
+        seen.append(atomic.sweep_partials(tmp_path))
+
+    monkeypatch.setattr(atomic.os, "fsync", sweep_while_writing)
+    atomic.write_atomic(tmp_path / "out.docx", TEXT)
+    assert seen[0] == 0  # the partial file's fsync; POSIX also flushes the folder after the rename
+    assert (tmp_path / "out.docx").read_bytes() == TEXT
+    assert os.listdir(tmp_path) == ["out.docx"]
+
+
+def test_ec12_sweep_partials_goes_on_past_a_live_write_to_a_dead_partial(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    dead = tmp_path / f"{atomic.PARTIAL_PREFIX}zzz.docx.0000000000000000"
+    dead.write_bytes(b"left by a crash")
+    seen: list[int] = []
+    real_fsync = os.fsync
+
+    def sweep_while_writing(descriptor: int) -> None:
+        real_fsync(descriptor)
+        seen.append(atomic.sweep_partials(tmp_path))
+
+    monkeypatch.setattr(atomic.os, "fsync", sweep_while_writing)
+    atomic.write_atomic(tmp_path / "out.docx", TEXT)
+    assert seen[0] == 1  # the dead partial file, not the live one
+    assert not dead.exists()
+    assert (tmp_path / "out.docx").read_bytes() == TEXT
+
+
+def test_ec13_a_sweep_that_takes_the_partial_file_first(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    target = tmp_path / "out.docx"
+    target.write_bytes(b"old")
+    real_open = atomic._open_partial
+    taken: list[object] = []
+
+    def opened_then_taken(path: Path) -> object:
+        handle = real_open(path)
+        taken.append(locks.take(path))
+        return handle
+
+    monkeypatch.setattr(atomic, "_open_partial", opened_then_taken)
+    try:
+        with pytest.raises(OSError):
+            atomic.write_atomic(target, TEXT)
+    finally:
+        for handle in taken:
+            if handle is not None:
+                handle.close()
+    assert target.read_bytes() == b"old"

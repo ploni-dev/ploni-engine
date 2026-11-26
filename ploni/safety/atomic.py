@@ -8,7 +8,8 @@ and then put in the target's place in one step.
 Contract: `write_atomic` leaves the target holding either its old bytes (or no file) or all
 of the new ones. When it fails before the rename it tries to remove its partial file, and
 the first error passes through. A crash that kills the process before the rename leaves the
-partial file behind: `sweep_partials` removes such files from a folder. It must be called
+partial file behind: `sweep_partials` removes such files from a folder, and leaves the partial
+file of a write that is still running, which holds it (`ploni.safety.locks`, issue #212). It must be called
 when a run starts, before any export; no caller exists yet (the exporter, Phase 9).
 
 Known limits:
@@ -47,6 +48,8 @@ from contextlib import suppress
 from pathlib import Path
 from typing import BinaryIO
 
+from ploni.safety import locks
+
 # How the name of every partial file begins. `sweep_partials` removes entries with this
 # beginning and nothing else; the leading dot hides them in a POSIX listing.
 PARTIAL_PREFIX = ".ploni-partial-"
@@ -82,9 +85,13 @@ def write_atomic(path: Path, data: bytes) -> None:
     Why: see the module docstring.
 
     Contract: `path` is the target. The bytes go to a new partial file in the same folder,
-    are flushed to disk, and the partial file then replaces the target. On any error before
+    are flushed to disk, and the partial file then replaces the target. The partial file is
+    held while it is written (`ploni.safety.locks`). On any error before
     the rename, also one that is not an Exception, the partial file is removed if it can be
-    and the first error passes through. FileExistsError when the random name of the partial
+    and the first error passes through; among them the OSError of a hold that another run's
+    sweep took first, and, on Windows, the PermissionError of a rename in the moment another
+    run's sweep has the partial file open (the sweep's Known limits). The target is then as
+    it was. FileExistsError when the random name of the partial
     file is taken: the file that has the name is left as it is. FileNotFoundError when the
     folder does not exist. An OSError after the rename (the folder flush on POSIX) means the
     target already holds all the new bytes.
@@ -97,6 +104,8 @@ def write_atomic(path: Path, data: bytes) -> None:
     handle = _open_partial(partial)
     try:
         with handle:
+            # Held while it is written, so that another run's sweep leaves it (issue #212).
+            locks.hold(handle)
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
@@ -116,17 +125,33 @@ def sweep_partials(folder: Path) -> int:
     the next run does it.
 
     Contract: removes the entries directly in `folder` whose names begin with PARTIAL_PREFIX
-    and that are not folders; returns how many. A symbolic link with the prefix is removed
-    itself; what it points to is not touched. Every such entry is tried; when one cannot be
+    and that are not folders, but for a partial file that a live write holds
+    (`ploni.safety.locks`, issue #212); returns how many. A symbolic link with the prefix is
+    removed itself, without looking at what it points to, which is not touched. Every such entry is tried; when one cannot be
     removed, the first error is raised after the others were tried. A folder that does not
     exist gives 0.
 
     Known limits:
     - Deeper folders are not looked at. A Windows junction with the prefix is left: it counts
       as a folder.
-    - It must not run while another process of this product writes into the same folder:
-      on POSIX it would remove that writer's partial file, and that write fails; on Windows
-      the open file cannot be removed and the sweep raises.
+    - A partial file that its writer made and has not yet held: if the writer's hold comes
+      while the sweep holds the file, the hold fails with OSError before it writes, the
+      target is as it was, and the sweep removes the file. If it comes after the sweep gave
+      the lock back and before the removal, the write goes on: on Windows the removal fails
+      and the sweep raises, and the write ends whole; on POSIX the removal succeeds and the
+      write fails at the rename, the target as it was. A partial file that its writer has
+      just closed, before the rename, is removed on every system: the write then fails at
+      the rename, the target as it was (the reviews of b7390ae and 5d1ee74).
+    - The sweep opens each partial file for a moment. On Windows a writer's rename in that
+      moment fails with PermissionError, the target as it was: measured in about 1 in 15
+      writes of four runs (1 in 50 of two runs) that wrote and swept the same folder at once
+      without a pause (the reviews of 5d1ee74 and 55fdeff).
+    - An OSError from `locks.take` (a partial file that cannot be opened for reading and
+      writing) counts as one that cannot be removed: the first such error is raised at the
+      end. A sweep can so fail, loudly, on another run's partial file that is being written
+      or renamed in that moment: about 1 in 7 calls in the same four-run stress, as a
+      PermissionError of the open or of the removal, or a FileNotFoundError of the removal
+      (the review of 55fdeff). Nothing is lost; the sweep runs again at the next start.
     """
     if not folder.is_dir():
         return 0
@@ -135,6 +160,13 @@ def sweep_partials(folder: Path) -> int:
     for entry in os.scandir(folder):
         if entry.name.startswith(PARTIAL_PREFIX) and not entry.is_dir(follow_symlinks=False):
             try:
+                if not entry.is_symlink():
+                    # Taken, then given back before the removal: a writer whose hold comes
+                    # while it is taken fails before it writes (the Known limits, issue #212).
+                    taken = locks.take(Path(entry.path))
+                    if taken is None:
+                        continue
+                    taken.close()
                 os.unlink(entry.path)
             except OSError as error:
                 first = first or error
