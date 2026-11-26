@@ -13,7 +13,8 @@ compares, and the session that writes the detectors and the public CI log read t
 (review 1 of the branch, finding 1; tests/t8_privacy/test_heldout_disk.py runs a broken build to
 show it). Hebrew words stand at module level, so a traceback that shows a test's source
 shows none; a test's body holds single letters and marks only. A parametrized test takes a type
-name, never a list of words, as pytest prints a failing test's arguments (review 2, finding 24).
+name or text written here by hand, never words of the generator's tables, as pytest prints a
+failing test's arguments (review 2, finding 24; review 8, finding 45).
 
 Test matrix:
 
