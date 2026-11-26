@@ -533,7 +533,8 @@ GIVEN = (
     "אור", "שחר", "רון", "ברק", "יונה", "שרון", "עדן", "טל", "גל", "שקד", "ים", "תום", "עומר", "נועם", "דקל", "חן", "שירה",
 )  # fmt: skip
 FAMILY = ("כהן", "לוי", "מזרחי", "פרץ", "ביטון", "דהן", "אברהם", "פרידמן", "אגבאריה", "חדד", "גבאי", "שפירא", "ברק", "לביא", "הדר")
-# The family names that are no ordinary word, the first twelve: a name of one word standing alone.
+# The family names not on the plan's list of names that are ordinary words, the first twelve: a
+# name of one word standing alone.
 LONE_FAMILY = FAMILY[:12]
 VERBS = ("טוען", "השיב", "הוסיף", "ציין", "הודה", "ביקש", "הגיש", "העיד", "הכחיש", "סירב", "חזר", "הבהיר", "התנגד", "הסכים", "שתק", "נכח")
 NOT_NAMES = (("גורלו של הנכס היה מר {}.", "מאוד"), ("הטעם של המשקה היה מר {} מן הצפוי.", "יותר"))
