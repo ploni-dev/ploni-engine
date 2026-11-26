@@ -69,10 +69,13 @@ SETTINGS = ("pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini")
 OWN = frozenset({
     "tests/heldout_oracles.py",
     "tests/t1_unit/test_heldout_generator.py",
+    "tests/t1_unit/test_heldout_scorer.py",
     "tests/t2_property/test_heldout_generator.py",
     "tests/t4_integration/test_heldout_generator.py",
+    "tests/t4_integration/test_heldout_scorer.py",
     "tests/t8_privacy/test_heldout_apart.py",
     "tests/t8_privacy/test_heldout_disk.py",
+    "tests/t8_privacy/test_heldout_scorer.py",
 })  # fmt: skip
 # The files that read imports themselves, and import by a computed name on purpose.
 UNREADABLE_ALLOWED = frozenset({
