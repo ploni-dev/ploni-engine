@@ -31,11 +31,14 @@ Written by the batch's writer, by Achia's answer of 2026-11-26 on issue 283 ("Ye
 | DATE | The whole date, from its first character to its last: for a date in digits, first digit to last with the separators; for a date with a month name, in either calendar, from the day to the year, every word between included, with the gershayim and geresh of the day and the year. Not a word before it. |
 | AMOUNT | The number, or the written-out number words, together with the currency sign or word, on whichever side the currency stands, with any space between them; thousands separators and decimals are in. Not a word before it. |
 | ADDRESS | From the word for street or avenue, or its abbreviation with its geresh, when one stands there, else from the street's name, to the last letter of the city's name: the house number, and any comma between, are in. A proclitic glued to the first word is out. |
-| PERSON | The name only, after its trigger: the given name, the family name, or both with the space between, as written, with any geresh or niqqud inside it. The trigger (a title or a role) is out. |
-| PERSON_UNTITLED | A name that stands once in its document with no trigger or title before it: the given name and the family name with the space between, as written, with any geresh or niqqud inside it. |
+| PERSON | A name, after its trigger when there is one: the given name, the family name, or both with the space between, as written, with any geresh or niqqud inside it. The trigger (a title or a role) is out. |
 | PLACEHOLDER | The placeholder whole: a placeholder word, or two such words that stand together, as one item; initials with every dot, the last one included; a run of underscores whole. A title before it is out. |
 | HEALTH_FUND_ID | The number only. Not the label. |
 | MILITARY_ID | The number only. Not the label. |
 | PASSPORT_NUMBER | The number only, and letters that are part of it when it has them. Not the label. |
 
 Every type's rule is given; none is "not given". How a detection is counted against these spans is the scorer's, and is written with it.
+
+## The group of names that stand once
+
+Some PERSON items are names that stand once in their document with no trigger or title before them (build-plan.md section 7; Achia, 2026-11-16, "Yes, as its own line from the start"). They are PERSON, and a detector returns them as PERSON, under the PERSON rule above. The batch marks them as a group, and their score is shown on a line of its own beside the type's.
