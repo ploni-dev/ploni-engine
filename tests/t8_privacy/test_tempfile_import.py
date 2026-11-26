@@ -25,7 +25,7 @@ Equivalence classes:
        cases): one line each. The ten ways name the module absolutely, so the place does not
        change their result; EC6 is where it does
   EC6  ten relative imports from each of the 59 places, climbing to `ploni` by as many dots
-       as the place needs (RELATIVE, 59 x 10 = 590 cases): the helper's binding, plain, under
+       as the place needs (RELATIVE, 59 x 14 = 826 cases): the helper's binding, plain, under
        another name, beside another name, and named as a module path (which Python itself
        refuses at run time), one line each (four forms); the helper's module, a name of the
        helper (`private_dir`), a name it does not have (`tempfiles`), a project module named
@@ -40,6 +40,9 @@ Equivalence classes:
   EC4  a tree on disk: the lines, with file and line, of every file under ploni/ but the
        helper
   EC5  the repository: no line
+  EC7  the text of a file under ploni/ but the helper names the helper's private binding
+       (`_tempfile`): the attribute and getattr routes the reader does not see -> named; the
+       repository -> none
 
 Boundaries:
   B1  the neighbours of the helper: `ploni/safety/__init__.py`, `ploni/safety/atomic.py`,
@@ -95,9 +98,10 @@ ROOT = Path(__file__).resolve().parents[2]
 HELPER = "ploni/safety/tempfiles.py"
 HELPER_MODULE = "ploni.safety.tempfiles"
 BANNED = "tempfile"
-# The helper's own bindings of the module, the old public name and the private one of #278:
-# importing either from the helper goes around the helper.
-HELPER_BINDINGS = (f"{HELPER_MODULE}.{BANNED}", f"{HELPER_MODULE}._{BANNED}")
+# The helper's bindings of the module: the private one of #278, and the old public name, which
+# no longer exists and stays refused should it come back.
+PRIVATE = f"_{BANNED}"
+HELPER_BINDINGS = (f"{HELPER_MODULE}.{BANNED}", f"{HELPER_MODULE}.{PRIVATE}")
 
 # The packages and the top modules of the plan's layout (build-plan.md section 4.7), and the
 # command line, `__main__`, which 4.7 does not list.
@@ -136,7 +140,8 @@ def outside_helper(imports: list[Import]) -> list[str]:
         Args: imports, as `project_imports` returns them.
         Returns: lines of the form `file:line: imports tempfile`, as `from_packages` gives
             them, for every file but HELPER. An import of the helper's own binding of the
-            module (`from ploni.safety.tempfiles import tempfile`) counts as one of `tempfile`.
+            module (`from ploni.safety.tempfiles import _tempfile`, or the old public name)
+            counts as one of `tempfile`.
         Raises: nothing.
 
     Known limits: those of `from_packages`, and the module docstring's.
@@ -171,7 +176,7 @@ def climb(importer: str, is_package: bool) -> str:
     return "." * (package.count(".") + 1)
 
 
-# Ten relative imports, written from any place: the source, and whether it must give a line.
+# Fourteen relative imports, written from any place: the source, and whether it must give a line.
 # `{short}` is one dot fewer than the place needs, so it names a module one package below
 # `ploni` (at a top module, an absolute name), not the helper.
 RELATIVE = (
@@ -185,6 +190,11 @@ RELATIVE = (
     ("from {dots}safety.tempfiles import tempfiles\n", False),
     ("from {dots} import tempfile\n", False),
     ("from {dots}tempfile import mkstemp\n", False),
+    # The helper's private binding of #278, in the four forms that must give a line.
+    ("from {dots}safety.tempfiles import _tempfile\n", True),
+    ("from {dots}safety.tempfiles import _tempfile as t\n", True),
+    ("from {dots}safety.tempfiles import private_dir, _tempfile\n", True),
+    ("from {dots}safety.tempfiles._tempfile import mkstemp\n", True),
 )
 
 
@@ -286,3 +296,26 @@ def test_b2_a_repository_with_no_ploni_folder_reports_nothing(tmp_path: Path) ->
 
 def test_ec5_no_file_under_ploni_but_the_helper_imports_tempfile() -> None:
     assert outside_helper(project_imports(ROOT, "ploni")) == []
+
+
+def names_private_binding(root: Path) -> list[str]:
+    """Return each file under root/ploni but the helper whose text names the helper's private binding."""
+    files = sorted(path for path in (root / "ploni").rglob("*") if path.suffix.lower() in (".py", ".pyw"))
+    return [path.relative_to(root).as_posix() for path in files if path.relative_to(root).as_posix() != HELPER and PRIVATE in path.read_text(encoding="utf-8")]
+
+
+def test_ec7_no_file_under_ploni_but_the_helper_names_its_private_binding(tmp_path: Path) -> None:
+    # The attribute route the ban's reader does not see (`tempfiles._tempfile.mkstemp()`,
+    # `getattr(tempfiles, "_tempfile")`): refused by the name's text (the review of 46a972a,
+    # finding 3). A tree on disk first, then the repository.
+    for name, source in {
+        HELPER: "import tempfile as _tempfile\n",
+        "ploni/write/docx.py": "from ploni.safety import tempfiles\n\ntempfiles._tempfile.mkstemp()\n",
+        "ploni/report/audit.py": "value = getattr(tempfiles, '_tempfile')\n",
+        "ploni/api.py": "import json\n",
+    }.items():
+        path = tmp_path / name
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(source, encoding="utf-8")
+    assert names_private_binding(tmp_path) == ["ploni/report/audit.py", "ploni/write/docx.py"]
+    assert names_private_binding(ROOT) == []

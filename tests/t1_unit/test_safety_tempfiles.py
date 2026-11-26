@@ -61,7 +61,7 @@ The race of a run's start (the review of b7390ae, finding 1). Equivalence classe
   EC25 a held lock file with no folder (a block between its folder's removal and its close)
        -> left, and the sweep raises nothing
 The helper's own copy of tempfile (issue #278). Equivalence classes:
-  EC26 no public name of the helper is the tempfile module, and `__all__` lists exactly the
+  EC26 no public name of the helper is the tempfile module or a name of it, and `__all__` lists exactly the
        names the helper defines for its callers; a star import of the helper binds no module
 
 Boundaries:
@@ -1026,6 +1026,8 @@ def test_ec25_a_held_lock_file_with_no_folder_is_left(tmp_path: Path) -> None:
 def test_ec26_the_helper_hands_on_no_copy_of_tempfile() -> None:
     public = sorted(name for name in dir(tempfiles) if not name.startswith("_"))
     assert [name for name in public if getattr(tempfiles, name) is tempfile] == []
+    # Nor a function or class of the module under a public name (`from tempfile import mkstemp`).
+    assert [name for name in public if getattr(getattr(tempfiles, name), "__module__", None) == tempfile.__name__] == []
     # The names the helper itself defines for its callers, written out here and not read from it.
     assert sorted(tempfiles.__all__) == ["CHUNK", "LOCK_SUFFIX", "NotRemoved", "OWNER_ONLY", "PREFIX", "private_dir", "sweep"]
     # A star import of a module that defines __all__ binds exactly those names.
