@@ -35,6 +35,8 @@ Equivalence class:
            digest put in its place, as the approved lines cannot be written here)
        F2c refused: EXPECTED without its last line, with one line changed, with one line more;
            the made-up 73-line list under the real digest
+       F2d main's old 48 lines, taken from the workflow's lines by leaving out the 25 of the
+           two steps, are refused: step 4 of #170 drops the old shape
      Not here: copies of the approved form edited (one line dropped, `-P` dropped, the PR's
      workspace on the path, the check made `true`, the steps moved, one step only, the steps
      twice). Each would spell the approved lines. They were run against this pin outside the
@@ -144,6 +146,8 @@ EXPECTED = [
 NEXT_SHA256 = "95c26cc497753dc710532fe2dc1d7b404cf5248e77843ef0777bcf2294a3b3a2"
 # The run line of the reviewed-commit check is code line 32 (index 31) of EXPECTED.
 AFTER = 32
+# The code lines of the two score-guard steps, after AFTER: 73 - 48.
+STEPS = 25
 # A made-up 73-line list, for F2b and F2c only: it is not the approved form.
 MADE_UP = EXPECTED[:AFTER] + ["      - run: echo made up"] * 25 + EXPECTED[AFTER:]
 
@@ -181,3 +185,9 @@ def test_f2b_lines_with_the_pinned_digest_are_accepted(monkeypatch: pytest.Monke
 )
 def test_f2c_other_lines_are_refused(lines: list[str]) -> None:
     assert not pinned(lines)
+
+
+def test_f2d_the_old_48_lines_are_refused() -> None:
+    lines = code_lines(WORKFLOW)
+    old = lines[:AFTER] + lines[AFTER + STEPS :]
+    assert len(old) == 48 and not pinned(old)
