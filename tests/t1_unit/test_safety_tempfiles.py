@@ -61,8 +61,9 @@ The race of a run's start (the review of b7390ae, finding 1). Equivalence classe
   EC25 a held lock file with no folder (a block between its folder's removal and its close)
        -> left, and the sweep raises nothing
 The helper's own copy of tempfile (issue #278). Equivalence classes:
-  EC26 no public name of the helper is the tempfile module or a name of it, and `__all__` lists exactly the
-       names the helper defines for its callers; a star import of the helper binds no module
+  EC26 no public name of the helper is the tempfile module or a function or class of it,
+       and `__all__` lists exactly the names the helper defines for its callers; a star
+       import of the helper binds no module
 
 Boundaries:
   B1  a block that makes nothing

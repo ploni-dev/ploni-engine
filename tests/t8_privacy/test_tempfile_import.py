@@ -1,4 +1,4 @@
-"""No file under ploni/ but the temp-file helper imports Python's `tempfile` module, or imports the helper's copy of it by name.
+"""No file under ploni/ but the temp-file helper imports Python's `tempfile` module, or imports or names the helper's copy of it.
 
 Why: a temp file made with `tempfile` outside a `ploni.safety.tempfiles.private_dir` block
 lands in the system's temp folder and stays there after a crash, with document text in it
@@ -24,10 +24,11 @@ Equivalence classes:
        deep and a package two deep, its six top modules and `__main__`; 10 x 59 = 590
        cases): one line each. The ten ways name the module absolutely, so the place does not
        change their result; EC6 is where it does
-  EC6  ten relative imports from each of the 59 places, climbing to `ploni` by as many dots
-       as the place needs (RELATIVE, 59 x 14 = 826 cases): the helper's binding, plain, under
-       another name, beside another name, and named as a module path (which Python itself
-       refuses at run time), one line each (four forms); the helper's module, a name of the
+  EC6  fourteen relative imports from each of the 59 places, climbing to `ploni` by as many
+       dots as the place needs (RELATIVE, 59 x 14 = 826 cases): the helper's bindings, the old
+       public name and the private one of #278, each plain, under another name, beside another
+       name, and named as a module path (which Python itself refuses at run time), one line
+       each (eight forms); the helper's module, a name of the
        helper (`private_dir`), a name it does not have (`tempfiles`), a project module named
        tempfile in two forms, and the helper's binding written with one dot too few, which
        names a module one package below `ploni` (at a top module, an absolute name), not the
@@ -40,9 +41,10 @@ Equivalence classes:
   EC4  a tree on disk: the lines, with file and line, of every file under ploni/ but the
        helper
   EC5  the repository: no line
-  EC7  the text of a file under ploni/ but the helper names the helper's private binding
-       (`_tempfile`): the attribute and getattr routes the reader does not see -> named; the
-       repository -> none
+  EC7  the bytes of a file under ploni/ but the helper hold the helper's private binding
+       (`_tempfile`) as a word: the attribute and getattr routes the reader does not see ->
+       named; longer names that hold it, and a file in cp1255 -> not named; the repository ->
+       none
 
 Boundaries:
   B1  the neighbours of the helper: `ploni/safety/__init__.py`, `ploni/safety/atomic.py`,
@@ -67,12 +69,14 @@ Adversarial:
       it cannot hide a `tempfile` import here
 
 Known limits:
-  - The helper's binding of tempfile reached as an attribute, not imported:
-    `from ploni.safety import tempfiles` then `tempfiles._tempfile.mkstemp()`: this test
-    reads imports only. Since #278 the helper binds the module under a private name and lists
-    its public names in `__all__`, so a star import of it binds no module and the route takes
-    a name that begins with an underscore: a deliberate act (ADR-0005's bar), tested by EC26
-    of tests/t1_unit/test_safety_tempfiles.py.
+  - Since #278 the helper binds the module under a private name and lists its public names
+    in `__all__`, so a star import of it binds no module (EC26 of
+    tests/t1_unit/test_safety_tempfiles.py), and EC7 refuses the word `_tempfile` anywhere in
+    a product file, a comment or docstring too: the attribute, getattr and vars routes, which
+    the import reader does not see. The private binding reached by a name built when the
+    program runs (`getattr(tempfiles, "_" + "tempfile")`, an escape of its first letter, two
+    literals side by side, `vars(tempfiles)[name]`) is seen by neither: a deliberate act
+    (ADR-0005's bar).
   - `sys.modules["tempfile"]` is no import, so it is not read, and no change to the helper
     closes it: any import of the module, under any name, puts it there. Reaching it is a
     deliberate act (ADR-0005's bar), like code given to exec.
@@ -82,14 +86,15 @@ Known limits:
   - Source text handed to exec or eval is not read (tests/project_imports.py).
 
 The Hebrew and document-structure axes of the test-matrix skill do not apply: this code
-reads import statements and handles no document.
+reads import statements and the bytes of each product file, and handles no document.
 """
 
+import re
 from pathlib import Path
 
 import pytest
 
-from tests.project_imports import Import, from_packages, imported, project_imports
+from tests.project_imports import SOURCE_SUFFIXES, Import, from_packages, imported, project_imports
 from tests.t8_privacy.test_imports import FORMS, LINE
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -299,9 +304,10 @@ def test_ec5_no_file_under_ploni_but_the_helper_imports_tempfile() -> None:
 
 
 def names_private_binding(root: Path) -> list[str]:
-    """Return each file under root/ploni but the helper whose text names the helper's private binding."""
-    files = sorted(path for path in (root / "ploni").rglob("*") if path.suffix.lower() in (".py", ".pyw"))
-    return [path.relative_to(root).as_posix() for path in files if path.relative_to(root).as_posix() != HELPER and PRIVATE in path.read_text(encoding="utf-8")]
+    """Return each file under root/ploni but the helper whose bytes hold the helper's private binding as a word."""
+    files = sorted(path for path in (root / "ploni").rglob("*") if path.suffix.lower() in SOURCE_SUFFIXES)
+    word = re.compile(rb"\b" + PRIVATE.encode() + rb"\b")
+    return [path.relative_to(root).as_posix() for path in files if path.relative_to(root).as_posix() != HELPER and word.search(path.read_bytes())]
 
 
 def test_ec7_no_file_under_ploni_but_the_helper_names_its_private_binding(tmp_path: Path) -> None:
@@ -313,9 +319,12 @@ def test_ec7_no_file_under_ploni_but_the_helper_names_its_private_binding(tmp_pa
         "ploni/write/docx.py": "from ploni.safety import tempfiles\n\ntempfiles._tempfile.mkstemp()\n",
         "ploni/report/audit.py": "value = getattr(tempfiles, '_tempfile')\n",
         "ploni/api.py": "import json\n",
+        # Longer names that only hold the word, and a file in the laptop's code page: no line.
+        "ploni/write/names.py": "def write_tempfile(): pass\nis_tempfile = 1\nfrom ploni.safety import tempfiles as _tempfiles\n",
     }.items():
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(source, encoding="utf-8")
+    (tmp_path / "ploni/write/hebrew.py").write_bytes("# שלום\n".encode("cp1255"))
     assert names_private_binding(tmp_path) == ["ploni/report/audit.py", "ploni/write/docx.py"]
     assert names_private_binding(ROOT) == []
