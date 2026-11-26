@@ -121,6 +121,10 @@ class Broken:
         # The partial file is held through its descriptor (issue #212).
         return int(self.handle.fileno())
 
+    def tell(self) -> int:
+        # The partial file is held from position 0 (issue #212).
+        return int(self.handle.tell())
+
 
 def test_e1_the_write_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     target = tmp_path / "out.docx"

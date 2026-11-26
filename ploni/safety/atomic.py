@@ -85,9 +85,11 @@ def write_atomic(path: Path, data: bytes) -> None:
     Why: see the module docstring.
 
     Contract: `path` is the target. The bytes go to a new partial file in the same folder,
-    are flushed to disk, and the partial file then replaces the target. On any error before
+    are flushed to disk, and the partial file then replaces the target. The partial file is
+    held while it is written (`ploni.safety.locks`). On any error before
     the rename, also one that is not an Exception, the partial file is removed if it can be
-    and the first error passes through. FileExistsError when the random name of the partial
+    and the first error passes through; among them the OSError of a hold that another run's
+    sweep took first (the sweep's Known limits). FileExistsError when the random name of the partial
     file is taken: the file that has the name is left as it is. FileNotFoundError when the
     folder does not exist. An OSError after the rename (the folder flush on POSIX) means the
     target already holds all the new bytes.
@@ -130,12 +132,15 @@ def sweep_partials(folder: Path) -> int:
     Known limits:
     - Deeper folders are not looked at. A Windows junction with the prefix is left: it counts
       as a folder.
-    - A partial file made by a writer that has not yet held it, or that it has just closed
-      before the rename, is taken for a crashed one's in that moment: on POSIX the
-      write then fails at the rename, the target as it was; on Windows the open file cannot
-      be removed and the sweep raises.
-    - An OSError from `locks.is_held` (a partial file that cannot be opened for reading)
-      counts as one that cannot be removed: the first such error is raised at the end.
+    - A partial file that its writer made and has not yet held is taken by the sweep: the
+      writer's hold then fails with OSError, before it writes, and the target is as it was;
+      the partial file is removed on POSIX, and on Windows, where the writer still has it
+      open, the sweep raises and a later sweep removes it. A partial file that its writer
+      has just closed, before the rename, is removed on every system: the write then fails
+      at the rename, and the target is as it was (the review of b7390ae, finding 2).
+    - An OSError from `locks.take` (a partial file that cannot be opened for reading and
+      writing) counts as one that cannot be removed: the first such error is raised at the
+      end.
     """
     if not folder.is_dir():
         return 0
@@ -144,8 +149,13 @@ def sweep_partials(folder: Path) -> int:
     for entry in os.scandir(folder):
         if entry.name.startswith(PARTIAL_PREFIX) and not entry.is_dir(follow_symlinks=False):
             try:
-                if not entry.is_symlink() and locks.is_held(Path(entry.path)):
-                    continue
+                if not entry.is_symlink():
+                    # Taken, then given back before the removal: a writer that has not yet
+                    # held it now fails at its hold, before it writes (issue #212).
+                    taken = locks.take(Path(entry.path))
+                    if taken is None:
+                        continue
+                    taken.close()
                 os.unlink(entry.path)
             except OSError as error:
                 first = first or error

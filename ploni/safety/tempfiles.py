@@ -45,8 +45,12 @@ Known limits:
   and on a POSIX system readable by its owner: the marks belong to the file, not to the
   name.
 - Between the making of a private folder and the holding of its lock there is a moment in
-  which another run's `sweep` takes the folder for a crashed run's. A lock file whose block
-  ended in the moment a sweep looked at it stays, empty, in the root.
+  which another run's `sweep` takes the folder for a crashed run's. The sweep holds the
+  folder's lock while it removes it, so the starting run cannot use it: it fails at its start,
+  before its block runs, with FileExistsError (the sweep made the lock file), OSError (the
+  sweep holds it) or FileNotFoundError (the sweep removed the folder). Two runs started in the
+  same millisecond can so cost one of them its start; no file of a run that has begun is
+  touched (the review of b7390ae, finding 1).
 """
 
 import os
@@ -245,7 +249,9 @@ def private_dir(root: Path) -> Iterator[Path]:
             module docstring. Beside it in root the block holds the lock file of the folder
             (its name and LOCK_SUFFIX); both are gone when the block ends.
         Raises: OSError when the folder cannot be made, and ValueError for a root that
-            no path can be (one with a null character); NotRemoved when the folder cannot
+            no path can be (one with a null character); FileExistsError, OSError or
+            FileNotFoundError at the start, before the block runs, when another run's sweep
+            took the folder in that moment (the module docstring); NotRemoved when the folder cannot
             be removed at the end, also in place of an error of the block itself.
             Otherwise an error of the block passes through.
 
@@ -258,6 +264,10 @@ def private_dir(root: Path) -> Iterator[Path]:
     try:
         lock = open(lock_path, "xb")
         locks.hold(lock)
+        # A sweep that took the folder for a crashed run's in the moment before the hold has
+        # removed it: the block must not begin (the review of b7390ae, finding 1).
+        if not folder.is_dir():
+            raise FileNotFoundError("the private folder was removed before its block began")
         with _as_temp_of_process(folder):
             yield folder
     finally:
@@ -280,32 +290,68 @@ def sweep(root: Path) -> int:
         Args: root, the folder given to `private_dir`.
         Returns: how many folders were removed. A root that does not exist gives 0.
             Only a folder directly under root whose name begins with PREFIX is removed,
-            whoever made it, and only when its lock file is not held; its lock file goes
-            with it. On Windows the beginning is matched in any case of letters. A file and
+            whoever made it, and only when its lock can be taken; the sweep holds the lock
+            while it removes the folder, and its lock file goes with it. A lock file whose
+            folder is gone, and that no run holds, is removed too, and not counted. On Windows the beginning is matched in any case of letters. A file and
             a link with such a name are left alone; so is a folder whose lock is held.
-        Raises: NotRemoved, after every folder was tried, for the first one that could
-            not be removed; ValueError for a root that no path can be (one with a
-            null character); OSError from `locks.is_held` for a lock path that cannot be
-            opened (a folder in its place).
+        Raises: after every folder was tried, the first error: NotRemoved for a folder
+            that could not be removed, OSError for a lock path that could not be opened (a
+            folder in its place); ValueError for a root that no path can be (one with a
+            null character).
 
     Known limits: a folder that can never be removed is tried, and reported, at every
-    start. The moments the module docstring names, and the Windows delay of
-    `ploni.safety.locks`, can leave a crashed run's folder for one more start.
+    start. A crashed run whose lock the system has not yet freed (`ploni.safety.locks`,
+    Known limits) is left for one more start. A run that starts in the moment the sweep
+    takes its folder fails at its start (the module docstring).
     """
     left = [folder for folder in sorted(root.glob(f"{PREFIX}*")) if folder.is_dir() and not _is_link(folder)]
-    stuck: list[NotRemoved] = []
+    stuck: list[OSError] = []
     removed = 0
     for folder in left:
-        if locks.is_held(_lock_of(folder)):
-            continue
         try:
-            _remove(folder)
-        except NotRemoved as error:
+            removed += _sweep_one(folder)
+        except OSError as error:
             stuck.append(error)
-            continue
-        removed += 1
-        with suppress(OSError):
-            _lock_of(folder).unlink()
+    _sweep_lone_locks(root)
     if stuck:
         raise stuck[0]
     return removed
+
+
+def _sweep_one(folder: Path) -> int:
+    """Remove one folder an earlier run left, holding its lock while it does; 0 when a run holds it.
+
+    The lock is taken and kept until the folder is gone, so that a run cannot begin to use the
+    folder in between (the review of b7390ae, finding 1); the lock file is removed after, also
+    when the folder could not be. Raises NotRemoved as `_remove` does, and OSError for a lock
+    path that cannot be opened.
+    """
+    lock_path = _lock_of(folder)
+    lock = locks.take(lock_path)
+    if lock is None:
+        return 0
+    try:
+        _remove(folder)
+    finally:
+        lock.close()
+        # Also after NotRemoved: a lock file that no run holds guards nothing.
+        with suppress(OSError):
+            lock_path.unlink()
+    return 1
+
+
+def _sweep_lone_locks(root: Path) -> None:
+    """Remove the lock files under root whose folder is gone and that no run holds.
+
+    Such a file is left by a run that crashed between removing its folder and its lock file,
+    or that ended while a sweep held the lock. It is empty. One that cannot be taken stays.
+    """
+    for lock_path in sorted(root.glob(f"{PREFIX}*{LOCK_SUFFIX}")):
+        folder = lock_path.with_name(lock_path.name.removesuffix(LOCK_SUFFIX))
+        if _is_link(lock_path) or not lock_path.is_file() or folder.exists():
+            continue
+        with suppress(OSError):
+            lock = locks.take(lock_path)
+            if lock is not None:
+                lock.close()
+                lock_path.unlink()
