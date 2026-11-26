@@ -539,3 +539,19 @@ def test_ec16_a_rename_that_finds_its_partial_file_gone(tmp_path: Path, monkeypa
     assert (tmp_path / "out.docx").read_bytes() == TEXT
     assert len(calls) == 2
     assert os.listdir(tmp_path) == ["out.docx"]
+
+
+def test_ec15_the_sweep_goes_on_past_a_partial_file_gone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    gone, dead = (tmp_path / f"{atomic.PARTIAL_PREFIX}{name}.docx.1" for name in ("a", "b"))
+    for path in (gone, dead):
+        path.write_bytes(b"part")
+    real_unlink = atomic.os.unlink
+
+    def renamed_first(path: str) -> None:
+        real_unlink(path)
+        if Path(path) == gone:
+            raise FileNotFoundError(2, "renamed by its writer")
+
+    monkeypatch.setattr(atomic.os, "unlink", renamed_first)
+    assert atomic.sweep_partials(tmp_path) == 1
+    assert os.listdir(tmp_path) == []
