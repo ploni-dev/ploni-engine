@@ -17,8 +17,9 @@ Test matrix:
   D3  the repository's files, names and sizes, are the same before and after
   D4  a broken build (every key span moved by one, no Hebrew marks) makes the generator's own
       tests fail, run in a child pytest at -vv; their output holds no planted text of 4 code
-      points or more (but a run of underscores, which is how pytest draws its own rules), and
-      pytest's failure lines are in it (the positive control)
+      points or more (but a run of underscores, which is how pytest draws its own rules), of the
+      clean batch or of the broken one, built here broken the same way (review 2, finding 24),
+      and pytest's failure lines are in it (the positive control)
   D5  the check that the checker works: a write made inside the guard of D1 is caught
 
 Known limits: a write made by another process, or through a C extension that does not call
@@ -28,17 +29,20 @@ shows what the tests print when they fail in the two ways it breaks, not in ever
 """
 
 import builtins
+import dataclasses
 import io
 import os
 import subprocess
 import sys
 import tempfile
-from collections.abc import Iterator
+from collections.abc import Callable, Iterator
 from contextlib import contextmanager
 from pathlib import Path
+from types import ModuleType
 
 import pytest
 
+from eval.heldout import generator
 from eval.heldout.generator import SEED, build
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -49,23 +53,13 @@ GENERATOR_TESTS = (
     "tests/t2_property/test_heldout_generator.py",
     "tests/t4_integration/test_heldout_generator.py",
 )
-# A pytest plugin that breaks the build: every key span one code point to the right, and the
-# Hebrew marks never drawn.
-BROKEN = '''
-import dataclasses
+# A pytest plugin that breaks the build in the child, as `break_generator` does.
+BROKEN = """
 import eval.heldout.generator as generator
+from tests.t8_privacy.test_heldout_disk import break_generator
 
-_real = generator._document
-
-
-def _broken(rng, index, planned):
-    text, key, near = _real(rng, index, planned)
-    return text, [dataclasses.replace(item, start=item.start + 1, end=item.end + 1) for item in key], near
-
-
-generator._document = _broken
-generator.HEBREW_MARK_TABLE = str.maketrans({})
-'''
+break_generator(generator, setattr)
+"""
 # The child pytest is given this long; it took about five seconds on the laptop.
 CHILD_TIMEOUT_SECONDS = 300
 SHORTEST_LEAK = 4
@@ -128,7 +122,19 @@ def test_d1_d2_d3_nothing_is_written(tmp_path: Path, monkeypatch: pytest.MonkeyP
     assert same
 
 
-def test_d4_a_failing_test_prints_no_planted_text(tmp_path: Path) -> None:
+def break_generator(module: ModuleType, set_value: Callable[[object, str, object], None]) -> None:
+    """Break a generator's build: every key span one code point to the right, no Hebrew marks drawn."""
+    real = module._document
+
+    def broken(rng: object, index: int, planned: list[object]) -> tuple[str, list[object], list[object]]:
+        text, key, near = real(rng, index, planned)
+        return text, [dataclasses.replace(item, start=item.start + 1, end=item.end + 1) for item in key], near
+
+    set_value(module, "_document", broken)
+    set_value(module, "HEBREW_MARK_TABLE", str.maketrans({}))
+
+
+def test_d4_a_failing_test_prints_no_planted_text(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (tmp_path / "broken_batch.py").write_text(BROKEN, encoding="utf-8")
     env = {key: value for key, value in os.environ.items() if not key.startswith("PYTEST_")}
     env |= {"PYTHONPATH": os.pathsep.join((str(tmp_path), str(ROOT))), "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
@@ -136,8 +142,12 @@ def test_d4_a_failing_test_prints_no_planted_text(tmp_path: Path) -> None:
     done = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, timeout=CHILD_TIMEOUT_SECONDS, check=False)  # noqa: S603 fixed argv, no shell
     output = (done.stdout + done.stderr).decode("utf-8", errors="replace")
     clean = build(SEED)
+    # The texts the child's broken batch holds: the same build, broken here the same way.
+    break_generator(generator, monkeypatch.setattr)
+    broken = build(SEED)
+    items = clean.key + clean.near_misses + broken.key + broken.near_misses
     # A run of underscores tells nothing and is how pytest draws its own rules, so it is left out.
-    telling = [item for item in clean.key + clean.near_misses if len(item.text) >= SHORTEST_LEAK and item.text.strip("_")]
+    telling = [item for item in items if len(item.text) >= SHORTEST_LEAK and item.text.strip("_")]
     leaked = [index for index, item in enumerate(telling) if item.text in output]
     controls = (done.returncode, "FAILED" in output, "AssertionError" in output or "assert" in output)
     assert controls == (1, True, True)

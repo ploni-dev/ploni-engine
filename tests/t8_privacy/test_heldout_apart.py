@@ -10,9 +10,10 @@ The rules:
   R1  no file under ploni/ or tests/, but the batch's own tests (OWN), holds the name of the
       batch's folder, `heldout`, in any case of letters; nor does any conftest.py anywhere, nor a
       file pytest reads its settings from (pyproject.toml, pytest.ini, setup.cfg, tox.ini)
-  R2  no Python file anywhere outside eval/heldout/ and OWN imports a module of eval.heldout,
-      in any way tests/project_imports.py reads (a helper under scripts/ that a detector test
-      imports would hand the batch on)
+  R2  no Python file of CODE_FOLDERS or of the repository's root, outside eval/heldout/ and
+      OWN, imports a module of eval.heldout, in any way tests/project_imports.py reads (a helper
+      under scripts/, or a script at the root, that a detector test imports would hand the
+      batch on)
   R3  no Python file under ploni/ or tests/ makes an import whose name cannot be read (a
       computed name, a walk of a package), but the three that do so today on purpose
       (UNREADABLE_ALLOWED), which read imports themselves
@@ -22,8 +23,9 @@ Test matrix:
   EC2  a tree on disk: a file under ploni/ that names it in a comment, a non-Python file under
        ploni/ that holds the name in capitals, a test that imports a module of it, a test that
        imports the package from eval, a test that imports it by a call with a literal name, a
-       root conftest.py and a pyproject.toml that name it, a helper under scripts/ that imports
-       it, a test and a ploni/ file that import a computed name    one line each, with the file
+       root conftest.py and a pyproject.toml that name it, a helper under scripts/ and a script
+       at the root that import it, a test and a ploni/ file that import a computed name
+                                                        one line each, with the file
   EC3  in the same tree: an own test, a file under eval/heldout/, a test that imports eval
        only, a word that only holds part of the name ("held out", "held-out"), a test of
        UNREADABLE_ALLOWED                                 no line
@@ -35,18 +37,22 @@ Known limits (what no reading of the source sees, left to the reviewer of a dete
 read the batch; the author may not, by Claude's reading of issue 283):
   - a name built while the program runs, as "held" + "out", in a path or an import;
   - a glob or a directory walk that reads the generator's source, and runpy with a computed path;
-  - a pytest plugin named on the command line, and a path read from a setting.
+  - a pytest plugin named on the command line, and a path read from a setting;
+  - a Python file in a top-level folder other than CODE_FOLDERS.
 """
 
 from pathlib import Path
 
-from tests.project_imports import UNREADABLE, project_imports
+from tests.project_imports import UNREADABLE, Import, imported, project_imports
 
 ROOT = Path(__file__).resolve().parents[2]
 NAME = "heldout"
 BATCH_MODULE = "eval.heldout"
 BATCH_FOLDER = "eval/heldout/"
 GUARDED = ("ploni", "tests")
+# The folders that hold the repository's Python code. Not models/ or docs/: they hold none, and
+# reading models/ took eight minutes on the laptop (review 2, finding 29).
+CODE_FOLDERS = ("eval", "experiments", "ploni", "scripts", "tests")
 SETTINGS = ("pyproject.toml", "pytest.ini", "setup.cfg", "tox.ini")
 # The batch's own tests, the only files under tests/ that may name it.
 OWN = frozenset({
@@ -89,19 +95,21 @@ def by_text(root: Path) -> list[str]:
     return sorted(found)
 
 
-def _folders(root: Path) -> list[str]:
-    """Every top-level folder of a tree that may hold Python files."""
-    return sorted(path.name for path in root.iterdir() if path.is_dir() and not path.name.startswith(".") and path.name not in SKIPPED)
+def _imports(root: Path) -> list[Import]:
+    """Every import of the Python files of CODE_FOLDERS and of the root itself."""
+    found = [item for folder in CODE_FOLDERS for item in project_imports(root, folder)]
+    for path in sorted(root.glob("*.py")):
+        found += [Import(path.name, line, path.stem, module) for line, module in imported(path.read_bytes(), path.stem)]
+    return found
 
 
 def by_import(root: Path) -> list[str]:
     """R2: one line per import of a module of eval.heldout by a Python file outside it and OWN."""
     found = []
-    for folder in _folders(root):
-        for item in project_imports(root, folder):
-            batch = item.module == BATCH_MODULE or item.module.startswith(BATCH_MODULE + ".")
-            if batch and item.file not in OWN and not item.file.startswith(BATCH_FOLDER):
-                found.append(f"{item.file}:{item.line}: imports {item.module}")
+    for item in _imports(root):
+        batch = item.module == BATCH_MODULE or item.module.startswith(BATCH_MODULE + ".")
+        if batch and item.file not in OWN and not item.file.startswith(BATCH_FOLDER):
+            found.append(f"{item.file}:{item.line}: imports {item.module}")
     return list(dict.fromkeys(found))
 
 
@@ -139,6 +147,7 @@ TREE = {
     "conftest.py": "pytest_plugins = ['eval.heldout.fixtures']\n",
     "pyproject.toml": "[tool.pytest.ini_options]\naddopts = ['-p', 'eval.HELDOUT.plugin']\n",
     "scripts/helper.py": "from eval.heldout.generator import build\n",
+    "run_batch.py": "import eval.heldout.scorer\n",
     "eval/heldout/generator.py": "SEED = 1\n",
     "eval/heldout/scorer.py": "from eval.heldout.generator import build\n",
 }
@@ -170,6 +179,7 @@ def test_ec2_ec3_a_tree_on_disk(tmp_path: Path) -> None:
         "tests/t1_unit/test_ids.py:1: imports eval.heldout.generator",
         "tests/t1_unit/test_ids.py:1: imports eval.heldout.generator.build",
         "tests/t1_unit/test_phone.py:2: imports eval.heldout.scorer",
+        "run_batch.py:1: imports eval.heldout.scorer",
     ]
     assert by_unreadable(tmp_path) == [
         "ploni/detect/loader.py:2: imports a name that cannot be read",

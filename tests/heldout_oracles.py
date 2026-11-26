@@ -28,6 +28,12 @@ ID_SEPARATORS = "- ."
 TRIGGERS = ("מר", "גב'", 'עו"ד', 'ד"ר', "פרופ'", 'רו"ח', "התובע", "הנתבע", "המבקש", "המשיב", "העד", "כב' השופט", 'ב"כ')
 PARTY_TRIGGERS = ("התובע", "הנתבע", "המבקש", "המשיב", "העד")
 NAMES = set(GIVEN) | set(FAMILY)
+# build-plan.md Phase 1, Trigger words: names that are ordinary Hebrew words. Alone and with no
+# title, such a word is no name by the plan's rule: "lexicon membership ... never creates a
+# PERSON detection alone".
+ORDINARY_WORD_NAMES = frozenset({"אור", "שחר", "רון", "ברק", "יונה", "שרון", "עדן", "טל", "גל", "שקד", "ים", "תום", "עומר", "נועם", "דקל", "חן", "שירה"})
+# The group of the names that stand once with no title (build-plan.md section 7).
+UNTITLED = "untitled"
 # build-plan.md Phase 1, placeholders; real Hebrew abbreviations of the same shape as initials.
 PLACEHOLDER_WORDS = ("פלוני", "אלמוני", "פלונית", "פלוני אלמוני")
 REAL_ABBREVIATIONS = ("ת.ז.", "ח.פ.", "ע.ר.", "מ.א.", "ת.ד.", "ד.נ.", "ע.מ.")
@@ -144,6 +150,14 @@ def _name_ok(text: str, words: int | None) -> bool:
     return all(part in NAMES for part in parts) and (words is None or len(parts) == words)
 
 
+def _untitled_ok(text: str) -> bool:
+    """A name that stands alone: two names of the lexicon, or one family name that is no ordinary word."""
+    parts = text.split()
+    pair = len(parts) == 2 and all(part in NAMES for part in parts)
+    lone = len(parts) == 1 and parts[0] in FAMILY and parts[0] not in ORDINARY_WORD_NAMES
+    return pair or lone
+
+
 def _placeholder_ok(text: str) -> bool:
     """A placeholder of the plan's list, a run of underscores, or initials that are no abbreviation."""
     initials = re.fullmatch(r"[א-ת]\.[א-ת]\.", text) is not None and text not in REAL_ABBREVIATIONS
@@ -173,8 +187,7 @@ def valid(batch: Batch, item: Item) -> bool:
         "DATE": lambda: _date_ok(text),
         "AMOUNT": lambda: any(sign in text for sign in CURRENCY),
         "ADDRESS": lambda: _address_ok(text),
-        "PERSON": lambda: _name_ok(text, None),
-        "PERSON_UNTITLED": lambda: _name_ok(text, 2),
+        "PERSON": lambda: _untitled_ok(text) if item.group == UNTITLED else _name_ok(text, None),
         "PLACEHOLDER": lambda: _placeholder_ok(text),
     }
     if kind in checks:

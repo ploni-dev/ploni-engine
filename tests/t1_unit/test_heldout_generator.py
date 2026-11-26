@@ -11,34 +11,40 @@ Every assertion here is on a bool, a count, a list of indexes or of type names, 
 failing test prints no document and no planted value, because pytest prints what an assertion
 compares, and the session that writes the detectors and the public CI log read that output
 (review 1 of the branch, finding 1; tests/t8_privacy/test_heldout_disk.py runs a broken build to
-show it). Hebrew literals stand at module level, so a traceback that shows a test's source
-shows none.
+show it). Hebrew words stand at module level, so a traceback that shows a test's source
+shows none; a test's body holds single letters and marks only. A parametrized test takes a type
+name, never a list of words, as pytest prints a failing test's arguments (review 2, finding 24).
 
 Test matrix:
 
 Equivalence classes (the batch of SEED):
-  EC1  every type of TYPES has at least 40 positives and 40 near misses        (22 types)
-  EC2  the types of the key are the plan's 22, and every near miss is typed by one of them
+  EC1  every type of TYPES has at least 40 positives and 40 near misses        (21 types)
+  EC2  the types of the key are the plan's 21, and every near miss is typed by one of them; the
+       one group is the names that stand once, all of them PERSON (review 2, finding 21)
   EC3  every item's span holds exactly its planted text, and start < end
   EC4  every positive of a checksum type passes its check, as build-plan.md Phase 1 writes it,
        and every near miss of that type fails it                               (5 types)
   EC5  each checksum type has at least 20 near misses of its length that fail the checksum only
   EC6  no two planted items overlap, near misses included
   EC7  the same seed gives the same batch (by digest); another seed another; the default is SEED
-  EC8  every positive of the 17 other types passes its oracle and every near miss fails it
+  EC8  every positive of the 16 other types passes its oracle and every near miss fails it
   EC9  no IL_ID positive starts with 5 (a company's or a non-profit's head); one has 8 digits
   EC10 no trigger that starts with ה keeps it after a glued ל, ב or כ
   EC11 no ID-family near miss that fails the check holds a group of 7 to 9 digits that passes
-  EC12 company and non-profit near misses include a number with the other one's prefix
+  EC12 no company or non-profit near miss is a valid registry number of the other kind (review
+       2, finding 20)
   EC13 at least a third of the GUSH_HELKA and of the ADDRESS near misses carry a cue word
   EC14 at least a third of the near misses of each pattern-only type have a positive's shape
-  EC15 each PERSON_UNTITLED positive stands once in its document, with no trigger before it
+  EC15 each word of each name of the group stands once in its document, with no trigger before
+       the name (review 2, finding 27)
   EC16 plain sentences with no item stand between the items: at least a fifth as many as items
   EC17 no ADDRESS positive that starts with ה is glued to a proclitic
   EC18 the forms of a type are all drawn: phones of each kind and form, cards of 13 and 19
        digits and of the 2-series, an account written with its words; near-miss values of
        PLACEHOLDER, PERSON and URL are varied
   EC19 the batch of SEED has the digest pinned here, so any change of it shows as a change
+  EC20 the group has at least 40 positives and 40 near misses, and its positives are not all of
+       one word count (review 2, finding 26)
 
 Hebrew and separator axes:
   H1  gershayim as both " (U+0022) and the Hebrew sign (U+05F4) inside CASE_NUMBER positives
@@ -78,29 +84,27 @@ import pytest
 from eval.heldout import generator
 from eval.heldout.generator import SEED, TYPES, Batch, Item, build
 from tests.heldout_oracles import (
-    CHECKSUM_TYPES, PARTY_TRIGGERS, TRIGGERS, before, card_brand_ok, checksum_valid, digest, luhn_ok, plan_id_ok,
-    stripped, valid,
+    CHECKSUM_TYPES, ORDINARY_WORD_NAMES, PARTY_TRIGGERS, TRIGGERS, UNTITLED, before, card_brand_ok, checksum_valid, digest,
+    luhn_ok, plan_id_ok, stripped, valid,
 )  # fmt: skip
 
 BATCH = build(SEED)
 ITEMS = BATCH.key + BATCH.near_misses
 # The digest of the batch of SEED on Python 3.13; a change of the batch changes it (EC19).
-SEED_DIGEST = "868f676fbad0a6e433d11d2bba8a19ee07e9b32cd906adfebdaf85e927b3cbe5"
+SEED_DIGEST = "62ec2fdca3092f757adc10624f704ea300259e928f56698c162ea8b4dab2273e"
 # CLAUDE.md, Tests: detectors 40 positive and 40 negative.
 MINIMUM = 40
 ID_FAMILY = ("IL_ID", "COMPANY_NUMBER", "NONPROFIT_NUMBER")
 OTHER_TYPES = tuple(kind for kind in TYPES if kind not in CHECKSUM_TYPES)
-# build-plan.md: the types of Phase 1 and, from section 7, the name that stands once.
+# build-plan.md: the types of Phase 1.
 EXPECTED_TYPES = {
     "IL_ID", "COMPANY_NUMBER", "NONPROFIT_NUMBER", "IBAN", "BANK_ACCOUNT", "CREDIT_CARD",
     "PHONE", "EMAIL", "URL", "IP_ADDRESS", "IL_PLATE", "CASE_NUMBER", "GUSH_HELKA", "DATE",
-    "AMOUNT", "ADDRESS", "PERSON", "PERSON_UNTITLED", "PLACEHOLDER", "HEALTH_FUND_ID",
-    "MILITARY_ID", "PASSPORT_NUMBER",
+    "AMOUNT", "ADDRESS", "PERSON", "PLACEHOLDER", "HEALTH_FUND_ID", "MILITARY_ID", "PASSPORT_NUMBER",
 }  # fmt: skip
-# build-plan.md Phase 1, Trigger words: names that are ordinary Hebrew words.
-ORDINARY_WORD_NAMES = {"אור", "שחר", "רון", "ברק", "יונה", "שרון", "עדן", "טל", "גל", "שקד", "ים", "תום", "עומר", "נועם", "דקל", "חן", "שירה"}
-GUSH_CUES = ("גוש", "חלקה")
-ADDRESS_CUES = (*generator.STREETS, *generator.CITIES, "רחוב")
+CUES = {"GUSH_HELKA": ("גוש", "חלקה"), "ADDRESS": (*generator.STREETS, *generator.CITIES, "רחוב")}
+# What a word of a document is, for "stands once": a run of anything but spaces and punctuation.
+WORD = re.compile(r"[^\s.,:;()]+")
 GERESH_AS_ASCII = str.maketrans({"׳": "'"})
 PATTERN_SHAPES = {"HEALTH_FUND_ID": r"\d{6,9}", "MILITARY_ID": r"\d{7}", "PASSPORT_NUMBER": r"\d{8}|[A-Z]{2}\d{7}"}
 GLUED_PARTIES = tuple(f"{proclitic}{trigger}" for trigger in PARTY_TRIGGERS for proclitic in "לבכ")
@@ -125,6 +129,7 @@ def test_ec2_the_types_are_the_plans() -> None:
     assert len(TYPES) == len(EXPECTED_TYPES)
     assert sorted({item.type for item in BATCH.key} ^ EXPECTED_TYPES) == []
     assert sorted({item.type for item in BATCH.near_misses} - EXPECTED_TYPES) == []
+    assert sorted({(item.type, item.group) for item in ITEMS if item.group}) == [("PERSON", UNTITLED)]
 
 
 def test_ec3_every_span_holds_its_planted_text() -> None:
@@ -192,14 +197,14 @@ def test_ec11_no_id_family_near_miss_holds_a_passing_group() -> None:
 
 
 @pytest.mark.parametrize(("kind", "other"), [("COMPANY_NUMBER", "NONPROFIT_NUMBER"), ("NONPROFIT_NUMBER", "COMPANY_NUMBER")])
-def test_ec12_near_misses_with_the_other_prefix(kind: str, other: str) -> None:
-    assert sum(checksum_valid(other, item.text) for item in of(BATCH.near_misses, kind)) >= 1
+def test_ec12_no_near_miss_is_a_valid_registry_number(kind: str, other: str) -> None:
+    assert sum(checksum_valid(other, item.text) for item in of(BATCH.near_misses, kind)) == 0
 
 
-@pytest.mark.parametrize(("kind", "cues"), [("GUSH_HELKA", GUSH_CUES), ("ADDRESS", ADDRESS_CUES)], ids=["GUSH_HELKA", "ADDRESS"])
-def test_ec13_near_misses_carry_a_cue(kind: str, cues: tuple[str, ...]) -> None:
+@pytest.mark.parametrize("kind", CUES)
+def test_ec13_near_misses_carry_a_cue(kind: str) -> None:
     near = of(BATCH.near_misses, kind)
-    carrying = sum(any(cue in item.text.translate(GERESH_AS_ASCII) for cue in cues) for item in near)
+    carrying = sum(any(cue in item.text.translate(GERESH_AS_ASCII) for cue in CUES[kind]) for item in near)
     assert carrying * 3 >= len(near)
 
 
@@ -210,10 +215,23 @@ def test_ec14_pattern_only_near_misses_with_a_positives_shape(kind: str) -> None
     assert shaped * 3 >= len(near)
 
 
+def grouped(items: tuple[Item, ...]) -> list[Item]:
+    """The items of the group of names that stand once."""
+    return [item for item in items if item.group == UNTITLED]
+
+
 def test_ec15_a_name_that_stands_once() -> None:
-    items = of(BATCH.key, "PERSON_UNTITLED")
-    assert [index for index, item in enumerate(items) if BATCH.documents[item.doc].count(item.text) != 1] == []
+    items = grouped(BATCH.key)
+    words = [Counter(WORD.findall(document)) for document in BATCH.documents]
+    assert [index for index, item in enumerate(items) if any(words[item.doc][word] != 1 for word in item.text.split())] == []
     assert [index for index, item in enumerate(items) if any(before(BATCH, item, 12).endswith(trigger + " ") for trigger in TRIGGERS)] == []
+
+
+def test_ec20_the_group_of_names_that_stand_once() -> None:
+    sizes = (len(grouped(BATCH.key)), len(grouped(BATCH.near_misses)))
+    assert (sizes[0] >= MINIMUM, sizes[1] >= MINIMUM) == (True, True)
+    assert len({len(item.text.split()) for item in grouped(BATCH.key)}) >= 2
+    assert sum(item.text in ORDINARY_WORD_NAMES for item in grouped(BATCH.near_misses)) >= MINIMUM // 2
 
 
 def test_ec16_plain_sentences_between_the_items() -> None:
