@@ -122,16 +122,18 @@ def error_name(error: BaseException) -> str:
 
     Why: `main` writes the name of an error no code caught, and must write one line with no
     document text in it. A class made at run time can have any name: a line break in it would
-    start a second line, and a metaclass can answer with any text.
+    start a second line, a metaclass can answer with any text or raise, and a name set to a
+    subclass of str can format itself as any text.
 
-    Contract: the type's `__name__` when it is a string of ASCII that is a Python identifier;
-    otherwise `<value>`. Raises nothing.
+    Contract: the type's own name, read past its metaclass as the log filter reads it
+    (`type.__dict__["__name__"]`), when it is exactly a str of ASCII that is a Python
+    identifier; otherwise `<value>`. Raises nothing.
 
     Known limits: an identifier taken from a document as a class name (`Jacob`) is written, as
     the log filter writes names of code (its Known limits).
     """
-    name = type(error).__name__
-    return name if isinstance(name, str) and name.isascii() and name.isidentifier() else "<value>"
+    name = type.__dict__["__name__"].__get__(type(error))
+    return name if type(name) is str and name.isascii() and name.isidentifier() else "<value>"
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -159,8 +161,8 @@ def main(argv: list[str] | None = None) -> int:
     Known limits: a stub and a usage error both exit 2. An argument argparse does not know,
     such as a file name, is repeated on the error stream: that is argparse writing, not a log
     record, and the filter does not see it. An exit raised inside a command passes through: its
-    number is the exit code, and a text given to it is printed, so no command calls `sys.exit`
-    with a text. Ctrl+C before the arguments are read is not caught.
+    number is the exit code, and a text given to it is printed: a command must not call
+    `sys.exit` with a text, and nothing checks that. Ctrl+C before the arguments are read is not caught.
     """
     logging.install(sys.stderr)
     parser = argparse.ArgumentParser(prog="ploni", description=__doc__.splitlines()[0] if __doc__ else None)
