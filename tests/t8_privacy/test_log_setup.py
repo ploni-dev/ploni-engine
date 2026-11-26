@@ -78,8 +78,9 @@ Adversarial:
   A7  a `**` argument in a call of `event`, however `event` is bound, a literal mapping too,
       before a written keyword too: the filter writes every key that is a lower-case word, so
       a mapping built from a document would write its words (issue #216)   refused;
-      keyword arguments written in the call, `*args` alone, a `**` inside an argument or in a
-      call of another function, and an `event` of a project module outside ploni/safety/
+      keyword arguments written in the call, `*args` alone, a `**` inside an argument, in a
+      call of another function or of `install`, and an `event` of a project module outside
+      ploni/safety/
                                                                            no line
 
 Not applicable: the Hebrew axes and the document axes of the test-matrix skill, as the input
@@ -688,6 +689,7 @@ def test_a7_a_mapping_spread_into_event(source: str, importer: str) -> None:
         "from ploni.obs import event\n\nevent(E.X, **counts)\n",
         "from ploni.safety.logging import event\n\nevent(*args)\n",
         "from ploni.safety.logging import event\n\nevent(E.X, pages=len(dict(**counts)))\n",
+        "from ploni.safety.logging import install\n\ninstall(**options)\n",
     ],
 )
 def test_a7_what_is_no_spread_into_event(source: str) -> None:
