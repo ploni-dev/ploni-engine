@@ -99,7 +99,9 @@ class Scores:
 def _checked(detections: Iterable[object], doc: int, length: int) -> list[tuple[int, int, str]]:
     """Return a document's detections as triples; one that is no span of it is an error, not a fp.
 
-    The error names the document, the detection and the numbers, never text.
+    The error names the document, the detection and the numbers, never text. A start or an end
+    must be an int itself, and a type a str itself, not a class of the detector's (nor a bool),
+    whose own formatting could print text (scorer review 3, finding 6).
     """
     found = []
     for index, detection in enumerate(detections):
@@ -107,7 +109,7 @@ def _checked(detections: Iterable[object], doc: int, length: int) -> list[tuple[
         if not isinstance(detection, tuple | list) or len(detection) != TRIPLE:
             raise ValueError(f"{where}: not a (start, end, type) triple")
         start, end, kind = detection
-        if not all(isinstance(at, int) and not isinstance(at, bool) for at in (start, end)) or not isinstance(kind, str):
+        if type(start) is not int or type(end) is not int or type(kind) is not str:
             raise ValueError(f"{where}: start and end must be int and type a str")
         if not 0 <= start < end <= length:
             raise ValueError(f"{where}: span ({start}, {end}) is not inside a text of length {length}")
@@ -120,13 +122,13 @@ class DetectorError(Exception):
 
     Why: the detector's own message, and its traceback, may quote the document, which the session
     that writes the detectors must not see. Contract: the message names the document's index and
-    the class of the error, by its name when it is one of Python's own and as OWN_CLASS when it
-    is the detector's, whose name it chose; the detector's error is not chained to it.
+    the class of the error, by its name when it is a built-in error and as OWN_CLASS for any
+    other, whose name the detector or a library chose; the detector's error is not chained to it.
     """
 
 
 def _class_name(error: BaseException) -> str:
-    """Return the name of an error's class when it is one of Python's own, else OWN_CLASS."""
+    """Return the name of an error's class when it is a built-in error, else OWN_CLASS."""
     kind = type(error)
     return kind.__name__ if getattr(builtins, kind.__name__, None) is kind else OWN_CLASS
 
@@ -228,8 +230,9 @@ def _held_back() -> Iterator[None]:
     original sys.__stdout__ and sys.__stderr__, are buffers thrown away; and the process's file
     handles 1 and 2 lead to the null device, so that a stream or a logging handler made before
     the block, os.write and a C extension write nothing to the screen either. On leaving, the
-    original streams are flushed into the null device, then everything is put back as it was.
-    Raises OSError when the null device or a file handle cannot be opened or copied.
+    original streams are flushed into the null device, a stream the detector closed passed over
+    (scorer review 3, finding 8), then everything is put back as it was. Raises OSError when the
+    null device or a file handle cannot be opened or copied.
     """
     for stream in (sys.stdout, sys.stderr, sys.__stdout__, sys.__stderr__):
         if stream is not None:
@@ -240,15 +243,18 @@ def _held_back() -> Iterator[None]:
     logging.disable(logging.CRITICAL)
     for handle in HANDLES:
         os.dup2(null, handle)
-    sys.__stdout__, sys.__stderr__ = io.StringIO(), io.StringIO()
+    # Through the module's namespace, as the two are final names to a type checker (scorer
+    # review 3, finding 10).
+    vars(sys).update(__stdout__=io.StringIO(), __stderr__=io.StringIO())
     try:
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             yield
     finally:
         for stream in originals:
             if stream is not None:
-                stream.flush()
-        sys.__stdout__, sys.__stderr__ = originals
+                with contextlib.suppress(ValueError, OSError):
+                    stream.flush()
+        vars(sys).update(__stdout__=originals[0], __stderr__=originals[1])
         for handle, copy in zip(HANDLES, saved, strict=True):
             os.dup2(copy, handle)
             os.close(copy)
@@ -269,11 +275,17 @@ def main(argv: list[str]) -> int:
     message. Any other argv: the usage line on the error stream, returns 2. An import that
     fails is raised.
 
-    Known limits: not held back are what the detector's module prints while it is imported,
-    before scoring starts; what the detector writes after `main` has returned, from a thread, an
-    atexit handler, a finalizer or a process it started; what it writes through a copy of file
-    handle 1 or 2 that it made before scoring (os.dup at import), or to a console or a terminal
-    it opens itself; and what a C library's own buffer flushes later.
+    Known limits: the detector is Ploni's own code, run on invented documents, so what this
+    guards against is a slip, such as a debug print or a log line, not a detector built to leak;
+    what keeps the batch from the session that writes the detectors is that session's isolation
+    from it (Achia, 2026-11-26, issue 283), not a sandbox here. Still not held back are what the
+    detector writes through a copy of file handle 1 or 2 that it made before scoring (os.dup at
+    import); what its module prints while it is imported, before scoring starts; what it writes
+    to a console or a terminal it opens itself; and what a process it started writes after the
+    command has ended. When `main` is called from Python rather than run as the command, what a
+    thread, an atexit handler or a finalizer of the detector writes after `main` has returned is
+    not held back either; the command ends without running them (scorer review 3, finding 7),
+    but for an import that fails or an interrupt, after which Python ends as it does.
     """
     if len(argv) != 1 or ":" not in argv[0]:
         print(USAGE, file=sys.stderr)
@@ -292,4 +304,10 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    sys.exit(main(sys.argv[1:]))
+    # Ends at once after the report, so that a thread or an atexit handler of the detector that
+    # would print at shutdown never runs (scorer review 3, finding 7).
+    code = main(sys.argv[1:])
+    for stream in (sys.stdout, sys.stderr):
+        with contextlib.suppress(ValueError, OSError):
+            stream.flush()
+    os._exit(code)
