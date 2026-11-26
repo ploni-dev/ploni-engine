@@ -57,7 +57,9 @@ Known limits:
 import os
 import shutil
 import stat
-import tempfile
+# Under a private name, and with __all__ below, so that the helper hands on no copy of the
+# module, by name or by a star import (issue #278).
+import tempfile as _tempfile
 import threading
 from collections import Counter
 from collections.abc import Iterator
@@ -65,6 +67,8 @@ from contextlib import contextmanager, suppress
 from pathlib import Path
 
 from ploni.safety import locks
+
+__all__ = ["CHUNK", "LOCK_SUFFIX", "NotRemoved", "OWNER_ONLY", "PREFIX", "private_dir", "sweep"]
 
 # How the name of every folder made here begins. `sweep` removes folders with this beginning
 # and nothing else.
@@ -216,15 +220,15 @@ def _as_temp_of_process(folder: Path) -> Iterator[None]:
     name = str(folder)
     with _LOCK:
         if not _OPEN:
-            _OPEN.append(tempfile.tempdir)
+            _OPEN.append(_tempfile.tempdir)
         _OPEN.append(name)
-        tempfile.tempdir = name
+        _tempfile.tempdir = name
     try:
         yield
     finally:
         with _LOCK:
             _OPEN.remove(name)
-            tempfile.tempdir = _OPEN[-1]
+            _tempfile.tempdir = _OPEN[-1]
             if len(_OPEN) == 1:
                 _OPEN.clear()
 
@@ -259,7 +263,7 @@ def private_dir(root: Path) -> Iterator[Path]:
     Known limits: see the module docstring.
     """
     root.mkdir(mode=OWNER_ONLY, parents=True, exist_ok=True)
-    folder = Path(tempfile.mkdtemp(prefix=PREFIX, dir=root))
+    folder = Path(_tempfile.mkdtemp(prefix=PREFIX, dir=root))
     lock_path = _lock_of(folder)
     lock = None
     try:

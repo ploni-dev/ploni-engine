@@ -60,6 +60,10 @@ The race of a run's start (the review of b7390ae, finding 1). Equivalence classe
        met by the lone-lock pass alone -> left
   EC25 a held lock file with no folder (a block between its folder's removal and its close)
        -> left, and the sweep raises nothing
+The helper's own copy of tempfile (issue #278). Equivalence classes:
+  EC26 no public name of the helper is the tempfile module or a function or class of it,
+       and `__all__` lists exactly the names the helper defines for its callers; a star
+       import of the helper binds no module
 
 Boundaries:
   B1  a block that makes nothing
@@ -842,7 +846,7 @@ def test_a8_the_temp_folder_of_the_process_is_changed_only_under_the_lock(tmp_pa
     before = tempfile.tempdir
     monkeypatch.setattr(tempfiles, "_LOCK", Watched())
     monkeypatch.setattr(tempfiles, "_OPEN", Watching())
-    monkeypatch.setattr(tempfiles, "tempfile", WatchedTempfile())
+    monkeypatch.setattr(tempfiles, "_tempfile", WatchedTempfile())
     with tempfiles.private_dir(tmp_path), tempfiles.private_dir(tmp_path):
         pass
     # Two blocks: three additions to the list, two removals and one emptying; the temp folder set four times.
@@ -916,7 +920,7 @@ def test_ec18_a_run_whose_lock_file_a_sweep_made(tmp_path: Path, monkeypatch: py
         Path(name + tempfiles.LOCK_SUFFIX).write_bytes(b"")
         return name
 
-    monkeypatch.setattr(tempfiles.tempfile, "mkdtemp", made_and_taken)
+    monkeypatch.setattr(tempfile, "mkdtemp", made_and_taken)
     with pytest.raises(FileExistsError), tempfiles.private_dir(tmp_path):
         ran.append(True)
     assert ran == []
@@ -1018,3 +1022,15 @@ def test_ec25_a_held_lock_file_with_no_folder_is_left(tmp_path: Path) -> None:
         locks.hold(handle)
         assert tempfiles.sweep(tmp_path) == 0
         assert lock.exists()
+
+
+def test_ec26_the_helper_hands_on_no_copy_of_tempfile() -> None:
+    public = sorted(name for name in dir(tempfiles) if not name.startswith("_"))
+    assert [name for name in public if getattr(tempfiles, name) is tempfile] == []
+    # Nor a function or class of the module under a public name (`from tempfile import mkstemp`).
+    assert [name for name in public if getattr(getattr(tempfiles, name), "__module__", None) == tempfile.__name__] == []
+    # The names the helper itself defines for its callers, written out here and not read from it.
+    assert sorted(tempfiles.__all__) == ["CHUNK", "LOCK_SUFFIX", "NotRemoved", "OWNER_ONLY", "PREFIX", "private_dir", "sweep"]
+    # A star import of a module that defines __all__ binds exactly those names.
+    assert "__all__" in vars(tempfiles)
+    assert [name for name in tempfiles.__all__ if isinstance(getattr(tempfiles, name), type(tempfile))] == []
