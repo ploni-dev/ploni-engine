@@ -8,8 +8,8 @@ quotes the text it was given, so `main` must hold both back (review 1 of the bra
 Test matrix (each case on the batch of SEED):
   W1  scoring the replay detector inside the guard of tests/t8_privacy/test_heldout_disk.py,
       which makes every write raise: scored whole, nothing written
-  O1  main on the replay detector: ASCII only, one line per type and TOTAL, no planted text of
-      4 code points or more
+  O1  main on the replay detector: ASCII only, one line per type, per group and TOTAL, no
+      planted text of 4 code points or more
   O2  main on a detector that prints every document on both streams and then raises with a
       document's text: exit 1, one ASCII line on the error stream, no planted text anywhere
 
@@ -22,7 +22,7 @@ import sys
 import pytest
 
 from eval.heldout import scorer
-from eval.heldout.generator import SEED, TYPES, build
+from eval.heldout.generator import GROUPS, SEED, TYPES, build
 from eval.heldout.scorer import score
 from tests.t8_privacy.test_heldout_disk import no_writes
 
@@ -61,7 +61,7 @@ def test_o1_main_prints_numbers_and_names_only(capsys: pytest.CaptureFixture[str
     assert scorer.main([f"{__name__}:replay_detector"]) == 0
     streams = capsys.readouterr()
     shown = (len(streams.out.splitlines()), streams.out.isascii(), streams.err)
-    assert shown == (len(TYPES) + 1, True, "")
+    assert shown == (len(TYPES) + len(GROUPS) + 1, True, "")
     assert leaked(streams.out) == []
 
 

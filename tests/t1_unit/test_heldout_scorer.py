@@ -38,6 +38,14 @@ The report:
   R1  one line per type, sorted, then TOTAL; names and numbers only
   R2  no text of a document in it
 
+A group (GROUPED below: the item of document 1 that starts at 0 is of group g; review 2 of the
+generator's branch, finding 21):
+  G1  its own line: tp and fn of its items only, the empty and the replay detectors; a batch
+      with no group has no group line
+  G2  a partial detection of a group's item is a fn of the group, and stays a fp of the type
+  G3  the report shows the group's line after the types' and before TOTAL, named type:group,
+      with tp, fn and recall only
+
 main:
   M1  no argument, two arguments, an argument without a colon: the usage line, exit 2
   M2  a module and function: the report of the batch of SEED printed, exit 0
@@ -50,13 +58,14 @@ spans and type names; it never reads the text (S11 shows it only hands the text 
 batch is scored in tests/t4_integration/test_heldout_scorer.py.
 """
 
+import dataclasses
 import sys
 from collections.abc import Iterable
 
 import pytest
 
 from eval.heldout import scorer
-from eval.heldout.generator import TYPES, Batch, Item
+from eval.heldout.generator import GROUPS, TYPES, Batch, Item
 from eval.heldout.scorer import Counts, DetectorError, report, score
 
 DOCUMENTS = ("alpha beta gamma", "delta epsilon", "zeta")
@@ -67,6 +76,7 @@ KEY = (
     Item(1, 6, 13, "X", "epsilon"),
 )
 BATCH = Batch(DOCUMENTS, KEY, ())
+GROUPED = Batch(DOCUMENTS, (*KEY[:2], dataclasses.replace(KEY[2], group="g"), KEY[3]), ())
 
 
 def detector_of(found: dict[str, list[tuple[int, int, str]]]) -> scorer.Detector:
@@ -259,4 +269,21 @@ def test_m4_main_holds_back_what_the_detector_prints(capsys: pytest.CaptureFixtu
     streams = capsys.readouterr()
     lines = streams.out.splitlines()
     shown = (code, len(lines), streams.err, streams.out.isascii())
-    assert shown == (0, len(TYPES) + 1, "", True)
+    assert shown == (0, len(TYPES) + len(GROUPS) + 1, "", True)
+
+
+def test_g1_a_group_has_its_own_line() -> None:
+    assert score(detector_of({}), GROUPED).per_group == {"X:g": counts(fn=1)}
+    assert score(replay(GROUPED.key), GROUPED).per_group == {"X:g": counts(tp=1)}
+    assert score(replay(KEY), BATCH).per_group == {}
+
+
+def test_g2_a_partial_detection_of_a_groups_item() -> None:
+    scores = score(detector_of({DOCUMENTS[1]: [(0, 3, "X")]}), GROUPED)
+    assert (scores.per_group["X:g"], scores.per_type["X"]) == (counts(fn=1), counts(fp=1, fn=3, partial=1))
+
+
+def test_g3_the_report_shows_the_group() -> None:
+    lines = report(score(replay(GROUPED.key), GROUPED))
+    assert [line.split()[0] for line in lines] == ["X", "Y", "X:g", "TOTAL"]
+    assert lines[2].split() == ["X:g", "tp", "1", "fn", "0", "recall", "1.000"]
