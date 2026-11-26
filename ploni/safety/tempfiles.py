@@ -265,7 +265,7 @@ def private_dir(root: Path) -> Iterator[Path]:
             _remove(folder)
         finally:
             if lock is not None:
-                locks.release(lock)
+                lock.close()
                 with suppress(OSError):
                     lock_path.unlink()
 

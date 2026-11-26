@@ -105,7 +105,6 @@ def write_atomic(path: Path, data: bytes) -> None:
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
-            locks.release(handle)
         os.replace(partial, path)
     except BaseException:
         # A clean-up that fails must not hide why the write failed; the sweep gets the file.
@@ -131,8 +130,8 @@ def sweep_partials(folder: Path) -> int:
     Known limits:
     - Deeper folders are not looked at. A Windows junction with the prefix is left: it counts
       as a folder.
-    - A partial file made by a writer that has not yet held it, or that it has just given
-      back before the rename, is taken for a crashed one's in that moment: on POSIX the
+    - A partial file made by a writer that has not yet held it, or that it has just closed
+      before the rename, is taken for a crashed one's in that moment: on POSIX the
       write then fails at the rename, the target as it was; on Windows the open file cannot
       be removed and the sweep raises.
     - An OSError from `locks.is_held` (a partial file that cannot be opened for reading)
