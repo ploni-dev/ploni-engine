@@ -291,6 +291,20 @@ class Sly(str):
         return f"Jacob {CANARY}"
 
 
+class EqualsAll(type):
+    """A metaclass whose classes say they equal every class."""
+
+    def __eq__(cls, other: object) -> bool:
+        return True
+
+    def __hash__(cls) -> int:
+        return 0
+
+
+class Liar(Sly, metaclass=EqualsAll):
+    """A str subclass whose class says it is str, and that formats itself as other text."""
+
+
 def named_by(name: str) -> BaseException:
     """Return an error of a class whose `__name__` was set to the text given."""
     kind = type("Plain", (Exception,), {})
@@ -307,6 +321,7 @@ ERRORS = {
     "metaclass answers": (lambda: Answers("Odd", (Exception,), {})(), "Odd"),
     "metaclass raises": (lambda: Refuses("Bad", (Exception,), {})(), "Bad"),
     "str subclass": (lambda: named_by(Sly("Ok")), "<value>"),
+    "str subclass whose class says it is str": (lambda: named_by(Liar("Ok")), "<value>"),
 }
 
 
