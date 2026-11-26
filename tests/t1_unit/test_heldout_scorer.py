@@ -33,6 +33,8 @@ Error paths (ValueError, and the message holds no text of the document):
   E7  the detector raises, with the document's text in its message: DetectorError, whose message
       names the document and the error's type only, with no error chained to it (review 1 of
       the branch, finding 2)
+  E8  the detector exits with the document's text as its message: DetectorError as E7
+      (scorer review 1, finding 1)
 
 The report:
   R1  one line per type, sorted, then TOTAL; names and numbers only
@@ -45,6 +47,8 @@ generator's branch, finding 21):
   G2  a partial detection of a group's item is a fn of the group, and stays a fp of the type
   G3  the report shows the group's line after the types' and before TOTAL, named type:group,
       with tp, fn and recall only
+  G4  a detection at a group item's exact span with another type is a fn of the group (scorer
+      review 1, finding 3)
 
 main:
   M1  no argument, two arguments, an argument without a colon: the usage line, exit 2
@@ -287,3 +291,20 @@ def test_g3_the_report_shows_the_group() -> None:
     lines = report(score(replay(GROUPED.key), GROUPED))
     assert [line.split()[0] for line in lines] == ["X", "Y", "X:g", "TOTAL"]
     assert lines[2].split() == ["X:g", "tp", "1", "fn", "0", "recall", "1.000"]
+
+
+def test_g4_the_right_span_with_another_type() -> None:
+    assert score(detector_of({DOCUMENTS[1]: [(0, 5, "Y")]}), GROUPED).per_group == {"X:g": counts(fn=1)}
+
+
+def exits_with_text(text: str) -> list[tuple[int, int, str]]:
+    """A detector that exits with the start of the document's text as its message."""
+    sys.exit(text[:60])
+
+
+def test_e8_the_detector_exits() -> None:
+    with pytest.raises(DetectorError) as raised:
+        score(exits_with_text, BATCH)
+    error = raised.value
+    shown = (str(error), error.__cause__ is None, error.__suppress_context__)
+    assert shown == ("document 0: the detector raised SystemExit", True, True)
