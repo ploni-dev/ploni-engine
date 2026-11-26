@@ -17,6 +17,7 @@ counts imports counts such a statement twice.
 """
 
 import ast
+import os
 from collections.abc import Collection, Iterable, Mapping
 from importlib.util import resolve_name
 from pathlib import Path
@@ -171,7 +172,7 @@ def _mentions(tree: ast.AST) -> list[int]:
     return lines
 
 
-def project_imports(root: Path, package: str) -> list[Import]:
+def project_imports(root: Path, package: str, skipped: Collection[str] = ()) -> list[Import]:
     """Return every import of every Python file under root/package.
 
     Why: a rule about imports holds only when no file is left out, so the folder is walked
@@ -179,9 +180,10 @@ def project_imports(root: Path, package: str) -> list[Import]:
 
     Contract:
         Args: root, the folder that holds the package folder; package, the name of that
-            folder, which is also the first part of every importer's name.
+            folder, which is also the first part of every importer's name; skipped, names of
+            folders left out at any depth and not walked into (a virtual environment, a cache).
         Returns: the imports, ordered by file path and then by line. Only `.py` and `.pyw`
-            files are read, with the suffix in any case of letters. No package folder gives
+            entries are read, with the suffix in any case of letters. No package folder gives
             an empty list.
         Raises: SyntaxError or ImportError as `imported` does, with the file named first in
             the message; OSError when a file cannot be read.
@@ -190,8 +192,12 @@ def project_imports(root: Path, package: str) -> list[Import]:
     read like any other.
     """
     found = []
-    files = (file for file in (root / package).rglob("*") if file.suffix.lower() in SOURCE_SUFFIXES)
-    for path in sorted(file.relative_to(root).as_posix() for file in files):
+    entries = []
+    for place, folders, names in os.walk(root / package):
+        folders[:] = [folder for folder in folders if folder not in skipped]
+        # A folder named like a source file is read too, and fails as a file would (E5).
+        entries += [Path(place) / name for name in (*folders, *names) if Path(name).suffix.lower() in SOURCE_SUFFIXES]
+    for path in sorted(entry.relative_to(root).as_posix() for entry in entries):
         parts = path.rpartition(".")[0].split("/")
         is_package = parts[-1] == "__init__"
         importer = ".".join(parts[:-1] if is_package else parts)

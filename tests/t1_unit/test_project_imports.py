@@ -51,6 +51,9 @@ project_imports, a folder. Equivalence classes:
                               not a .txt or .pyi file in it, not a .py file beside it
   EC14  no package folder     nothing, which is today's repository
   EC15  order                 by file path, then by line
+  EC31  folders left out      a file under a folder whose name is given, at any depth, is not
+                              read; a file or a folder whose name only looks like one is; with
+                              none given, every file is read
 
 Error paths:
   E3  a file that is not Python           SyntaxError that names the file
@@ -472,6 +475,24 @@ def test_ec15_order_is_by_file_then_by_line(tmp_path: Path) -> None:
         ("ploni/b.py", 1, "z"),
         ("ploni/b.py", 2, "a"),
     ]
+
+
+def test_ec31_folders_left_out(tmp_path: Path) -> None:
+    files = {
+        "ploni/a.py": "import json\n",
+        "ploni/.venv/lib/tool.py": "import socket\n",
+        "ploni/deep/__pycache__/x.py": "import socket\n",
+        "ploni/deep/.venv.py": "import os\n",
+        "ploni/venv/kept.py": "import re\n",
+    }
+    write(tmp_path, files)
+    left_out = reader.project_imports(tmp_path, "ploni", (".venv", "__pycache__"))
+    assert [(item.file, item.module) for item in left_out] == [
+        ("ploni/a.py", "json"),
+        ("ploni/deep/.venv.py", "os"),
+        ("ploni/venv/kept.py", "re"),
+    ]
+    assert len(reader.project_imports(tmp_path, "ploni")) == len(files)
 
 
 def test_e3_a_file_that_is_not_python_is_named(tmp_path: Path) -> None:
