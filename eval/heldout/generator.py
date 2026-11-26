@@ -34,14 +34,18 @@ written, in words, in eval/heldout/SPAN_RULES.md (Achia, 2026-11-26, "Yes, the r
 | AMOUNT           | 640 Amounts                                            |
 | ADDRESS          | 642 Addresses                                          |
 | PERSON           | 644 Trigger words: a name after a trigger              |
-| PERSON_UNTITLED  | 404 (section 7) a name that stands once, with no title |
 | PLACEHOLDER      | 646 Already-anonymized placeholders                    |
 | HEALTH_FUND_ID   | 648 Health fund member numbers                         |
 | MILITARY_ID      | 648 military IDs                                       |
 | PASSPORT_NUMBER  | 648 passport numbers                                   |
 
-Each type has one maker: given the random generator and whether a near miss is wanted, it
-returns a sentence frame with {} where the value stands, and the value. The gershayim and geresh
+One group, of PERSON items: "untitled", the names that stand once in their document with no
+title before them (build-plan.md line 404, section 7; Achia, 2026-11-16, "Yes, as its own line
+from the start"). Its items are PERSON, as a detector returns them; the group is a mark on the
+item, for a line of its own in the scores, and no type.
+
+Each type, and the group, has one maker: given the random generator and whether a near miss is
+wanted, it returns a sentence frame with {} where the value stands, and the value. The gershayim and geresh
 of a sentence are ASCII or Hebrew, chosen per sentence. Plain sentences with no item stand
 between the items, as in real text.
 
@@ -63,7 +67,8 @@ from dataclasses import dataclass, field
 SEED = 20261126
 # CLAUDE.md, Tests: detectors 40 positive and 40 negative; ten more of each leave room.
 PER_SIDE = 50
-# Twelve items a document; with the plain sentences between them, about half a page.
+# Twelve items a document; with the plain sentences between them, a few hundred code points,
+# a small part of a page (a median of 662 measured on the batch of SEED, before review 2).
 ITEMS_PER_DOCUMENT = 12
 # The share of items followed by a plain sentence with no item in it.
 FILLER_SHARE = 0.4
@@ -77,8 +82,6 @@ CHECKSUM_MISS_SHARE = 0.7
 SMALL_SHARE = 0.2
 # IL_ID near misses that are nine zeros, which pass the check (Phase 1: "Reject trivial sequences").
 TRIVIAL_SHARE = 0.1
-# Company and non-profit near misses that pass the check with the other one's prefix.
-WRONG_PREFIX_SHARE = 0.15
 # The bounds below of a random draw (days, house numbers, pages) are plausible sizes of what they
 # draw; the bounds that make a near miss fail are named.
 DIGITS = "0123456789"
@@ -87,6 +90,8 @@ NONZERO = DIGITS[1:]
 # group of 7 to 9 digits can pass it on its own.
 ID_LENGTH = 9
 ID_PART_SHORTEST = 7
+# A near miss one digit too long: the check digit's place and one digit more.
+ID_TOO_LONG_TAIL = 2
 # ISO 13616: "IL" read as digits, I = 18 and L = 21; the remainder that marks a valid IBAN.
 IL_DIGITS = "1821"
 IBAN_MOD = 97
@@ -106,7 +111,8 @@ class Item:
     Why: the key and the near misses are lists of these. The text, kept for the tests of the
     span, is left out of the repr, so a message that prints an item shows no identifier.
     Contract: doc indexes Batch.documents; [start, end) is the span in code points of that
-    document's text; type is one of TYPES; text equals the text of the span.
+    document's text; type is one of TYPES; text equals the text of the span; group is "" or one
+    of GROUPS, a mark of the items scored on a line of their own.
     """
 
     doc: int
@@ -114,6 +120,7 @@ class Item:
     end: int
     type: str
     text: str = field(repr=False)
+    group: str = ""
 
 
 @dataclass(frozen=True)
@@ -232,7 +239,7 @@ def _nine(rng: random.Random, head: str, near: bool) -> str:
         return digits if len(set(digits)) > 1 else _nine(rng, head, near)
     if rng.random() < CHECKSUM_MISS_SHARE:
         return body + rng.choice([digit for digit in DIGITS if not _id_ok(body + digit)])
-    return body + _num(rng, 2)
+    return body + _num(rng, ID_TOO_LONG_TAIL)
 
 
 def _id_value(rng: random.Random, digits: str) -> str:
@@ -249,9 +256,7 @@ def _il_id(rng: random.Random, near: bool) -> Frame:
     return _pick(rng, ID_FRAMES, _id_value(rng, digits))
 
 
-def _registered(rng: random.Random, near: bool, frames: tuple[str, ...], heads: tuple[str, ...], others: tuple[str, ...]) -> Frame:
-    if near and rng.random() < WRONG_PREFIX_SHARE:
-        return _pick(rng, frames, _id_value(rng, _nine(rng, rng.choice(others), False)))
+def _registered(rng: random.Random, near: bool, frames: tuple[str, ...], heads: tuple[str, ...]) -> Frame:
     return _pick(rng, frames, _id_value(rng, _nine(rng, rng.choice(heads), near)))
 
 
@@ -259,6 +264,8 @@ def _registered(rng: random.Random, near: bool, frames: tuple[str, ...], heads: 
 IBAN_FRAMES = ("יש להעביר את התשלום לחשבון {}.", "IBAN: {}", "מספר ה-IBAN של החשבון הוא {} ויש לציינו בהעברה.")
 BANK_CODES = ("010", "011", "012", "020", "031")
 ACCOUNT_FRAMES = ("התשלום יועבר לחשבון מס' {} (בנק-סניף-חשבון).", "פרטי חשבון הבנק: {}.", "החשבון {} רשום על שם החברה.")
+# What makes an account near miss fail: three groups of the wrong sizes.
+ACCOUNT_MISS_SHAPE = (4, 3, 2)
 
 
 def _iban_value(rng: random.Random, near: bool) -> Frame:
@@ -279,7 +286,7 @@ def _account(rng: random.Random, near: bool) -> Frame:
     if near and rng.random() < HALF:
         return "חשבונית מס' {} צורפה לתביעה.", f"{rng.randint(2015, 2025)}/{_num(rng, 6)}"
     if near:
-        return _pick(rng, ACCOUNT_FRAMES, "-".join((_num(rng, 4, NONZERO), _num(rng, 3), _num(rng, 2))))
+        return _pick(rng, ACCOUNT_FRAMES, "-".join(_num(rng, size, NONZERO) for size in ACCOUNT_MISS_SHAPE))
     bank, branch, account = rng.choice(BANK_CODES)[1:], _num(rng, 3, NONZERO), _num(rng, rng.randint(6, 9))
     if rng.random() < SMALL_SHARE:
         return "התשלום יועבר לבנק {} על שם החברה.", f"{bank} סניף {branch} חשבון {account}"
@@ -376,13 +383,16 @@ def _ip(rng: random.Random, near: bool) -> Frame:
 # License plates (build-plan.md Phase 1): NN-NNN-NN and NNN-NN-NNN, a separator or a trigger.
 PLATE_TRIGGERED = ("הרכב, מספר רישוי {}, נגרר מהמקום.", "לוחית הרישוי {} צולמה במצלמת האבטחה.", "רכב מס' {} חנה במקום אסור.")
 PLATE_SHAPES = ((7, (2, 3)), (8, (3, 2)))
+# What makes a plate near miss fail: a plate's digits with no separator and no trigger, or two
+# groups of the wrong sizes.
+PLATE_MISS_SHAPE = (4, 3)
 
 
 def _plate(rng: random.Random, near: bool) -> Frame:
     if near and rng.random() < HALF:
-        return "בארכיון נספרו {} פריטים.", _num(rng, rng.choice((7, 8)), NONZERO)
+        return "בארכיון נספרו {} פריטים.", _num(rng, rng.choice(PLATE_SHAPES)[0], NONZERO)
     if near:
-        return "מספר האסמכתא {} נמסר ללקוח.", f"{_num(rng, 4, NONZERO)}-{_num(rng, 3)}"
+        return "מספר האסמכתא {} נמסר ללקוח.", "-".join(_num(rng, size, NONZERO) for size in PLATE_MISS_SHAPE)
     length, groups = rng.choice(PLATE_SHAPES)
     digits = _num(rng, length, NONZERO)
     if rng.random() < SMALL_SHARE:
@@ -415,7 +425,8 @@ def _case(rng: random.Random, near: bool) -> Frame:
     return _pick(rng, CASE_FRAMES, f"{procedure} {rng.randint(1, 9999)}/{year}")
 
 
-# Gush and helka (build-plan.md Phase 1). A near miss carries a cue word and is still no parcel.
+# Gush and helka (build-plan.md Phase 1). Most near misses carry a cue word and are still no
+# parcel; the rest are a part of a text by its number.
 PARCEL_FRAMES = ("המקרקעין הידועים כ{} נמכרו לחברה.", "הנכס רשום בפנקסי המקרקעין כ{}.", "הבקשה נוגעת למגרש ב{}.")
 REGIONS = ("גוש דן", "גוש עציון")
 
@@ -483,7 +494,8 @@ def _amount(rng: random.Random, near: bool) -> Frame:
 
 # Addresses (build-plan.md Phase 1): a street lexicon, a number, a city lexicon. The first seven
 # streets are named after people. A form with no street word is not glued to a proclitic, since
-# Hebrew drops a street's ה after one. A near miss carries a street, a city or a street word.
+# Hebrew drops a street's ה after one. Most near misses carry a street, a city or a street word;
+# the rest are a room by its number.
 STREETS = ("הרצל", "ויצמן", "בן גוריון", "רוטשילד", "ז'בוטינסקי", "ביאליק", "סוקולוב", "אלנבי", "הנביאים", "העצמאות", "הרב קוק", "דיזנגוף", "הגפן", "הזית")
 CITIES = ("תל אביב-יפו", "ירושלים", "חיפה", "באר שבע", "נתניה", "רמת גן", "פתח תקווה", "ראשון לציון", "חולון", "אשדוד", "רחובות", "כפר סבא")
 ADDRESS_FRAMES = ("הצד מתגורר ב{}.", "כתובת הנכס: {}.", "המשרד ממוקם ב{} בקומה השנייה.")
@@ -511,7 +523,7 @@ def _address(rng: random.Random, near: bool) -> Frame:
 
 # Trigger words and names (build-plan.md Phase 1); a name that stands once (section 7). "@" is
 # where the trigger stands. A PERSON near miss is a trigger before a word that is no name; a
-# PERSON_UNTITLED near miss is a name of the plan's list used as the word it is.
+# near miss of the untitled group is a name of the plan's list used as the word it is.
 TRIGGERS = ("מר", "גב'", 'עו"ד', 'ד"ר', "פרופ'", 'רו"ח', "התובע", "הנתבע", "המבקש", "המשיב", "העד", "כב' השופט", 'ב"כ')
 PARTY_TRIGGERS = TRIGGERS[6:11]
 PERSON_FRAMES = ("@ {} הצהיר כי הדברים נכונים.", "ההודעה נמסרה ל@ {} ביום הדיון.", "בדיון נכחו הצדדים ו@ {}.", "המסמך נחתם בפני @ {}.")
@@ -521,6 +533,8 @@ GIVEN = (
     "אור", "שחר", "רון", "ברק", "יונה", "שרון", "עדן", "טל", "גל", "שקד", "ים", "תום", "עומר", "נועם", "דקל", "חן", "שירה",
 )  # fmt: skip
 FAMILY = ("כהן", "לוי", "מזרחי", "פרץ", "ביטון", "דהן", "אברהם", "פרידמן", "אגבאריה", "חדד", "גבאי", "שפירא", "ברק", "לביא", "הדר")
+# The family names that are no ordinary word, the first twelve: a name of one word standing alone.
+LONE_FAMILY = FAMILY[:12]
 VERBS = ("טוען", "השיב", "הוסיף", "ציין", "הודה", "ביקש", "הגיש", "העיד", "הכחיש", "סירב", "חזר", "הבהיר", "התנגד", "הסכים", "שתק", "נכח")
 NOT_NAMES = (("גורלו של הנכס היה מר {}.", "מאוד"), ("הטעם של המשקה היה מר {} מן הצפוי.", "יותר"))
 ORDINARY = (
@@ -551,7 +565,8 @@ def _person(rng: random.Random, near: bool) -> Frame:
 def _untitled(rng: random.Random, near: bool) -> Frame:
     if near:
         return rng.choice(ORDINARY)
-    return _pick(rng, UNTITLED_FRAMES, f"{rng.choice(GIVEN)} {rng.choice(FAMILY)}")
+    name = rng.choice(LONE_FAMILY) if rng.random() < SMALL_SHARE else f"{rng.choice(GIVEN)} {rng.choice(FAMILY)}"
+    return _pick(rng, UNTITLED_FRAMES, name)
 
 
 # Placeholders (build-plan.md Phase 1): פלוני, אלמוני, פלונית, initials, a blank line. A near miss
@@ -605,16 +620,22 @@ def _passport(rng: random.Random, near: bool) -> Frame:
     return _pattern_only(rng, near, PASSPORT_FRAMES, "מספר האשרה {} נרשם במערכת.", value)
 
 
+# One maker per line of the scores: a type, or a type and a group after GROUP_MARK.
+GROUP_MARK = ":"
+UNTITLED = "PERSON:untitled"
 MAKERS: dict[str, Maker] = {
     "IL_ID": _il_id,
-    "COMPANY_NUMBER": lambda rng, near: _registered(rng, near, COMPANY_FRAMES, COMPANY_HEADS, NONPROFIT_HEADS),
-    "NONPROFIT_NUMBER": lambda rng, near: _registered(rng, near, NONPROFIT_FRAMES, NONPROFIT_HEADS, COMPANY_HEADS),
+    "COMPANY_NUMBER": lambda rng, near: _registered(rng, near, COMPANY_FRAMES, COMPANY_HEADS),
+    "NONPROFIT_NUMBER": lambda rng, near: _registered(rng, near, NONPROFIT_FRAMES, NONPROFIT_HEADS),
     "IBAN": _iban_value, "BANK_ACCOUNT": _account, "CREDIT_CARD": _card, "PHONE": _phone, "EMAIL": _email, "URL": _url,
     "IP_ADDRESS": _ip, "IL_PLATE": _plate, "CASE_NUMBER": _case, "GUSH_HELKA": _parcel, "DATE": _date,
-    "AMOUNT": _amount, "ADDRESS": _address, "PERSON": _person, "PERSON_UNTITLED": _untitled, "PLACEHOLDER": _placeholder,
+    "AMOUNT": _amount, "ADDRESS": _address, "PERSON": _person, UNTITLED: _untitled, "PLACEHOLDER": _placeholder,
     "HEALTH_FUND_ID": _health, "MILITARY_ID": _military, "PASSPORT_NUMBER": _passport,
 }  # fmt: skip
-TYPES = tuple(MAKERS)
+TYPES = tuple(dict.fromkeys(line.partition(GROUP_MARK)[0] for line in MAKERS))
+GROUPS = tuple(line.partition(GROUP_MARK)[2] for line in MAKERS if GROUP_MARK in line)
+# What a word of a document is, for "stands once": a run of anything but spaces and punctuation.
+WORD = re.compile(r"[^\s.,:;()]+")
 ID_FAMILY = ("IL_ID", "COMPANY_NUMBER", "NONPROFIT_NUMBER")
 GENRES = (
     ("כתב תביעה", "בכבוד רב,"), ("החלטה", "ניתנה היום בהיעדר הצדדים."), ("הסכם שכירות", "ולראיה באו הצדדים על החתום."),
@@ -630,17 +651,39 @@ FILLERS = (
 Planned = tuple[str, bool, str, str]
 
 
-def _draw(rng: random.Random, kind: str, near: bool) -> Frame:
-    """Return a frame and value of a type, its marks ASCII or Hebrew.
-
-    An ID-family near miss with a group of digits that passes the check on its own is drawn again.
-    """
-    frame, value = MAKERS[kind](rng, near)
-    while near and kind in ID_FAMILY and _part_passes(value):
-        frame, value = MAKERS[kind](rng, near)
+def _marked(rng: random.Random, frame: str, value: str) -> Frame:
+    """Return a frame and its value with the marks ASCII or, one time in two, Hebrew."""
     if rng.random() < HALF:
         return frame.translate(HEBREW_MARK_TABLE), value.translate(HEBREW_MARK_TABLE)
     return frame, value
+
+
+def _draw(rng: random.Random, line: str, near: bool) -> Frame:
+    """Return a frame and value of a line of the scores, its marks ASCII or Hebrew.
+
+    An ID-family near miss with a group of digits that passes the check on its own is drawn again.
+    """
+    frame, value = MAKERS[line](rng, near)
+    while near and line in ID_FAMILY and _part_passes(value):
+        frame, value = MAKERS[line](rng, near)
+    return _marked(rng, frame, value)
+
+
+def _alone(rng: random.Random, planned: list[Planned]) -> list[Planned]:
+    """Return a document's plan with each untitled name drawn again until each of its words stands once.
+
+    Why: build-plan.md section 7 asks for a name that stands once in its document; a word of it
+    found again in another sentence, or twice in the name, would make it no such name.
+    """
+    planned = list(planned)
+    for at, (line, positive, frame, value) in enumerate(planned):
+        if line != UNTITLED or not positive:
+            continue
+        rest = [word for other, (_, _, text, filled) in enumerate(planned) if other != at for word in WORD.findall(text.replace("{}", filled))]
+        while any(word in rest for word in value.split()) or len(set(value.split())) < len(value.split()):
+            value = _marked(rng, frame, _untitled(rng, False)[1])[1]
+        planned[at] = (line, positive, frame, value)
+    return planned
 
 
 def _document(rng: random.Random, index: int, planned: list[Planned]) -> tuple[str, list[Item], list[Item]]:
@@ -649,9 +692,10 @@ def _document(rng: random.Random, index: int, planned: list[Planned]) -> tuple[s
     parts, length = [title + "\n"], len(title) + 1
     key: list[Item] = []
     near: list[Item] = []
-    for kind, positive, frame, value in planned:
+    for line, positive, frame, value in _alone(rng, planned):
         before, after = frame.split("{}")
-        item = Item(index, length + len(before), length + len(before) + len(value), kind, value)
+        kind, _, group = line.partition(GROUP_MARK)
+        item = Item(index, length + len(before), length + len(before) + len(value), kind, value, group)
         (key if positive else near).append(item)
         sentence = before + value + after + rng.choice((" ", "\n"))
         if rng.random() < FILLER_SHARE:
@@ -669,7 +713,8 @@ def build(seed: int = SEED) -> Batch:
     so this is the only place the batch exists; the seed fixes it.
 
     Contract: seed, any int; SEED is the batch of the gate. Returns the Batch: PER_SIDE positives
-    and PER_SIDE near misses of every type of TYPES, shuffled into documents of
+    and PER_SIDE near misses of every line of MAKERS (a type of TYPES, or a group of one),
+    shuffled into documents of
     ITEMS_PER_DOCUMENT items each (the last one may hold fewer). The same seed gives the same
     Batch. Raises nothing. Writes nothing to disk and logs nothing.
 
@@ -677,7 +722,7 @@ def build(seed: int = SEED) -> Batch:
     """
     rng = random.Random(seed)  # noqa: S311 seeded on purpose, so the batch is the same on every run
     planned: list[Planned] = [
-        (kind, positive, *_draw(rng, kind, not positive)) for kind in TYPES for positive in (True, False) for _ in range(PER_SIDE)
+        (line, positive, *_draw(rng, line, not positive)) for line in MAKERS for positive in (True, False) for _ in range(PER_SIDE)
     ]
     rng.shuffle(planned)
     documents: list[str] = []
