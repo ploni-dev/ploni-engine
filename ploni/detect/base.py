@@ -6,8 +6,11 @@ protocol is all that fusion, the pipeline and the conformance suite may rely on.
 
 Contract: a detector is any class with the four members of `Detector`; it need not inherit
 from it. The conformance suite (tests/detector_contract.py, run by tests/t0_contract/) holds
-every detector to the rules of section 4.3: each returned span lies inside the projection,
-each returned type is one of `produces`, each confidence is in [0, 1].
+every detector to the three rules of section 4.3: each returned span lies inside the
+projection, each returned type is one of `produces`, each confidence is in [0, 1]. It holds
+five more as well, Claude's rules, which only narrow: a span holds at least one character; its
+surface is the text of the span; a base span is a non-empty place inside the span; the part is
+the projection's; the detection names the detector that returned it (`Detector.detect`).
 
 Known limits: nothing here checks those rules at run time; the suite does. `DetectContext`
 holds nothing yet: the plan names it and gives it no field.
@@ -62,9 +65,11 @@ class Detector(Protocol):
 
         Contract: `proj` is one part of the document; `ctx` is the context of this run.
         Returns the detections in `proj.text`, possibly none. Each span is in code points of
-        `proj.text`, start inclusive, end exclusive, with 0 <= start <= end <= len(proj.text);
-        each `entity_type` is in `produces`; each `confidence` is in [0, 1]. Raises what the
-        detector documents.
+        `proj.text`, start inclusive, end exclusive, with 0 <= start < end <= len(proj.text);
+        each `entity_type` is in `produces`; each `confidence` is in [0, 1]. Also: the surface
+        is `proj.text[start:end]`; a base span is a non-empty place inside the span; `part` is
+        `proj.part`; `detector` is `name` (Claude's rules, which only narrow;
+        tests/detector_contract.py). Raises what the detector documents.
 
         Known limits: one projection per call; a name that runs from one part into another is
         not seen.

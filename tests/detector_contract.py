@@ -28,10 +28,14 @@ which are document text. What `detect` raises, `breaks` raises.
 no anchor for the empty text. `Digits` is a detector of runs of ASCII digits, of type NUMBER,
 that keeps the contract; the tests that show each rule can fail start from it.
 
-Known limits: the first detector PR may tighten the check further. Not checked:
+Known limits: the first detector PR may tighten the check further. Not checked, among them:
   - that `band` is one of its three words;
   - that `detection_id` is content-based (build-plan.md section 5);
   - that `prefix` and `suffix` are the letters around the base span;
+  - `lemma`, `gender`, `needs_review` and `review_reason`, `at_window_edge`;
+  - that `metadata` is a new dict for each detection;
+  - overlapping or duplicate detections;
+  - that a second call returns the same;
   - that the detector leaves its arguments as they were.
 """
 
