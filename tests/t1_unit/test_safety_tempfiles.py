@@ -50,6 +50,9 @@ The race of a run's start (the review of b7390ae, finding 1). Equivalence classe
   EC20 a lock path that cannot be opened (a folder in its place) -> the sweep goes on to the
        folders after it, and raises that OSError at the end
   EC21 a lock file with no folder, not held -> removed by the sweep, not counted
+       (also when it comes after a lock file that a run holds, which stays)
+  EC22 a symbolic link named like a lone lock file, to a file outside and to nothing -> left;
+       nothing outside is made or changed
 
 Boundaries:
   B1  a block that makes nothing
@@ -944,3 +947,25 @@ def test_ec21_a_lock_file_with_no_folder_is_removed(tmp_path: Path) -> None:
     (tmp_path / f"{tempfiles.PREFIX}gone{tempfiles.LOCK_SUFFIX}").write_bytes(b"")
     assert tempfiles.sweep(tmp_path) == 0
     assert list(tmp_path.iterdir()) == []
+
+
+def test_ec21_the_sweep_goes_on_past_a_held_lock_file_to_a_lone_one(tmp_path: Path) -> None:
+    lone = tmp_path / f"{tempfiles.PREFIX}zzzz-gone{tempfiles.LOCK_SUFFIX}"
+    lone.write_bytes(b"")
+    with tempfiles.private_dir(tmp_path) as folder:
+        assert tempfiles.sweep(tmp_path) == 0
+        assert not lone.exists()
+        assert held(folder.with_name(folder.name + tempfiles.LOCK_SUFFIX)) is True
+
+
+@pytest.mark.parametrize("target_exists", [True, False])
+def test_ec22_a_link_named_like_a_lone_lock_file_is_left(tmp_path: Path, target_exists: bool) -> None:
+    root, outside = tmp_path / "root", outside_tree(tmp_path)
+    root.mkdir()
+    target = outside / ("kept.txt" if target_exists else "made-by-no-one.txt")
+    at = root / f"{tempfiles.PREFIX}gone{tempfiles.LOCK_SUFFIX}"
+    link(at, target, "symlink")
+    assert tempfiles.sweep(root) == 0
+    assert at.is_symlink()
+    assert target.exists() is target_exists
+    assert untouched(outside)
