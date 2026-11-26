@@ -114,6 +114,10 @@ class Broken:
         self.handle.write(data[:10])  # type: ignore[attr-defined]
         raise OSError(28, "No space left on device")
 
+    def fileno(self) -> int:
+        # The partial file is held through its descriptor (issue #212).
+        return int(self.handle.fileno())
+
 
 def test_e1_the_write_fails(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     target = tmp_path / "out.docx"

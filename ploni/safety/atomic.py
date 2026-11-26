@@ -8,7 +8,8 @@ and then put in the target's place in one step.
 Contract: `write_atomic` leaves the target holding either its old bytes (or no file) or all
 of the new ones. When it fails before the rename it tries to remove its partial file, and
 the first error passes through. A crash that kills the process before the rename leaves the
-partial file behind: `sweep_partials` removes such files from a folder. It must be called
+partial file behind: `sweep_partials` removes such files from a folder, and leaves the partial
+file of a write that is still running, which holds it (`ploni.safety.locks`, issue #212). It must be called
 when a run starts, before any export; no caller exists yet (the exporter, Phase 9).
 
 Known limits:
@@ -46,6 +47,8 @@ import secrets
 from contextlib import suppress
 from pathlib import Path
 from typing import BinaryIO
+
+from ploni.safety import locks
 
 # How the name of every partial file begins. `sweep_partials` removes entries with this
 # beginning and nothing else; the leading dot hides them in a POSIX listing.
@@ -97,9 +100,12 @@ def write_atomic(path: Path, data: bytes) -> None:
     handle = _open_partial(partial)
     try:
         with handle:
+            # Held while it is written, so that another run's sweep leaves it (issue #212).
+            locks.hold(handle)
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
+            locks.release(handle)
         os.replace(partial, path)
     except BaseException:
         # A clean-up that fails must not hide why the write failed; the sweep gets the file.
@@ -116,17 +122,21 @@ def sweep_partials(folder: Path) -> int:
     the next run does it.
 
     Contract: removes the entries directly in `folder` whose names begin with PARTIAL_PREFIX
-    and that are not folders; returns how many. A symbolic link with the prefix is removed
-    itself; what it points to is not touched. Every such entry is tried; when one cannot be
+    and that are not folders, but for a partial file that a live write holds
+    (`ploni.safety.locks`, issue #212); returns how many. A symbolic link with the prefix is
+    removed itself, without looking at what it points to, which is not touched. Every such entry is tried; when one cannot be
     removed, the first error is raised after the others were tried. A folder that does not
     exist gives 0.
 
     Known limits:
     - Deeper folders are not looked at. A Windows junction with the prefix is left: it counts
       as a folder.
-    - It must not run while another process of this product writes into the same folder:
-      on POSIX it would remove that writer's partial file, and that write fails; on Windows
-      the open file cannot be removed and the sweep raises.
+    - A partial file made by a writer that has not yet held it, or that it has just given
+      back before the rename, is taken for a crashed one's in that moment: on POSIX the
+      write then fails at the rename, the target as it was; on Windows the open file cannot
+      be removed and the sweep raises.
+    - An OSError from `locks.is_held` (a partial file that cannot be opened for reading)
+      counts as one that cannot be removed: the first such error is raised at the end.
     """
     if not folder.is_dir():
         return 0
@@ -135,6 +145,8 @@ def sweep_partials(folder: Path) -> int:
     for entry in os.scandir(folder):
         if entry.name.startswith(PARTIAL_PREFIX) and not entry.is_dir(follow_symlinks=False):
             try:
+                if not entry.is_symlink() and locks.is_held(Path(entry.path)):
+                    continue
                 os.unlink(entry.path)
             except OSError as error:
                 first = first or error
