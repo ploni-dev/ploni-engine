@@ -33,6 +33,14 @@ sweep. Equivalence classes:
   EC12 other entries of the root      a folder with another name, a file with the prefix, a link
                                 with the prefix, a folder with the prefix one level deeper: left alone
   EC13 a root that does not exist, an empty root    0
+  EC14 a folder of a block that is still open (its lock beside it held, issue #212)    left,
+      not counted; the block still ends as before
+  EC15 a folder that a killed run left with its lock file beside it, not held    the folder and
+      its lock file are removed, counted once
+private_dir and the lock (issue #212). Equivalence classes:
+  EC16 inside the block the lock file `<folder>.lock` stands beside the folder in the root and
+       is held; the folder itself is still empty; after the block both are gone, also when the
+       block ends with NotRemoved
 
 Boundaries:
   B1  a block that makes nothing
@@ -90,7 +98,7 @@ if sys.platform == "win32":
 
 import pytest
 
-from ploni.safety import tempfiles
+from ploni.safety import locks, tempfiles
 
 TEXT = "יעקב כהן / John Smith"
 # The kinds of link to a folder that this system has. A junction is the folder link of Windows and needs no
@@ -823,3 +831,34 @@ def test_a8_the_temp_folder_of_the_process_is_changed_only_under_the_lock(tmp_pa
     assert len(changes) == 10
     assert held == []
     assert tempfile.tempdir == before
+
+
+def test_ec14_sweep_leaves_the_folder_of_a_block_that_is_still_open(tmp_path: Path) -> None:
+    with tempfiles.private_dir(tmp_path) as folder:
+        (folder / "work.txt").write_text(TEXT, encoding="utf-8")
+        assert tempfiles.sweep(tmp_path) == 0
+        assert (folder / "work.txt").read_text(encoding="utf-8") == TEXT
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_ec15_sweep_removes_a_killed_run_and_its_lock_file(tmp_path: Path) -> None:
+    folder = leftover(tmp_path, "killed")
+    lock = folder.with_name(folder.name + tempfiles.LOCK_SUFFIX)
+    lock.write_bytes(b"")
+    assert tempfiles.sweep(tmp_path) == 1
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_ec16_the_lock_file_beside_the_folder(tmp_path: Path) -> None:
+    with tempfiles.private_dir(tmp_path) as folder:
+        lock = folder.with_name(folder.name + tempfiles.LOCK_SUFFIX)
+        assert lock.is_file()
+        assert locks.is_held(lock) is True
+        assert list(folder.iterdir()) == []
+    assert list(tmp_path.iterdir()) == []
+
+
+def test_ec16_the_lock_file_goes_when_the_block_ends_with_not_removed(tmp_path: Path, stuck: None) -> None:
+    with pytest.raises(tempfiles.NotRemoved), tempfiles.private_dir(tmp_path) as folder:
+        pass
+    assert not folder.with_name(folder.name + tempfiles.LOCK_SUFFIX).exists()

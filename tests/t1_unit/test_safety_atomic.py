@@ -58,6 +58,8 @@ sweep_partials. Equivalence classes:
   E9  two partial files that cannot be removed, with two kinds of OSError    every other partial
        file is still removed, then the first error is raised, not the last
   EC6  a folder that does not exist, an empty folder, a path that is a file    0
+  EC12 a partial file that a live write holds (issue #212): the sweep runs between the write
+       and the rename    left, not counted; the write ends and the target holds all its bytes
 """
 
 import os
@@ -389,3 +391,18 @@ def test_ec12_the_folder_of_the_target_is_flushed(tmp_path: Path, monkeypatch: p
     monkeypatch.setattr(atomic, "_sync_folder", flushed.append)
     atomic.write_atomic(tmp_path / "out.docx", TEXT)
     assert flushed == [tmp_path] and (tmp_path / "out.docx").read_bytes() == TEXT
+
+
+def test_ec12_sweep_partials_leaves_the_partial_file_of_a_live_write(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    seen: list[int] = []
+    real_fsync = os.fsync
+
+    def sweep_while_writing(descriptor: int) -> None:
+        real_fsync(descriptor)
+        seen.append(atomic.sweep_partials(tmp_path))
+
+    monkeypatch.setattr(atomic.os, "fsync", sweep_while_writing)
+    atomic.write_atomic(tmp_path / "out.docx", TEXT)
+    assert seen[0] == 0  # the partial file's fsync; POSIX also flushes the folder after the rename
+    assert (tmp_path / "out.docx").read_bytes() == TEXT
+    assert os.listdir(tmp_path) == ["out.docx"]
