@@ -41,10 +41,10 @@ Equivalence classes:
   EC4  a tree on disk: the lines, with file and line, of every file under ploni/ but the
        helper
   EC5  the repository: no line
-  EC7  the bytes of a file under ploni/ but the helper hold the helper's private binding
+  EC7  the text of a file under ploni/ but the helper holds the helper's private binding
        (`_tempfile`) as a word: the attribute and getattr routes the reader does not see ->
-       named; longer names that hold it, and a file in cp1255 -> not named; the repository ->
-       none
+       named; longer names that hold it, in Latin or in Hebrew letters, and a file in cp1255
+       (read with the bytes that are not UTF-8 replaced) -> not named; the repository -> none
 
 Boundaries:
   B1  the neighbours of the helper: `ploni/safety/__init__.py`, `ploni/safety/atomic.py`,
@@ -86,7 +86,7 @@ Known limits:
   - Source text handed to exec or eval is not read (tests/project_imports.py).
 
 The Hebrew and document-structure axes of the test-matrix skill do not apply: this code
-reads import statements and the bytes of each product file, and handles no document.
+reads import statements and the text of each product file, and handles no document.
 """
 
 import re
@@ -304,10 +304,16 @@ def test_ec5_no_file_under_ploni_but_the_helper_imports_tempfile() -> None:
 
 
 def names_private_binding(root: Path) -> list[str]:
-    """Return each file under root/ploni but the helper whose bytes hold the helper's private binding as a word."""
+    """Return each file under root/ploni but the helper whose text holds the helper's private binding as a word."""
     files = sorted(path for path in (root / "ploni").rglob("*") if path.suffix.lower() in SOURCE_SUFFIXES)
-    word = re.compile(rb"\b" + PRIVATE.encode() + rb"\b")
-    return [path.relative_to(root).as_posix() for path in files if path.relative_to(root).as_posix() != HELPER and word.search(path.read_bytes())]
+    # Read as text, so that a Hebrew letter beside the name counts as part of a longer name;
+    # bytes that are not UTF-8 (a file in cp1255) are replaced, not refused.
+    word = re.compile(r"\b" + PRIVATE + r"\b")
+    return [
+        path.relative_to(root).as_posix()
+        for path in files
+        if path.relative_to(root).as_posix() != HELPER and word.search(path.read_bytes().decode("utf-8", "replace"))
+    ]
 
 
 def test_ec7_no_file_under_ploni_but_the_helper_names_its_private_binding(tmp_path: Path) -> None:
@@ -319,8 +325,9 @@ def test_ec7_no_file_under_ploni_but_the_helper_names_its_private_binding(tmp_pa
         "ploni/write/docx.py": "from ploni.safety import tempfiles\n\ntempfiles._tempfile.mkstemp()\n",
         "ploni/report/audit.py": "value = getattr(tempfiles, '_tempfile')\n",
         "ploni/api.py": "import json\n",
-        # Longer names that only hold the word, and a file in the laptop's code page: no line.
-        "ploni/write/names.py": "def write_tempfile(): pass\nis_tempfile = 1\nfrom ploni.safety import tempfiles as _tempfiles\n",
+        # Longer names that only hold the word, in Latin and in Hebrew letters, and a file in the
+        # laptop's code page: no line.
+        "ploni/write/names.py": "def write_tempfile(): pass\nis_tempfile = 1\nfrom ploni.safety import tempfiles as _tempfiles\nשם_tempfile = 1\n_tempfileשני = 1\n",
     }.items():
         path = tmp_path / name
         path.parent.mkdir(parents=True, exist_ok=True)
