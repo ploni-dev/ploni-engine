@@ -15,6 +15,13 @@ Known limits: identifiers are content-based (build-plan.md section 5:
 `entity_id = sha256(canonical || type)`); they are made by the code that makes a detection or
 an entity, not here. `TableCell` is not written out in section 5; its fields are those the
 comment on `TextProjection.table_cells` names, and its row and column count from 0.
+The fields that hold document text are left out when an object is printed (`repr=False`):
+`TextProjection.text`; `Detection.surface`, `lemma` and `metadata`; `Entity.canonical` and
+`variants`; every field of `Surrogate` that holds a name or its spellings (Achia, 2026-11-25
+and 2026-11-26, issue #213). Names, order, types and defaults stay those of section 5; a
+field is still read, compared and copied as before, and `dataclasses.asdict` and `astuple`
+still give it; pytest's explanation of a failed `==` between two objects shows each field that
+differs, hidden ones too.
 """
 
 from __future__ import annotations
@@ -96,7 +103,7 @@ class TextProjection:
     """
 
     part: PartId
-    text: str
+    text: str = field(repr=False)
     anchors: list[Anchor]  # sorted, contiguous, covers all of text
     block_breaks: list[int]  # hard sentence boundaries: paragraph, table cell, list item, footnote
     table_cells: list[TableCell]
@@ -120,7 +127,7 @@ class Detection:
     detection_id: str  # content-based, see the module docstring
     part: PartId
     span: Span
-    surface: str
+    surface: str = field(repr=False)
     entity_type: str
     confidence: float  # calibrated
     band: str  # "high" | "medium" | "low"
@@ -128,12 +135,12 @@ class Detection:
     base_span: Span | None  # name without Hebrew proclitic
     prefix: str = ""  # the proclitic present, e.g. "ול"
     suffix: str = ""  # possessive or plural suffix
-    lemma: str | None = None
+    lemma: str | None = field(default=None, repr=False)
     gender: str | None = None
     at_window_edge: bool = False
     needs_review: bool = False
     review_reason: str | None = None
-    metadata: dict[Any, Any] = field(default_factory=dict)
+    metadata: dict[Any, Any] = field(default_factory=dict, repr=False)
 
 
 @dataclass
@@ -150,13 +157,13 @@ class Surrogate:
     Known limits: nothing here checks that `forms` covers every variant of the entity.
     """
 
-    value: str
-    given: str | None
-    surname: str | None
+    value: str = field(repr=False)
+    given: str | None = field(repr=False)
+    surname: str | None = field(repr=False)
     gender: str | None
     script: str  # "hebrew" | "latin" | "arabic"
-    forms: dict[str, str]  # observed surface -> replacement surface
-    translit: list[str]  # Latin spellings, for rehydration
+    forms: dict[str, str] = field(repr=False)  # observed surface -> replacement surface
+    translit: list[str] = field(repr=False)  # Latin spellings, for rehydration
 
 
 @dataclass
@@ -174,8 +181,8 @@ class Entity:
 
     entity_id: str  # stable hash of canonical + type
     entity_type: str
-    canonical: str
-    variants: set[str]
+    canonical: str = field(repr=False)
+    variants: set[str] = field(repr=False)
     detections: list[Detection]
     gender: str | None
     family_group: str | None
