@@ -116,7 +116,11 @@ def _imports(root: Path) -> list[Import]:
     """
     found = [item for folder in CODE_FOLDERS for item in project_imports(root, folder, () if folder in GUARDED else SKIPPED)]
     for path in sorted(root.glob("*.py")):
-        found += [Import(path.name, line, path.stem, module) for line, module in imported(path.read_bytes(), path.stem)]
+        try:
+            lines = imported(path.read_bytes(), path.stem)
+        except (SyntaxError, ImportError) as error:
+            raise type(error)(f"{path.name}: {error}") from error
+        found += [Import(path.name, line, path.stem, module) for line, module in lines]
     return found
 
 
