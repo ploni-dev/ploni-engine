@@ -21,10 +21,13 @@ The property is shown to fail: PastTheEnd, BeforeTheStart and Undeclared each gi
 some generated text, and the texts include ones that start and ones that end with a digit and
 the empty one, the places where the first two break.
 
-Not applicable: the proclitic and ordinary-word axes, as the check judges no word. hypothesis,
-which Phase 1 names, is not a dependency of this project (requirements-dev.txt). The texts are
-enumerated rather than drawn from `random`, whose seeded use the other T2 tests excuse with a
-suppression of ruff's S311 on the line.
+Not applicable: the proclitic and ordinary-word axes, as the check judges no word.
+
+Why not hypothesis: Phase 1 names it, but it is not installed and not in requirements-dev.txt,
+and adding it would be a new dependency, which needs Achia's decision (CLAUDE.md, Merging).
+Enumeration stands in: every combination up to three pieces is a case, 5,220 in all, which
+meets CLAUDE.md's 500 generated cases (5,000 at phase close) with no dependency. Unlike a
+seeded `random`, it needs no suppression of ruff's S311.
 """
 
 from itertools import product

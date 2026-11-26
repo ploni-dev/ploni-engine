@@ -19,11 +19,15 @@ confidence; never the surface, which is document text. What `detect` raises, `br
 `Digits` is a detector of runs of ASCII digits, of type NUMBER, that keeps the contract; the
 tests that show each rule can fail start from it.
 
-Known limits: an empty span ([n, n)) is in range: the plan's words are "inside the
-projection", and an empty place is inside it. Not checked, as section 4.3 does not ask it:
-that `part` is the projection's, that `surface` is the text of the span, that `detector` is
-the detector's name, that `band` is one of its three words, that `base_span` lies inside
-`span`, or that the detector leaves its arguments as they were.
+Known limits: the check holds the three rules of section 4.3 and no more (the coordinator's
+answer for issue #31, 2026-11-26). The first detector PR may tighten it. Not checked:
+  - a zero-width span ([n, n)) is accepted, as a place "inside the projection";
+  - that `surface` is the text of the span;
+  - that `part` is the projection's;
+  - that `detector` is the detector's name;
+  - that `band` is one of its three words;
+  - that `base_span` lies inside `span` (it is held to the projection only);
+  - that the detector leaves its arguments as they were.
 """
 
 import math
