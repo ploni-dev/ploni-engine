@@ -35,9 +35,11 @@ import time
 from pathlib import Path
 
 from ploni.safety import atomic, tempfiles
-from tests.locking import held
+from tests.locking import aged, held
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
 CONTENT = b"what a live run is still working on"
 # How long a lock may stay after its process was killed: Windows frees it "after a delay"
 # (ploni/safety/locks.py, Known limits); measured on the laptop at about 0.011 s, three runs.
@@ -158,6 +160,8 @@ def test_ec4_a_partial_sweep_skips_a_live_write(tmp_path: Path) -> None:
         assert line == "ready"
         partials = [entry for entry in tmp_path.iterdir() if entry.name.startswith(atomic.PARTIAL_PREFIX)]
         assert len(partials) == 1
+        # Old enough to be swept: the live write is left because it holds its file.
+        aged(tmp_path)
         assert atomic.sweep_partials(tmp_path) == 0
         # Its size, not its bytes: on Windows a held file's first byte cannot be read through
         # another handle (ploni/safety/locks.py, Known limits).
@@ -178,5 +182,6 @@ def test_ec5_a_partial_sweep_removes_a_crashed_write(tmp_path: Path) -> None:
     partials = [entry for entry in tmp_path.iterdir() if entry.name.startswith(atomic.PARTIAL_PREFIX)]
     assert len(partials) == 1
     assert freed(partials[0])
+    aged(tmp_path)
     assert atomic.sweep_partials(tmp_path) == 1
     assert list(tmp_path.iterdir()) == []

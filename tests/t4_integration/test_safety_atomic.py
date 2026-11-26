@@ -24,8 +24,11 @@ from pathlib import Path
 import pytest
 
 from ploni.safety import atomic
+from tests.locking import aged
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
 PROGRAM = """
 import os, sys
 from pathlib import Path
@@ -56,6 +59,7 @@ def test_m1_m2_killed_between_the_write_and_the_rename(tmp_path: Path, existing:
     assert run(target, "kill") == 9
     assert (target.read_bytes() == b"old") if existing else not target.exists()
     assert len(partials(tmp_path)) == 1
+    aged(tmp_path)
     assert atomic.sweep_partials(tmp_path) == 1
     assert partials(tmp_path) == []
     assert (target.read_bytes() == b"old") if existing else not target.exists()

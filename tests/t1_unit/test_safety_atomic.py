@@ -55,8 +55,27 @@ sweep_partials. Equivalence classes:
        tail is removed (it begins with the prefix)
   EC11 a symbolic link with the prefix, to a file and to a folder outside    the link is removed,
        what it points to is not (skipped where links cannot be made)
-  E9  two partial files that cannot be removed, with two kinds of OSError    every other partial
-       file is still removed, then the first error is raised, not the last
+  E9  two partial files that cannot be removed, with two kinds of OSError that a retry does not
+       end    every other partial file is still removed, then the first error is raised, not
+       the last
+  EC14 the rename, or a partial file's removal or take, refused once with PermissionError (the
+       moment another run's sweep has it open, issue #212)    tried again: the write ends
+       whole, the partial file is removed
+  EC15 a partial file gone when the sweep removes it (its writer renamed it in that moment)
+       no error, not counted
+  EC16 a rename that finds its partial file gone (another run's sweep removed it between its
+       close and its rename, #212)    the write is made again; the target holds all its bytes
+  EC17 a partial file younger than YOUNG_SECONDS that no one holds (Achia, 2026-11-26, "Skip
+       young files (Recommended)", #212)    left, not counted; one a second older than
+       YOUNG_SECONDS    removed
+  EC18 a partial file whose removal is refused with PermissionError at every try    that
+       error after ATTEMPTS tries, raised after the other partial files are removed
+  EC19 the rename refused with PermissionError at every try (a target read-only or open in
+       another program)    that error after ATTEMPTS tries of the rename alone, the bytes
+       written once, the target as it was, the partial file removed (the review of d5de41e,
+       finding 3)
+  EC20 a partial file whose last change is an hour ahead of the clock    left, not counted
+       (the Known limits; the review of 75c350d, finding 8)
   EC6  a folder that does not exist, an empty folder, a path that is a file    0
   EC12 a partial file that a live write holds (issue #212): the sweep runs between the write
        and the rename    left, not counted, and a dead partial file after it is removed; the
@@ -66,13 +85,17 @@ sweep_partials. Equivalence classes:
 """
 
 import os
+import time
 from pathlib import Path
+from typing import BinaryIO
 
 import pytest
 
 from ploni.safety import atomic, locks
+from tests.locking import aged
 
 TEXT = "ישראל ישראלי, ת.ז. 123456782".encode()
+
 
 
 def leftovers(folder: Path, keep: str) -> list[str]:
@@ -189,6 +212,8 @@ def test_ec4_ec5_sweep_partials(tmp_path: Path) -> None:
     deeper = tmp_path / "sub"
     deeper.mkdir()
     (deeper / f"{atomic.PARTIAL_PREFIX}c.1").write_bytes(b"part")
+    aged(tmp_path)
+    aged(deeper)
     assert atomic.sweep_partials(tmp_path) == 2
     assert sorted(os.listdir(tmp_path)) == sorted([f"{atomic.PARTIAL_PREFIX}folder", "keep.docx", "sub"])
     assert os.listdir(deeper) == [f"{atomic.PARTIAL_PREFIX}c.1"]
@@ -359,6 +384,7 @@ def test_ec5_names_that_only_look_like_a_partial_file(tmp_path: Path) -> None:
     for name in (".ploni-notes", "x.ploni-partial-y", ".ploni", ".ploni-partialX"):
         (tmp_path / name).write_bytes(b"keep")
     (tmp_path / atomic.PARTIAL_PREFIX).write_bytes(b"part")
+    aged(tmp_path)
     assert atomic.sweep_partials(tmp_path) == 1
     assert sorted(os.listdir(tmp_path)) == sorted([".ploni-notes", "x.ploni-partial-y", ".ploni", ".ploni-partialX"])
 
@@ -381,7 +407,9 @@ def test_e9_the_sweep_tries_every_file(tmp_path: Path, monkeypatch: pytest.Monke
     real_unlink = atomic.os.unlink
 
     order = sorted(entry.name for entry in os.scandir(tmp_path))
-    errors = {order[0]: PermissionError(32, "in use"), order[1]: FileNotFoundError(2, "gone meanwhile")}
+    # Two kinds of OSError that a retry does not end (a FileNotFoundError is a partial file its
+    # writer renamed: no error, EC15).
+    errors = {order[0]: IsADirectoryError(21, "a folder now"), order[1]: OSError(5, "input or output")}
 
     def unlink(path: str) -> None:
         name = Path(path).name
@@ -390,6 +418,7 @@ def test_e9_the_sweep_tries_every_file(tmp_path: Path, monkeypatch: pytest.Monke
         real_unlink(path)
 
     monkeypatch.setattr(atomic.os, "unlink", unlink)
+    aged(tmp_path)
     with pytest.raises(OSError) as caught:
         atomic.sweep_partials(tmp_path)
     scanned_first = next(name for name in (entry.name for entry in os.scandir(tmp_path)) if name in errors)
@@ -410,6 +439,8 @@ def test_ec12_sweep_partials_leaves_the_partial_file_of_a_live_write(tmp_path: P
 
     def sweep_while_writing(descriptor: int) -> None:
         real_fsync(descriptor)
+        # Old enough to be swept: the live write is left because it holds its file.
+        aged(tmp_path)
         seen.append(atomic.sweep_partials(tmp_path))
 
     monkeypatch.setattr(atomic.os, "fsync", sweep_while_writing)
@@ -429,6 +460,7 @@ def test_ec12_sweep_partials_goes_on_past_a_live_write_to_a_dead_partial(
 
     def sweep_while_writing(descriptor: int) -> None:
         real_fsync(descriptor)
+        aged(tmp_path)
         seen.append(atomic.sweep_partials(tmp_path))
 
     monkeypatch.setattr(atomic.os, "fsync", sweep_while_writing)
@@ -458,3 +490,181 @@ def test_ec13_a_sweep_that_takes_the_partial_file_first(tmp_path: Path, monkeypa
             if handle is not None:
                 handle.close()
     assert target.read_bytes() == b"old"
+
+
+@pytest.fixture
+def no_pause(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let `locks.again` try again with no pause."""
+    monkeypatch.setattr(locks.time, "sleep", lambda seconds: None)
+
+
+def refused_once(monkeypatch: pytest.MonkeyPatch, owner: object, name: str) -> list[int]:
+    """Make a function of a module raise PermissionError on its first call only; return the call count."""
+    real = getattr(owner, name)
+    calls: list[int] = []
+
+    def once(*arguments: object, **keywords: object) -> object:
+        calls.append(1)
+        if len(calls) == 1:
+            raise PermissionError(13, "in use")
+        return real(*arguments, **keywords)
+
+    monkeypatch.setattr(owner, name, once)
+    return calls
+
+
+def test_ec14_a_rename_refused_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_pause: None) -> None:
+    calls = refused_once(monkeypatch, atomic.os, "replace")
+    atomic.write_atomic(tmp_path / "out.docx", TEXT)
+    assert (tmp_path / "out.docx").read_bytes() == TEXT
+    assert len(calls) == 2
+
+
+@pytest.mark.parametrize("name", ["unlink", "take"])
+def test_ec14_a_partial_files_removal_or_take_refused_once(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_pause: None, name: str
+) -> None:
+    (tmp_path / f"{atomic.PARTIAL_PREFIX}a.docx.1").write_bytes(b"part")
+    calls = refused_once(monkeypatch, atomic.os if name == "unlink" else atomic.locks, name)
+    aged(tmp_path)
+    assert atomic.sweep_partials(tmp_path) == 1
+    assert os.listdir(tmp_path) == []
+    assert len(calls) == 2
+
+
+def test_ec15_a_partial_file_gone_when_it_is_removed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    (tmp_path / f"{atomic.PARTIAL_PREFIX}a.docx.1").write_bytes(b"part")
+    real_unlink = atomic.os.unlink
+
+    def renamed_first(path: str) -> None:
+        real_unlink(path)
+        raise FileNotFoundError(2, "renamed by its writer")
+
+    monkeypatch.setattr(atomic.os, "unlink", renamed_first)
+    aged(tmp_path)
+    assert atomic.sweep_partials(tmp_path) == 0
+
+
+def test_ec16_a_rename_that_finds_its_partial_file_gone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_pause: None) -> None:
+    # Another run's sweep removed the partial file between its close and its rename (#212): the
+    # write is made again from its bytes.
+    real_replace = atomic.os.replace
+    calls: list[int] = []
+
+    def swept_first(source: str, destination: str) -> None:
+        calls.append(1)
+        if len(calls) == 1:
+            os.unlink(source)
+            raise FileNotFoundError(2, "swept by another run")
+        real_replace(source, destination)
+
+    monkeypatch.setattr(atomic.os, "replace", swept_first)
+    atomic.write_atomic(tmp_path / "out.docx", TEXT)
+    assert (tmp_path / "out.docx").read_bytes() == TEXT
+    assert len(calls) == 2
+    assert os.listdir(tmp_path) == ["out.docx"]
+
+
+def test_ec15_the_sweep_goes_on_past_a_partial_file_gone(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    gone, dead = (tmp_path / f"{atomic.PARTIAL_PREFIX}{name}.docx.1" for name in ("a", "b"))
+    for path in (gone, dead):
+        path.write_bytes(b"part")
+    real_unlink = atomic.os.unlink
+
+    def renamed_first(path: str) -> None:
+        real_unlink(path)
+        if Path(path) == gone:
+            raise FileNotFoundError(2, "renamed by its writer")
+
+    monkeypatch.setattr(atomic.os, "unlink", renamed_first)
+    aged(tmp_path)
+    assert atomic.sweep_partials(tmp_path) == 1
+    assert os.listdir(tmp_path) == []
+
+
+@pytest.mark.parametrize(("age", "removed"), [(-1, 0), (1, 1)])
+def test_ec17_a_young_partial_file_is_left(tmp_path: Path, age: int, removed: int) -> None:
+    path = tmp_path / f"{atomic.PARTIAL_PREFIX}a.docx.1"
+    path.write_bytes(b"part")
+    then = time.time() - atomic.YOUNG_SECONDS - age
+    os.utime(path, (then, then))
+    assert atomic.sweep_partials(tmp_path) == removed
+    assert path.exists() is not bool(removed)
+
+
+def test_ec18_a_removal_refused_every_time(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_pause: None) -> None:
+    stuck, other = (tmp_path / f"{atomic.PARTIAL_PREFIX}{name}.docx.1" for name in ("a", "b"))
+    for path in (stuck, other):
+        path.write_bytes(b"part")
+    real_unlink = atomic.os.unlink
+    tries: list[int] = []
+
+    def refused(path: str) -> None:
+        if Path(path) == stuck:
+            tries.append(1)
+            raise PermissionError(13, "in use")
+        real_unlink(path)
+
+    monkeypatch.setattr(atomic.os, "unlink", refused)
+    aged(tmp_path)
+    with pytest.raises(PermissionError):
+        atomic.sweep_partials(tmp_path)
+    assert len(tries) == locks.ATTEMPTS
+    assert sorted(os.listdir(tmp_path)) == [stuck.name]
+
+
+def test_ec19_a_rename_refused_every_time(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_pause: None) -> None:
+    target = tmp_path / "out.docx"
+    target.write_bytes(b"old")
+    tries: list[int] = []
+
+    def refused(source: str, destination: str) -> None:
+        tries.append(1)
+        raise PermissionError(13, "in use")
+
+    real_open = atomic._open_partial
+    opened: list[Path] = []
+
+    def counted(path: Path) -> BinaryIO:
+        opened.append(path)
+        return real_open(path)
+
+    monkeypatch.setattr(atomic.os, "replace", refused)
+    monkeypatch.setattr(atomic, "_open_partial", counted)
+    with pytest.raises(PermissionError):
+        atomic.write_atomic(target, TEXT)
+    assert len(tries) == locks.ATTEMPTS
+    assert len(opened) == 1
+    assert target.read_bytes() == b"old"
+    assert os.listdir(tmp_path) == ["out.docx"]
+
+
+def test_ec17_young_is_sixty_seconds() -> None:
+    # "older than 60 seconds" (Achia, 2026-11-26, "Skip young files (Recommended)", #212).
+    assert atomic.YOUNG_SECONDS == 60
+
+
+def test_ec17_a_partial_file_exactly_young_seconds_old_is_removed(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    path = tmp_path / f"{atomic.PARTIAL_PREFIX}a.docx.1"
+    path.write_bytes(b"part")
+    then = path.stat().st_mtime
+    monkeypatch.setattr(atomic.time, "time", lambda: then + atomic.YOUNG_SECONDS)
+    assert atomic.sweep_partials(tmp_path) == 1
+
+
+def test_ec17_the_sweep_goes_on_past_a_young_partial_file(tmp_path: Path) -> None:
+    young, old = (tmp_path / f"{atomic.PARTIAL_PREFIX}{name}.docx.1" for name in ("a", "b"))
+    old.write_bytes(b"part")
+    aged(tmp_path)
+    young.write_bytes(b"part")
+    assert atomic.sweep_partials(tmp_path) == 1
+    assert os.listdir(tmp_path) == [young.name]
+
+
+def test_ec20_a_partial_file_changed_in_the_future_is_left(tmp_path: Path) -> None:
+    path = tmp_path / f"{atomic.PARTIAL_PREFIX}a.docx.1"
+    path.write_bytes(b"part")
+    ahead = time.time() + 3600
+    os.utime(path, (ahead, ahead))
+    assert atomic.sweep_partials(tmp_path) == 0
+    assert path.exists()

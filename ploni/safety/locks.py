@@ -7,7 +7,10 @@ holds a lock on its own temp folder and on each half-written file while it works
 operating system frees the lock if the run crashes; the sweeps skip what is still locked
 (issue #212, issuecomment-7188059248).
 
-Contract: `hold` takes the lock on an open file and keeps it until that file is closed or its
+Contract: `again` tries an action again, a few times with a short pause, when it fails with
+an error that two runs meeting can cause; the safety helpers use it where they meet another run
+(Achia, 2026-11-26, "All four (Recommended)", #212, issuecomment-7191184897). `hold` takes the
+lock on an open file and keeps it until that file is closed or its
 process ends, however it ends. `take` opens a file, made when it is missing, and takes its
 lock, or gives None when another handle holds it: `tempfiles.sweep` keeps what it takes while
 it removes the folder, so that no run can begin to use it in between (the review of b7390ae,
@@ -33,11 +36,19 @@ Known limits:
 
 import os
 import sys
+import time
+from collections.abc import Callable
 from pathlib import Path
 from typing import BinaryIO
 
 # Who may open a lock file that `take` makes: its owner, as the private folders (tempfiles).
 OWNER_READ_WRITE = 0o600
+# How often, and after how long a pause, `again` tries an action that met another run: "each
+# wait a few hundredths of a second and try again, a few times" (Achia, 2026-11-26, "All four
+# (Recommended)", #212). At most four pauses, 0.08 s in all, against the moment in which a start
+# can lose the race, measured at a median of 1.0 ms and at most 9.6 ms (the review of b7390ae).
+ATTEMPTS = 5
+PAUSE_SECONDS = 0.02
 
 if sys.platform == "win32":
     import msvcrt
@@ -100,3 +111,27 @@ def take(path: Path) -> BinaryIO | None:
         handle.close()
         return None
     return handle
+
+
+def again[T](action: Callable[[], T], errors: tuple[type[BaseException], ...]) -> T:
+    """Run an action; when it fails with one of the errors given, pause and run it again, a few times.
+
+    Why: two runs that meet in one folder can refuse each other for a moment (a file the other
+    has open, a lock it holds); a few hundredths of a second later the moment is over (#212).
+
+    Contract:
+        Args: action, called with no arguments; errors, the kinds that are tried again.
+        Returns: what the action returns, from the first try that succeeds.
+        Raises: an error of another kind at once; one of the kinds given, the last, when
+            ATTEMPTS tries have failed, after ATTEMPTS - 1 pauses of PAUSE_SECONDS.
+
+    Known limits: an action that is not safe to run twice must not be given; the callers give
+    a rename, a removal, a take, a start that leaves nothing when it fails, and a write that
+    makes a new partial file each try.
+    """
+    for _ in range(ATTEMPTS - 1):
+        try:
+            return action()
+        except errors:
+            time.sleep(PAUSE_SECONDS)
+    return action()

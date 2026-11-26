@@ -60,6 +60,18 @@ The race of a run's start (the review of b7390ae, finding 1). Equivalence classe
        met by the lone-lock pass alone -> left
   EC25 a held lock file with no folder (a block between its folder's removal and its close)
        -> left, and the sweep raises nothing
+The four retries (issue #212, Achia, 2026-11-26). Equivalence classes:
+  EC27 the sweep's take of a lock file refused once with PermissionError -> tried again; the
+       dead folder is removed
+  EC28 a start that loses the race (its lock file there already, its lock really taken by
+       another handle before its hold, or its folder gone after its hold), once -> started
+       again in a new folder; the block runs once; the root is left as it was but for what the
+       race left; where it lost to a removed folder, no lock file of its own is left
+  EC29 a start that loses the race every time -> the error after ATTEMPTS tries; the block never
+       runs; no folder of its own is left
+  EC30 a start that loses the race after its hold    its folder is removed while its own lock is
+       still held, as at a block's end, so that no sweep comes between (the review of 75c350d,
+       finding 9; of 64b37f7, finding 13)
 The helper's own copy of tempfile (issue #278). Equivalence classes:
   EC26 no public name of the helper is the tempfile module or a function or class of it,
        and `__all__` lists exactly the names the helper defines for its callers; a star
@@ -115,6 +127,7 @@ import sys
 import tempfile
 import threading
 from pathlib import Path
+from typing import Any
 
 if sys.platform == "win32":
     import _winapi
@@ -924,7 +937,11 @@ def test_ec18_a_run_whose_lock_file_a_sweep_made(tmp_path: Path, monkeypatch: py
     with pytest.raises(FileExistsError), tempfiles.private_dir(tmp_path):
         ran.append(True)
     assert ran == []
-    assert [entry.is_dir() for entry in tmp_path.iterdir()] == [False]
+    # A sweep made the lock file of every start, so each of the ATTEMPTS starts (#212) left one,
+    # the sweep's to remove; no folder is left.
+    entries = list(tmp_path.iterdir())
+    assert [entry.is_dir() for entry in entries] == [False] * locks.ATTEMPTS
+    assert all(entry.name.endswith(tempfiles.LOCK_SUFFIX) for entry in entries)
 
 
 def test_ec19_a_run_whose_folder_a_sweep_removed_before_the_hold(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
@@ -1034,3 +1051,118 @@ def test_ec26_the_helper_hands_on_no_copy_of_tempfile() -> None:
     # A star import of a module that defines __all__ binds exactly those names.
     assert "__all__" in vars(tempfiles)
     assert [name for name in tempfiles.__all__ if isinstance(getattr(tempfiles, name), type(tempfile))] == []
+
+
+@pytest.fixture
+def no_pause(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Let `locks.again` try again with no pause."""
+    monkeypatch.setattr(locks.time, "sleep", lambda seconds: None)
+
+
+def test_ec27_the_sweeps_take_refused_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_pause: None) -> None:
+    folder = leftover(tmp_path, "dead")
+    real_take = locks.take
+    calls: list[int] = []
+
+    def once(path: Path) -> object:
+        calls.append(1)
+        if len(calls) == 1:
+            raise PermissionError(13, "in use")
+        return real_take(path)
+
+    monkeypatch.setattr(tempfiles.locks, "take", once)
+    assert tempfiles.sweep(tmp_path) == 1
+    assert not folder.exists()
+
+
+def lost_race(monkeypatch: pytest.MonkeyPatch, kind: str, times: int, taken: list[Any]) -> list[int]:
+    """Make the first `times` starts of private_dir lose the race in one way; return the start count.
+
+    For a lost hold the lock is really taken by another handle, kept in `taken` for the case to close.
+    """
+    real_mkdtemp = tempfile.mkdtemp
+    real_hold = locks.hold
+    starts: list[int] = []
+
+    def made(*arguments: object, **keywords: object) -> str:
+        name = real_mkdtemp(*arguments, **keywords)
+        starts.append(1)
+        if kind == "lock file there" and len(starts) <= times:
+            Path(name + tempfiles.LOCK_SUFFIX).write_bytes(b"")
+        return name
+
+    def hold_or_lose(handle: Any) -> None:
+        if kind == "held at the hold" and len(starts) <= times:
+            # A sweep took the lock file in the moment before the hold: the hold meets the
+            # system's own error (PermissionError on Windows, BlockingIOError elsewhere).
+            taken.append(locks.take(Path(handle.name)))
+        if kind == "folder gone" and len(starts) <= times:
+            # A sweep removed the folder in the moment before the hold.
+            Path(str(handle.name).removesuffix(tempfiles.LOCK_SUFFIX)).rmdir()
+        real_hold(handle)
+
+    monkeypatch.setattr(tempfile, "mkdtemp", made)
+    monkeypatch.setattr(tempfiles.locks, "hold", hold_or_lose)
+    return starts
+
+
+KINDS = ["lock file there", "held at the hold", "folder gone"]
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_ec28_a_start_that_loses_the_race_once(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_pause: None, kind: str) -> None:
+    taken: list[Any] = []
+    starts = lost_race(monkeypatch, kind, 1, taken)
+    ran: list[Path] = []
+    try:
+        with tempfiles.private_dir(tmp_path) as folder:
+            (folder / "work.txt").write_text(TEXT, encoding="utf-8")
+            ran.append(folder)
+    finally:
+        for handle in taken:
+            handle.close()
+    assert len(ran) == 1
+    assert len(starts) == 2
+    assert not ran[0].exists()
+    assert [entry for entry in tmp_path.iterdir() if entry.is_dir()] == []
+    if kind == "folder gone":
+        # The lost start removed its own lock file (the review of d5de41e, finding 4).
+        assert list(tmp_path.iterdir()) == []
+
+
+@pytest.mark.parametrize("kind", KINDS)
+def test_ec29_a_start_that_loses_the_race_every_time(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_pause: None, kind: str) -> None:
+    taken: list[Any] = []
+    starts = lost_race(monkeypatch, kind, locks.ATTEMPTS, taken)
+    ran: list[bool] = []
+    try:
+        with pytest.raises(OSError), tempfiles.private_dir(tmp_path):
+            ran.append(True)
+    finally:
+        for handle in taken:
+            handle.close()
+    assert ran == []
+    if kind == "folder gone":
+        assert list(tmp_path.iterdir()) == []
+    assert len(starts) == locks.ATTEMPTS
+    assert [entry for entry in tmp_path.iterdir() if entry.is_dir()] == []
+
+
+def test_ec30_a_lost_start_removes_its_folder_before_its_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_pause: None) -> None:
+    taken: list[Any] = []
+    lost_race(monkeypatch, "folder gone", 1, taken)
+    real_remove = tempfiles._remove
+    locked_at_removal: list[bool] = []
+
+    def remove(folder: Path) -> None:
+        locked_at_removal.append(held(tempfiles._lock_of(folder)))
+        real_remove(folder)
+
+    monkeypatch.setattr(tempfiles, "_remove", remove)
+    try:
+        with tempfiles.private_dir(tmp_path):
+            pass
+    finally:
+        for handle in taken:
+            handle.close()
+    assert locked_at_removal == [True, True]
