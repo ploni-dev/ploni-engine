@@ -29,6 +29,7 @@ name the detector invents is printed as given, so text in a type name would be p
 import contextlib
 import importlib
 import io
+import logging
 import sys
 from collections import defaultdict
 from collections.abc import Callable, Iterable
@@ -107,7 +108,7 @@ def _checked(detections: Iterable[object], doc: int, length: int) -> list[tuple[
 
 
 class DetectorError(Exception):
-    """A detector raised while it read a document of the batch.
+    """A detector raised, or exited, while it read a document of the batch.
 
     Why: the detector's own message, and its traceback, may quote the document, which the session
     that writes the detectors must not see. Contract: the message names the document's index and
@@ -116,10 +117,10 @@ class DetectorError(Exception):
 
 
 def _detections(detector: Detector, text: str, doc: int) -> list[object]:
-    """Return what the detector returns for one text, its own error turned into a DetectorError."""
+    """Return what the detector returns for one text, its own error or exit turned into a DetectorError."""
     try:
         return list(detector(text))
-    except Exception as error:  # noqa: BLE001 re-raised as DetectorError at once, without its message
+    except (Exception, SystemExit) as error:  # noqa: BLE001 re-raised as DetectorError at once, without its message
         raise DetectorError(f"document {doc}: the detector raised {type(error).__name__}") from None
 
 
@@ -139,7 +140,7 @@ def score(detector: Detector, batch: Batch | None = None) -> Scores:
     a detection is not a (start, end, type) triple, when start or end is not an int (a bool is
     not one) or type not a str, or when not 0 <= start < end <= the text's length; the message
     names the document's index and the detection's, and holds no text. Raises DetectorError when
-    the detector raises, with the type of its error only.
+    the detector raises or exits, with the type of its error only.
 
     Known limits: the detector is called once per document, in order; it is not timed. What the
     detector prints is not held back here; `main` holds it back.
@@ -196,25 +197,32 @@ def main(argv: list[str]) -> int:
     Why: the session that writes the detectors and a PR's gate run it as one command and read
     only its numbers.
 
-    Contract: argv is [module:function]; the function is imported and scored, and what it prints
-    while it runs is thrown away. Prints the lines of `report`, returns 0. A DetectorError or a
-    ValueError of `score`: its message, which holds no text, on the error stream, returns 1. Any
-    other argv: the usage line on the error stream, returns 2. An import that fails is raised.
+    Contract: argv is [module:function]; the function is imported and scored. While it runs,
+    what it prints is thrown away and logging is off, also through a handler made before (as
+    one made when its module is imported). Prints the lines of `report`, returns 0. A
+    DetectorError (also for an exit of the detector) or a ValueError of `score`: its message,
+    which holds no text, on the error stream, returns 1. Any other argv: the usage line on the
+    error stream, returns 2. An import that fails is raised.
 
-    Known limits: a detector that writes to the process's own file handles, not through
-    sys.stdout and sys.stderr, is not held back.
+    Known limits: a detector that writes to the process's own file handles (os.write, a C
+    extension), or that turns logging back on itself, is not held back; what its module prints
+    while it is imported is not either.
     """
     if len(argv) != 1 or ":" not in argv[0]:
         print(USAGE, file=sys.stderr)
         return 2
     module, _, name = argv[0].partition(":")
     detector = getattr(importlib.import_module(module), name)
+    was_off = logging.root.manager.disable
+    logging.disable(logging.CRITICAL)
     try:
         with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
             scores = score(detector)
     except (DetectorError, ValueError) as error:
         print(error, file=sys.stderr)
         return 1
+    finally:
+        logging.disable(was_off)
     for line in report(scores):
         print(line)
     return 0
