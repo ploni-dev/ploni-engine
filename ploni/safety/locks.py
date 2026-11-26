@@ -46,7 +46,7 @@ OWNER_READ_WRITE = 0o600
 # How often, and after how long a pause, `again` tries an action that met another run: "each
 # wait a few hundredths of a second and try again, a few times" (Achia, 2026-11-26, "All four
 # (Recommended)", #212). At most four pauses, 0.08 s in all, against the moment in which a start
-# can lose the race, measured at a median of 1.0 ms and at most 9.6 ms (the review of d5de41e).
+# can lose the race, measured at a median of 1.0 ms and at most 9.6 ms (the review of b7390ae).
 ATTEMPTS = 5
 PAUSE_SECONDS = 0.02
 

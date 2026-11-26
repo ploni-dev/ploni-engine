@@ -302,13 +302,15 @@ def _started(root: Path) -> tuple[Path, BinaryIO]:
         if not folder.is_dir():
             raise FileNotFoundError("the private folder was removed before its block began")
     except BaseException:
+        # Removed while its lock is still held, as at a block's end, so that no sweep comes
+        # between (the review of 75c350d, finding 9).
+        with suppress(OSError):
+            _remove(folder)
         # A lock file that this start did not make (the sweep's) is the sweep's to remove.
         if lock is not None:
             lock.close()
             with suppress(OSError):
                 lock_path.unlink()
-        with suppress(OSError):
-            _remove(folder)
         raise
     return folder, lock
 
