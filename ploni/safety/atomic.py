@@ -143,12 +143,15 @@ def sweep_partials(folder: Path) -> int:
       just closed, before the rename, is removed on every system: the write then fails at
       the rename, the target as it was (the reviews of b7390ae and 5d1ee74).
     - The sweep opens each partial file for a moment. On Windows a writer's rename in that
-      moment fails with PermissionError, the target as it was: measured in about 1 in 50
-      writes of four runs that wrote and swept at once without a pause (the review of
-      5d1ee74, finding 15).
+      moment fails with PermissionError, the target as it was: measured in about 1 in 15
+      writes of four runs (1 in 50 of two runs) that wrote and swept the same folder at once
+      without a pause (the reviews of 5d1ee74 and 55fdeff).
     - An OSError from `locks.take` (a partial file that cannot be opened for reading and
       writing) counts as one that cannot be removed: the first such error is raised at the
-      end.
+      end. A sweep can so fail, loudly, on another run's partial file that is being written
+      or renamed in that moment: about 1 in 7 calls in the same four-run stress, as a
+      PermissionError of the open or of the removal, or a FileNotFoundError of the removal
+      (the review of 55fdeff). Nothing is lost; the sweep runs again at the next start.
     """
     if not folder.is_dir():
         return 0

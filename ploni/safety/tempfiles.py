@@ -50,8 +50,8 @@ Known limits:
   before its block runs, with FileExistsError (the sweep made the lock file), OSError (the
   sweep holds it) or FileNotFoundError (the sweep removed the folder). Two runs started in the
   same millisecond can so cost one of them its start; no byte of a run that has begun is
-  changed (the review of b7390ae, finding 1). A sweep can itself fail, loudly, on a lock file
-  that its run is removing in that moment (`sweep`, Raises).
+  changed (the review of b7390ae, finding 1). A sweep can itself fail, loudly, with a
+  PermissionError of opening a lock file of another run in that moment (`sweep`, Raises).
 """
 
 import os
@@ -297,10 +297,11 @@ def sweep(root: Path) -> int:
             a link with such a name are left alone; so is a folder whose lock is held.
         Raises: after every folder was tried, the first error: NotRemoved for a folder
             that could not be removed, OSError for a lock path that could not be opened (a
-            folder in its place, or, on Windows, a lock file that its run is removing in
-            that moment, measured as PermissionError in about 1 in 200 sweeps of four runs
-            at once, by the review of 5d1ee74); ValueError for a root that no path can be (one with a
-            null character).
+            folder in its place; or, on Windows, a PermissionError of opening the lock file
+            of another run, most likely one being removed in that moment, the cause not
+            measured: about 1 in 180 sweeps of four runs at once, by the reviews of 5d1ee74
+            and 55fdeff); ValueError for a root that no path can be (one with a null
+            character).
 
     Known limits: a folder that can never be removed is tried, and reported, at every
     start. A crashed run whose lock the system has not yet freed (`ploni.safety.locks`,

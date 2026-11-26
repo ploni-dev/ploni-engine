@@ -54,7 +54,7 @@ The race of a run's start (the review of b7390ae, finding 1). Equivalence classe
   EC22 a symbolic link named like a lone lock file, to a file outside and to nothing -> left;
        nothing outside is made or changed
   EC23 a symbolic link in the place of a dead folder's lock file, to a file outside and to
-       nothing -> not followed: the link and the folder are removed, nothing outside is made or
+       nothing, and on Windows a junction to a folder outside -> not followed: the link and the folder are removed, nothing outside is made or
        changed (the review of 5d1ee74, finding 14)
   EC24 an unheld lock file beside a live folder (a run between its "xb" open and its hold),
        met by the lone-lock pass alone -> left
@@ -978,13 +978,18 @@ def test_ec22_a_link_named_like_a_lone_lock_file_is_left(tmp_path: Path, target_
     assert untouched(outside)
 
 
-@pytest.mark.parametrize("target_exists", [True, False])
-def test_ec23_a_link_in_the_place_of_a_dead_folders_lock_file(tmp_path: Path, target_exists: bool) -> None:
+# A link in a lock file's place: a symbolic link to a file outside, to nothing, and on Windows a
+# junction to a folder outside (FOLDER_LINKS gives the kinds of each system).
+LOCK_LINKS = [("symlink", True), ("symlink", False)] + [("junction", True)] * ("junction" in FOLDER_LINKS)
+
+
+@pytest.mark.parametrize(("kind", "target_exists"), LOCK_LINKS)
+def test_ec23_a_link_in_the_place_of_a_dead_folders_lock_file(tmp_path: Path, kind: str, target_exists: bool) -> None:
     root, outside = tmp_path / "root", outside_tree(tmp_path)
     root.mkdir()
     folder = leftover(root, "dead")
-    target = outside / ("kept.txt" if target_exists else "made-by-no-one.txt")
-    link(folder.with_name(folder.name + tempfiles.LOCK_SUFFIX), target, "symlink")
+    target = outside if kind == "junction" else outside / ("kept.txt" if target_exists else "made-by-no-one.txt")
+    link(folder.with_name(folder.name + tempfiles.LOCK_SUFFIX), target, kind)
     assert tempfiles.sweep(root) == 1
     assert list(root.iterdir()) == []
     assert target.exists() is target_exists
