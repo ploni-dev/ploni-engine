@@ -53,6 +53,13 @@ The race of a run's start (the review of b7390ae, finding 1). Equivalence classe
        (also when it comes after a lock file that a run holds, which stays)
   EC22 a symbolic link named like a lone lock file, to a file outside and to nothing -> left;
        nothing outside is made or changed
+  EC23 a symbolic link in the place of a dead folder's lock file, to a file outside and to
+       nothing -> not followed: the link and the folder are removed, nothing outside is made or
+       changed (the review of 5d1ee74, finding 14)
+  EC24 an unheld lock file beside a live folder (a run between its "xb" open and its hold),
+       met by the lone-lock pass alone -> left
+  EC25 a held lock file with no folder (a block between its folder's removal and its close)
+       -> left, and the sweep raises nothing
 
 Boundaries:
   B1  a block that makes nothing
@@ -969,3 +976,40 @@ def test_ec22_a_link_named_like_a_lone_lock_file_is_left(tmp_path: Path, target_
     assert at.is_symlink()
     assert target.exists() is target_exists
     assert untouched(outside)
+
+
+@pytest.mark.parametrize("target_exists", [True, False])
+def test_ec23_a_link_in_the_place_of_a_dead_folders_lock_file(tmp_path: Path, target_exists: bool) -> None:
+    root, outside = tmp_path / "root", outside_tree(tmp_path)
+    root.mkdir()
+    folder = leftover(root, "dead")
+    target = outside / ("kept.txt" if target_exists else "made-by-no-one.txt")
+    link(folder.with_name(folder.name + tempfiles.LOCK_SUFFIX), target, "symlink")
+    assert tempfiles.sweep(root) == 1
+    assert list(root.iterdir()) == []
+    assert target.exists() is target_exists
+    assert untouched(outside)
+
+
+def test_ec24_a_lone_lock_pass_leaves_an_unheld_lock_file_beside_a_live_folder(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    # The state of a run between its "xb" open and its hold; _sweep_one is set aside so that the
+    # lone-lock pass alone meets it.
+    folder = tmp_path / f"{tempfiles.PREFIX}starting"
+    folder.mkdir()
+    lock = folder.with_name(folder.name + tempfiles.LOCK_SUFFIX)
+    lock.write_bytes(b"")
+    monkeypatch.setattr(tempfiles, "_sweep_one", lambda folder: 0)
+    assert tempfiles.sweep(tmp_path) == 0
+    assert lock.exists()
+
+
+def test_ec25_a_held_lock_file_with_no_folder_is_left(tmp_path: Path) -> None:
+    # The state of a block between its folder's removal and the close of its lock file.
+    lock = tmp_path / f"{tempfiles.PREFIX}ending{tempfiles.LOCK_SUFFIX}"
+    lock.write_bytes(b"")
+    with open(lock, "r+b") as handle:
+        locks.hold(handle)
+        assert tempfiles.sweep(tmp_path) == 0
+        assert lock.exists()

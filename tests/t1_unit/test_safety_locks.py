@@ -17,7 +17,7 @@ hold. Equivalence classes:
   EC9  a handle not at position 0 -> ValueError, and nothing is held
 take. Equivalence classes:
   EC5  a file no one holds -> an open handle that holds it; the file's bytes unchanged
-  EC6  a missing file -> made, empty, and held
+  EC6  a missing file -> made, empty, for its owner only on POSIX, and held
   EC7  a file another handle holds -> None, and the other keeps it
   EC8  a file opened for reading only by someone who does not hold it -> taken
 Boundaries:
@@ -31,6 +31,8 @@ another process counts, and that a crash frees it, is the integration suite. The
 structure and Hebrew text axes do not apply beyond B2: no document text is read.
 """
 
+import os
+import stat
 from pathlib import Path
 from typing import BinaryIO
 
@@ -111,6 +113,8 @@ def test_ec6_take_a_missing_file(tmp_path: Path) -> None:
     try:
         assert path.stat().st_size == 0
         assert held(path) is True
+        if os.name != "nt":  # Windows keeps only the read-only bit of a mode
+            assert stat.S_IMODE(path.stat().st_mode) == 0o600
     finally:
         handle.close()
 
