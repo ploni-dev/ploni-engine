@@ -18,9 +18,16 @@ ways to write an import are the ones of tests/t8_privacy/test_imports.py.
 Test matrix:
 
 Equivalence classes:
-  EC1  tempfile in each of the ten ways x 52 places to write it from (PLACES: 12 packages of
-       the plan's layout, each as a package's own file, a module, a module two deep and a
-       package two deep, and four modules at the top; 10 x 52 = 520 cases): one line each
+  EC1  tempfile in each of the ten ways x 59 places to write it from (PLACES: the 13 packages
+       of `build-plan.md` section 4.7, each as a package's own file, a module, a module two
+       deep and a package two deep, its six top modules and `__main__`; 10 x 59 = 590
+       cases): one line each. The ten ways name the module absolutely, so the place does not
+       change their result; EC6 is where it does
+  EC6  nine relative imports from each of the 59 places, climbing to `ploni` by as many dots
+       as the place needs (RELATIVE, 59 x 9 = 531 cases): the helper's binding, plain, under
+       another name, beside another name and a module below it, one line each; the helper's
+       module, its other names, and a project module named tempfile, no line. This class holds
+       the floor of 500 cases, as its result depends on the place
   EC2  the helper itself, `ploni/safety/tempfiles.py`, in each of the ten ways: no line
   EC3  the helper's own binding of tempfile imported from it, absolute and relative, plain,
        under another name and a module below it: one line each, as `tempfile`
@@ -51,11 +58,13 @@ Adversarial:
 Known limits:
   - The helper's binding of tempfile reached as an attribute, not imported:
     `from ploni.safety import tempfiles` then `tempfiles.tempfile.mkstemp()`, and a star
-    import of the helper, which binds it too. This test reads imports only. It is closed in the
-    helper itself, in a PR of its own (the question of issuecomment-7186453908 promised it).
+    import of the helper, which binds it too. This test reads imports only. It is to be closed
+    in the helper itself, in a PR of its own (#278, as the question of
+    issuecomment-7186453908 promised). So is `sys.modules["tempfile"]`, the module reached with
+    no import at all.
   - A temp file can be made without `tempfile`: `open` on a path under the system's temp
-    folder, `os.open`, `sys.modules["tempfile"]`, or a library that calls `tempfile` itself.
-    The temp-file canary covers what is written inside a `private_dir` block.
+    folder, `os.open`, or a library that calls `tempfile` itself. The temp-file canary covers
+    what is written inside a `private_dir` block.
   - Source text handed to exec or eval is not read (tests/project_imports.py).
 
 The Hebrew and document-structure axes of the test-matrix skill do not apply: this code
@@ -78,12 +87,13 @@ BANNED = "tempfile"
 # The helper's own binding of the module: importing it from the helper goes around the helper.
 HELPER_BINDING = f"{HELPER_MODULE}.{BANNED}"
 
-# The packages of the plan's layout (build-plan.md section 4.7), and four modules at the top.
+# The packages and the top modules of the plan's layout (build-plan.md section 4.7), and the
+# command line, `__main__`, which 4.7 does not list.
 PACKAGES = (
-    "adapters", "detect", "resolve", "policy", "write", "rehydrate", "report", "session", "mapping",
-    "worker", "i18n", "safety",
+    "adapters", "detect", "morph", "resolve", "policy", "mapping", "write", "verify", "rehydrate",
+    "report", "safety", "worker", "i18n",
 )  # fmt: skip
-TOP = (("ploni.api", False), ("ploni.types", False), ("ploni.errors", False), ("ploni.__main__", False))
+TOP = tuple((f"ploni.{name}", False) for name in ("api", "types", "config", "profiles", "session", "errors", "__main__"))
 # Each package as its own file, a module, a module two deep and a package two deep: (importer, is it an __init__ file).
 PLACES = TOP + tuple(
     place
@@ -137,7 +147,37 @@ def test_ec1_a_tempfile_import_is_reported(form: str, importer: str, is_package:
 
 def test_ec1_the_matrix_has_at_least_500_cases() -> None:
     # CLAUDE.md, Tests: an invariant is held over 500 generated cases, as the no-network test's is.
+    # EC1's place does not change its result (the module docstring); EC6's does, so EC6 alone
+    # holds the floor too.
     assert len(FORMS) * len(set(PLACES)) >= 500
+    assert len(set(PLACES)) * len(RELATIVE) >= 500
+
+
+def climb(importer: str, is_package: bool) -> str:
+    """Return the dots a relative import of a file needs to name the top package `ploni`."""
+    package = importer if is_package else importer.rpartition(".")[0]
+    return "." * (package.count(".") + 1)
+
+
+# Nine relative imports, written from any place: the source, and whether it must give a line.
+RELATIVE = (
+    ("from {dots}safety.tempfiles import tempfile\n", True),
+    ("from {dots}safety.tempfiles import tempfile as t\n", True),
+    ("from {dots}safety.tempfiles import private_dir, tempfile\n", True),
+    ("from {dots}safety.tempfiles.tempfile import mkstemp\n", True),
+    ("from {dots}safety import tempfiles\n", False),
+    ("from {dots}safety.tempfiles import private_dir\n", False),
+    ("from {dots}safety.tempfiles import tempfiles\n", False),
+    ("from {dots} import tempfile\n", False),
+    ("from {dots}tempfile import mkstemp\n", False),
+)
+
+
+@pytest.mark.parametrize(("source", "reported"), RELATIVE)
+@pytest.mark.parametrize(("importer", "is_package"), PLACES)
+def test_ec6_a_relative_import_from_each_place(source: str, reported: bool, importer: str, is_package: bool) -> None:
+    text = source.format(dots=climb(importer, is_package))
+    assert judged(text, "file.py", importer, is_package) == (["file.py:1: imports tempfile"] if reported else [])
 
 
 @pytest.mark.parametrize("form", FORMS)
