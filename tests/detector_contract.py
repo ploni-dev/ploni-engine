@@ -92,8 +92,8 @@ class Digits:
     def found(self, proj: TextProjection, index: int, match: re.Match[str]) -> Detection:
         """Build the detection of one run."""
         return Detection(
-            f"{self.name}-{index}", proj.part, self.span(match), match.group(), self.entity_type, self.confidence,
-            "high", self.name, self.base_span(match, len(proj.text)),
+            f"{self.name}-{index}", self.part_of(proj), self.span(match), match.group(), self.entity_type,
+            self.confidence, "high", self.signed(), self.base_span(match, len(proj.text)),
         )  # fmt: skip
 
     def span(self, match: re.Match[str]) -> Span:
@@ -104,9 +104,17 @@ class Digits:
         """Return no base span: a number carries no proclitic."""
         return None
 
+    def part_of(self, proj: TextProjection) -> str:
+        """Return the part a detection names: the projection's."""
+        return proj.part
+
+    def signed(self) -> str:
+        """Return the detector a detection names: this one."""
+        return self.name
+
 
 class PastTheEnd(Digits):
-    """Adversarial: one past the end of the run, so out of range only when the run ends the text."""
+    """Adversarial: one past the end of the run: out of range when the run ends the text, else not its surface."""
 
     def span(self, match: re.Match[str]) -> Span:
         """Return the run and the character after it."""
@@ -114,7 +122,7 @@ class PastTheEnd(Digits):
 
 
 class BeforeTheStart(Digits):
-    """One before the run, so out of range only when the run starts the text."""
+    """One before the run: out of range when the run starts the text, else not its surface."""
 
     def span(self, match: re.Match[str]) -> Span:
         """Return the character before the run and the run."""
@@ -135,6 +143,46 @@ class BaseOutside(Digits):
     def base_span(self, match: re.Match[str], length: int) -> Span | None:
         """Return a base span from the run to past the end."""
         return Span(match.start(), length + 1)
+
+
+class Shifted(Digits):
+    """Adversarial: its span is the run moved one character on, inside the text in mid-text."""
+
+    def span(self, match: re.Match[str]) -> Span:
+        """Return the run moved one character on."""
+        return Span(match.start() + 1, match.end() + 1)
+
+
+class Empty(Digits):
+    """Its span holds no character: it starts and ends where the run starts."""
+
+    def span(self, match: re.Match[str]) -> Span:
+        """Return the empty place at the start of the run."""
+        return Span(match.start(), match.start())
+
+
+class BaseBeyondSpan(Digits):
+    """Its base span runs one past its span, inside the text in mid-text."""
+
+    def base_span(self, match: re.Match[str], length: int) -> Span | None:
+        """Return the run and the character after it."""
+        return Span(match.start(), match.end() + 1)
+
+
+class WrongPart(Digits):
+    """It names a part other than the projection's."""
+
+    def part_of(self, proj: TextProjection) -> str:
+        """Return a header, whatever the projection."""
+        return "header1"
+
+
+class Misnamed(Digits):
+    """Adversarial: it names a detector one letter short of its own name."""
+
+    def signed(self) -> str:
+        """Return a name one letter short."""
+        return self.name[:-1]
 
 
 class Undeclared(Digits):
