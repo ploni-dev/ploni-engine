@@ -35,6 +35,7 @@ import io
 import logging
 import os
 import sys
+import traceback
 from collections import defaultdict
 from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
@@ -284,8 +285,8 @@ def main(argv: list[str]) -> int:
     to a console or a terminal it opens itself; and what a process it started writes after the
     command has ended. When `main` is called from Python rather than run as the command, what a
     thread, an atexit handler or a finalizer of the detector writes after `main` has returned is
-    not held back either; the command ends without running them (scorer review 3, finding 7),
-    but for an import that fails or an interrupt, after which Python ends as it does.
+    not held back either; the command ends without running them, also when `main` raises (scorer
+    review 3, finding 7; scorer review 4, finding 12).
     """
     if len(argv) != 1 or ":" not in argv[0]:
         print(USAGE, file=sys.stderr)
@@ -304,10 +305,16 @@ def main(argv: list[str]) -> int:
 
 
 if __name__ == "__main__":
-    # Ends at once after the report, so that a thread or an atexit handler of the detector that
-    # would print at shutdown never runs (scorer review 3, finding 7).
-    code = main(sys.argv[1:])
-    for stream in (sys.stdout, sys.stderr):
-        with contextlib.suppress(ValueError, OSError):
-            stream.flush()
-    os._exit(code)
+    # Ends at once after the report, also when main raises (exit 1, its traceback written first),
+    # so that a thread or an atexit handler of the detector that would print at shutdown never
+    # runs (scorer review 3, finding 7; scorer review 4, finding 12).
+    code = 1
+    try:
+        code = main(sys.argv[1:])
+    finally:
+        if sys.exc_info()[0] is not None:
+            traceback.print_exc()
+        for stream in (sys.stdout, sys.stderr):
+            with contextlib.suppress(ValueError, OSError):
+                stream.flush()
+        os._exit(code)
