@@ -22,17 +22,21 @@ named type:group: tp, its items a detection matches exactly, and fn, the rest; n
 of a group, so its fp stay on its type's line, and the group's line has none. `report` gives
 one line per type, one per group, and one for the total; `main` prints it for a named detector.
 
-Known limits: near misses are not counted apart, a detection of one is a fp of its type; a type
-name the detector invents is printed as given, so text in a type name would be printed.
+A type the key does not hold, which only a detector names, is shown as OTHER and its number,
+never by its name, so that no text can be printed through a type's name.
+
+Known limits: near misses are not counted apart, a detection of one is a fp of its type.
 """
 
+import builtins
 import contextlib
 import importlib
 import io
 import logging
+import os
 import sys
 from collections import defaultdict
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Iterable, Iterator
 from dataclasses import dataclass
 
 from eval.heldout.generator import GROUP_MARK, Batch, build
@@ -44,6 +48,10 @@ TOTAL = "TOTAL"
 USAGE = "usage: python -m eval.heldout.scorer <module>:<function>"
 # A detection is a triple: start, end, type.
 TRIPLE = 3
+# The process's file handles of the output and the error stream.
+HANDLES = (1, 2)
+OTHER = "OTHER"
+OWN_CLASS = "an error of its own class"
 
 
 @dataclass
@@ -112,16 +120,28 @@ class DetectorError(Exception):
 
     Why: the detector's own message, and its traceback, may quote the document, which the session
     that writes the detectors must not see. Contract: the message names the document's index and
-    the error's type only; the detector's error is not chained to it.
+    the class of the error, by its name when it is one of Python's own and as OWN_CLASS when it
+    is the detector's, whose name it chose; the detector's error is not chained to it.
     """
 
 
+def _class_name(error: BaseException) -> str:
+    """Return the name of an error's class when it is one of Python's own, else OWN_CLASS."""
+    kind = type(error)
+    return kind.__name__ if getattr(builtins, kind.__name__, None) is kind else OWN_CLASS
+
+
 def _detections(detector: Detector, text: str, doc: int) -> list[object]:
-    """Return what the detector returns for one text, its own error or exit turned into a DetectorError."""
+    """Return what the detector returns for one text, any error or exit of its turned into a DetectorError.
+
+    An interrupt stops the run as before, raised again with no message and nothing chained.
+    """
     try:
         return list(detector(text))
-    except (Exception, SystemExit) as error:  # noqa: BLE001 re-raised as DetectorError at once, without its message
-        raise DetectorError(f"document {doc}: the detector raised {type(error).__name__}") from None
+    except KeyboardInterrupt:
+        raise KeyboardInterrupt from None
+    except BaseException as error:  # noqa: BLE001 re-raised as DetectorError at once, without its message
+        raise DetectorError(f"document {doc}: the detector raised {_class_name(error)}") from None
 
 
 def _partial(span: Span, by_place: dict[tuple[int, str], list[Span]]) -> bool:
@@ -181,14 +201,59 @@ def report(scores: Scores) -> list[str]:
     Why: what a PR body and the session that writes the detectors read; names and numbers only.
 
     Contract: a type's line is its name, then tp, fp, fn, partial, recall and precision, each
-    after its label, recall and precision with three decimals; a group's line is its name, tp,
-    fn and recall. The last line is TOTAL's.
+    after its label, recall and precision with three decimals; a type with no item in the key
+    (tp and fn both 0), which only a detector named, is shown as OTHER_1, OTHER_2 and so on, in
+    the order of its name; a group's line is its name, tp, fn and recall. The last line is TOTAL's.
     """
     def line(name: str, row: Counts) -> str:
         return f"{name:<17} tp {row.tp:5d}  fp {row.fp:5d}  fn {row.fn:5d}  partial {row.partial:5d}  recall {row.recall:.3f}  precision {row.precision:.3f}"
 
+    named, others = [], 0
+    for name, row in scores.per_type.items():
+        if row.tp + row.fn == 0:
+            others += 1
+            name = f"{OTHER}_{others}"
+        named.append(line(name, row))
     groups = [f"{name:<17} tp {row.tp:5d}  fn {row.fn:5d}  recall {row.recall:.3f}" for name, row in scores.per_group.items()]
-    return [*(line(name, row) for name, row in scores.per_type.items()), *groups, line(TOTAL, scores.total)]
+    return [*named, *groups, line(TOTAL, scores.total)]
+
+
+@contextlib.contextmanager
+def _held_back() -> Iterator[None]:
+    """Hold back, while the block runs, all a detector could write to the screen as it reads.
+
+    Why: the session that writes the detectors reads what `main` prints, and a detector's own
+    output may quote a document (review 1 of the branch, finding 2; scorer reviews 1 and 2).
+    Contract: inside the block logging is off; sys.stdout and sys.stderr, and the interpreter's
+    original sys.__stdout__ and sys.__stderr__, are buffers thrown away; and the process's file
+    handles 1 and 2 lead to the null device, so that a stream or a logging handler made before
+    the block, os.write and a C extension write nothing to the screen either. On leaving, the
+    original streams are flushed into the null device, then everything is put back as it was.
+    Raises OSError when the null device or a file handle cannot be opened or copied.
+    """
+    for stream in (sys.stdout, sys.stderr, sys.__stdout__, sys.__stderr__):
+        if stream is not None:
+            stream.flush()
+    was_off, originals = logging.root.manager.disable, (sys.__stdout__, sys.__stderr__)
+    null = os.open(os.devnull, os.O_WRONLY)
+    saved = [os.dup(handle) for handle in HANDLES]
+    logging.disable(logging.CRITICAL)
+    for handle in HANDLES:
+        os.dup2(null, handle)
+    sys.__stdout__, sys.__stderr__ = io.StringIO(), io.StringIO()
+    try:
+        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+            yield
+    finally:
+        for stream in originals:
+            if stream is not None:
+                stream.flush()
+        sys.__stdout__, sys.__stderr__ = originals
+        for handle, copy in zip(HANDLES, saved, strict=True):
+            os.dup2(copy, handle)
+            os.close(copy)
+        os.close(null)
+        logging.disable(was_off)
 
 
 def main(argv: list[str]) -> int:
@@ -197,32 +262,30 @@ def main(argv: list[str]) -> int:
     Why: the session that writes the detectors and a PR's gate run it as one command and read
     only its numbers.
 
-    Contract: argv is [module:function]; the function is imported and scored. While it runs,
-    what it prints is thrown away and logging is off, also through a handler made before (as
-    one made when its module is imported). Prints the lines of `report`, returns 0. A
-    DetectorError (also for an exit of the detector) or a ValueError of `score`: its message,
-    which holds no text, on the error stream, returns 1. Any other argv: the usage line on the
-    error stream, returns 2. An import that fails is raised.
+    Contract: argv is [module:function]; the function is imported and scored, all it writes
+    while it runs held back as `_held_back` says. Prints the lines of `report`, returns 0. A
+    DetectorError (for any error or exit of the detector) or a ValueError of `score`: its
+    message, which holds no text, on the error stream, returns 1. An interrupt is raised with no
+    message. Any other argv: the usage line on the error stream, returns 2. An import that
+    fails is raised.
 
-    Known limits: a detector that writes to the process's own file handles (os.write, a C
-    extension), or that turns logging back on itself, is not held back; what its module prints
-    while it is imported is not either.
+    Known limits: not held back are what the detector's module prints while it is imported,
+    before scoring starts; what the detector writes after `main` has returned, from a thread, an
+    atexit handler, a finalizer or a process it started; what it writes through a copy of file
+    handle 1 or 2 that it made before scoring (os.dup at import), or to a console or a terminal
+    it opens itself; and what a C library's own buffer flushes later.
     """
     if len(argv) != 1 or ":" not in argv[0]:
         print(USAGE, file=sys.stderr)
         return 2
     module, _, name = argv[0].partition(":")
     detector = getattr(importlib.import_module(module), name)
-    was_off = logging.root.manager.disable
-    logging.disable(logging.CRITICAL)
     try:
-        with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(io.StringIO()):
+        with _held_back():
             scores = score(detector)
     except (DetectorError, ValueError) as error:
         print(error, file=sys.stderr)
         return 1
-    finally:
-        logging.disable(was_off)
     for line in report(scores):
         print(line)
     return 0

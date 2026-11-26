@@ -30,8 +30,8 @@ streams write:
       planted text
 
 Known limits: what a detector writes after main has returned (a thread, an atexit handler, a
-process it started) and what it writes to a console it opens itself are not held back (the
-scorer's Known limits).
+process it started), through a copy of a file handle it made before main ran, or to a console
+it opens itself is not held back (the scorer's Known limits).
 """
 
 import logging
