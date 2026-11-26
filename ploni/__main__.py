@@ -47,6 +47,9 @@ NETWORK = (
 # build-plan.md Phase 0, Deliverable: the commands other than selftest, each built by a later phase.
 STUBS = ("scan", "analyze", "review", "export", "verify", "restore", "rehydrate", "report", "usage")
 NOT_BUILT = 2
+# A command stopped by an error no code caught: a code of its own, apart from selftest's 1 ("not
+# offline") and the 2 of a stub or a usage error, so that a caller can tell a failure (issue #213).
+FAILED = 3
 
 
 def inventory(models: Path) -> list[str]:
@@ -124,11 +127,16 @@ def main(argv: list[str] | None = None) -> int:
     `ploni.safety.logging` is installed on the error stream, so every log record from then
     on, a library's too, is written by it, within the filter's Known limits: a record logged
     while ploni/ is imported, before `main` runs, is not, nor one of a library that adds a
-    handler of its own later (issue #211).
+    handler of its own later (issue #211). An error that a command raises and no code catches
+    stops the command with FAILED and one line on the error stream, "ploni <command>: failed:
+    <type name>": its message, which may quote a document, is not written, nor its traceback
+    (issue #213).
 
     Known limits: a stub and a usage error both exit 2. An argument argparse does not know,
     such as a file name, is repeated on the error stream: that is argparse writing, not a log
-    record, and the filter does not see it.
+    record, and the filter does not see it. An interrupt (Ctrl+C) and an exit are not errors
+    and are not caught. A type name is written as it is, so a class named at run time from a
+    document would show that name.
     """
     logging.install(sys.stderr)
     parser = argparse.ArgumentParser(prog="ploni", description=__doc__.splitlines()[0] if __doc__ else None)
@@ -136,12 +144,16 @@ def main(argv: list[str] | None = None) -> int:
     for name in ("selftest", *STUBS):
         commands.add_parser(name)
     command = parser.parse_args(argv).command
-    if command == "selftest":
-        if isinstance(sys.stdout, io.TextIOWrapper):
-            sys.stdout.reconfigure(errors="backslashreplace")
-        return selftest(MODELS, sys.stdout)
-    sys.stderr.write(f"ploni {command}: not built yet\n")
-    return NOT_BUILT
+    try:
+        if command == "selftest":
+            if isinstance(sys.stdout, io.TextIOWrapper):
+                sys.stdout.reconfigure(errors="backslashreplace")
+            return selftest(MODELS, sys.stdout)
+        sys.stderr.write(f"ploni {command}: not built yet\n")
+        return NOT_BUILT
+    except Exception as error:  # noqa: BLE001 the program's last catch: an error's message may quote a document, so only its type is written (issue #213)
+        sys.stderr.write(f"ploni {command}: failed: {type(error).__name__}\n")
+        return FAILED
 
 
 if __name__ == "__main__":

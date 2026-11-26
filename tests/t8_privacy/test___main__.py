@@ -98,12 +98,16 @@ raise SystemExit(code)
 """
 
 
+def start(program: str, *arguments: str) -> subprocess.CompletedProcess[bytes]:
+    """Run a program text in a fresh interpreter with its arguments; return the finished process, its streams as bytes."""
+    return subprocess.run(  # noqa: S603 fixed argv, no shell
+        [sys.executable, "-c", program, *arguments], cwd=ROOT, capture_output=True, timeout=60, check=False,
+    )  # fmt: skip
+
+
 def run(when: str, command: str, level: str, message: str, argument: str = "") -> subprocess.CompletedProcess[bytes]:
     """Run PROGRAM in a fresh interpreter; return the finished process, its streams as bytes."""
-    return subprocess.run(  # noqa: S603 fixed argv, no shell
-        [sys.executable, "-c", PROGRAM, when, command, level, message, argument],
-        cwd=ROOT, capture_output=True, timeout=60, check=False,
-    )  # fmt: skip
+    return start(PROGRAM, when, command, level, message, argument)
 
 
 def withheld(stream: bytes, level: str) -> list[bytes]:
@@ -183,9 +187,7 @@ FAILED = 3
 
 def crash(kind: str, message: str) -> subprocess.CompletedProcess[bytes]:
     """Run CRASHING in a fresh interpreter; return the finished process, its streams as bytes."""
-    return subprocess.run(  # noqa: S603 fixed argv, no shell
-        [sys.executable, "-c", CRASHING, kind, message], cwd=ROOT, capture_output=True, timeout=60, check=False,
-    )  # fmt: skip
+    return start(CRASHING, kind, message)
 
 
 def assert_failed(done: subprocess.CompletedProcess[bytes], name: str, canary: str) -> None:
