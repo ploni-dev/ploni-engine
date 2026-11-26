@@ -43,10 +43,10 @@ from typing import BinaryIO
 
 # Who may open a lock file that `take` makes: its owner, as the private folders (tempfiles).
 OWNER_READ_WRITE = 0o600
-# How often, and after how long a pause, `again` tries an action that met another run: "waits a
-# few hundredths of a second and tries again, a few times" (Achia, 2026-11-26, #212). At most
-# four pauses, 0.08 s in all, against a moment of two runs measured at under 1.3 ms (the review
-# of b7390ae).
+# How often, and after how long a pause, `again` tries an action that met another run: "each
+# wait a few hundredths of a second and try again, a few times" (Achia, 2026-11-26, "All four
+# (Recommended)", #212). At most four pauses, 0.08 s in all, against the moment in which a start
+# can lose the race, measured at a median of 1.0 ms and at most 9.6 ms (the review of d5de41e).
 ATTEMPTS = 5
 PAUSE_SECONDS = 0.02
 
@@ -126,7 +126,8 @@ def again[T](action: Callable[[], T], errors: tuple[type[BaseException], ...]) -
             ATTEMPTS tries have failed, after ATTEMPTS - 1 pauses of PAUSE_SECONDS.
 
     Known limits: an action that is not safe to run twice must not be given; the callers give
-    one call each (a rename, a removal, a take, a start that leaves nothing when it fails).
+    a rename, a removal, a take, a start that leaves nothing when it fails, and a write that
+    makes a new partial file each try.
     """
     for _ in range(ATTEMPTS - 1):
         try:

@@ -46,9 +46,10 @@ Known limits:
   name.
 - Between the making of a private folder and the holding of its lock there is a moment in
   which another run's `sweep` takes the folder for a crashed run's. The sweep holds the
-  folder's lock while it removes it, so the starting run cannot use it: it fails at its start,
-  before its block runs, with FileExistsError (the sweep made the lock file), OSError (the
-  sweep holds it) or FileNotFoundError (the sweep removed the folder). Two runs started in the
+  folder's lock while it removes it, so the starting run cannot use it: its start fails,
+  before its block runs, with FileExistsError (the sweep made the lock file), PermissionError
+  on Windows or BlockingIOError elsewhere (the sweep holds it) or FileNotFoundError (the sweep
+  removed the folder). Two runs started in the
   same millisecond so cost one of them a start, which `private_dir` makes again in a new folder,
   a few times, before it fails loudly (`ploni.safety.locks.again`, #212); no byte of a run that
   has begun is changed (the review of b7390ae, finding 1). A sweep's take of a lock file that
@@ -82,7 +83,7 @@ PREFIX = "ploni-"
 # stands beside the folder, not in it, so that the folder is empty when the block begins.
 LOCK_SUFFIX = ".lock"
 # The errors with which a start loses the race with another run's sweep (`_started`).
-STARTS_LOST: tuple[type[OSError], ...] = (FileExistsError, PermissionError, FileNotFoundError)
+STARTS_LOST: tuple[type[OSError], ...] = (FileExistsError, PermissionError, BlockingIOError, FileNotFoundError)
 
 # Zeros are written in pieces of this size, so that a large file needs no large buffer.
 CHUNK = 1024 * 1024
@@ -289,7 +290,7 @@ def _started(root: Path) -> tuple[Path, BinaryIO]:
     """Make a private folder under root and hold its lock; when a sweep takes it meanwhile, leave nothing of it and raise.
 
     The errors of a lost race are those of STARTS_LOST: FileExistsError (the sweep made the lock
-    file), PermissionError (it holds it) or FileNotFoundError (it removed the folder before the
+    file), PermissionError on Windows or BlockingIOError elsewhere (it holds it) or FileNotFoundError (it removed the folder before the
     hold; the review of b7390ae, finding 1). Any other error of making the folder passes as it is.
     """
     folder = Path(_tempfile.mkdtemp(prefix=PREFIX, dir=root))
@@ -337,7 +338,7 @@ def sweep(root: Path) -> int:
     Known limits: a folder that can never be removed is tried, and reported, at every
     start. A crashed run whose lock the system has not yet freed (`ploni.safety.locks`,
     Known limits) is left for one more start. A run that starts in the moment the sweep
-    takes its folder fails at its start (the module docstring).
+    takes its folder loses that start and starts again in a new folder (the module docstring).
     """
     left = [folder for folder in sorted(root.glob(f"{PREFIX}*")) if folder.is_dir() and not _is_link(folder)]
     stuck: list[OSError] = []

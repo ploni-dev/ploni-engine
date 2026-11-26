@@ -9,8 +9,9 @@ Contract: `write_atomic` leaves the target holding either its old bytes (or no f
 of the new ones. When it fails before the rename it tries to remove its partial file, and
 the first error passes through. A crash that kills the process before the rename leaves the
 partial file behind: `sweep_partials` removes such files from a folder, and leaves the partial
-file of a write that is still running, which holds it (`ploni.safety.locks`, issue #212). It must be called
-when a run starts, before any export; no caller exists yet (the exporter, Phase 9).
+file of a write that is still running, which holds it (`ploni.safety.locks`, issue #212), and
+any partial file younger than YOUNG_SECONDS. It must be called when a run starts, before any
+export; no caller exists yet (the exporter, Phase 9).
 
 Known limits:
 - One file is made whole. A set of files, and the mapping beside them, is not written as
@@ -44,6 +45,7 @@ Known limits:
 
 import os
 import secrets
+import time
 from contextlib import suppress
 from functools import partial
 from pathlib import Path
@@ -58,8 +60,13 @@ PARTIAL_PREFIX = ".ploni-partial-"
 # target do not draw the same name. On Windows two such writers still collide at the rename
 # (see Known limits).
 NAME_BYTES = 8
-# The errors with which a write meets another run's sweep, and is made again (#212).
-RACES: tuple[type[OSError], ...] = (PermissionError, FileNotFoundError)
+# The error with which a rename finds its partial file gone, and the write is made again (#212).
+RACES: tuple[type[OSError], ...] = (FileNotFoundError,)
+# How old a partial file must be, by its last change, before `sweep_partials` removes it: "older
+# than 60 seconds" (Achia, 2026-11-26, "Skip young files (Recommended)", #212). On Windows a
+# removal by name can land on the target that a writer renames the file onto in that moment
+# (the review of d5de41e, finding 1), so a live write's file is never removed.
+YOUNG_SECONDS = 60
 
 
 def _open_partial(path: Path) -> BinaryIO:
@@ -91,18 +98,18 @@ def write_atomic(path: Path, data: bytes) -> None:
     are flushed to disk, and the partial file then replaces the target. The partial file is
     held while it is written (`ploni.safety.locks`). On any error before
     the rename, also one that is not an Exception, the partial file is removed if it can be.
-    A try that meets another run's sweep (RACES: a hold the sweep took first, a rename in the
-    moment the sweep has the partial file open, or one that finds it removed between its close
-    and its rename) is made again with a new partial file, `locks.again`'s ATTEMPTS tries in
-    all (Achia, 2026-11-26, #212); then that error passes through, as does any other error of
-    the first try that fails. The target is then as it was. FileExistsError when the random
-    name of the partial file is taken: the file that has the name is left as it is.
-    FileNotFoundError when the folder does not exist, after ATTEMPTS tries. An OSError after
-    the rename (the folder flush on POSIX) means the target already holds all the new bytes.
+    A rename refused with PermissionError is tried again, alone, `locks.again`'s ATTEMPTS
+    tries in all; a rename that finds its partial file gone (RACES) makes the whole write
+    again with a new partial file, ATTEMPTS tries in all (Achia, 2026-11-26, #212). Then that
+    error passes through, as does any other error at once; the target is then as it was.
+    FileExistsError when the random name of the partial file is taken: the file that has the
+    name is left as it is. FileNotFoundError when the folder does not exist, after ATTEMPTS
+    tries. An OSError after the rename (the folder flush on POSIX) means the target already
+    holds all the new bytes.
 
     Known limits: see the module docstring. A target that cannot be replaced for good (on
-    Windows one that is read-only or open in another program) fails after ATTEMPTS tries,
-    0.08 s later than at once.
+    Windows one that is read-only or open in another program) fails after ATTEMPTS tries of
+    the rename, 0.08 s later than at once; the bytes are written once.
     """
     locks.again(partial(_write_once, path, data), RACES)
     _sync_folder(path.parent)
@@ -121,7 +128,8 @@ def _write_once(path: Path, data: bytes) -> None:
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(partial_path, path)
+        # Tried again for a moment in which another program has the target or the file open (#212).
+        locks.again(partial(os.replace, partial_path, path), (PermissionError,))
     except BaseException:
         # A clean-up that fails must not hide why the write failed; the sweep gets the file.
         with suppress(OSError):
@@ -137,7 +145,8 @@ def sweep_partials(folder: Path) -> int:
 
     Contract: removes the entries directly in `folder` whose names begin with PARTIAL_PREFIX
     and that are not folders, but for a partial file that a live write holds
-    (`ploni.safety.locks`, issue #212); returns how many. A symbolic link with the prefix is
+    (`ploni.safety.locks`, issue #212) and one whose last change is less than YOUNG_SECONDS
+    old (Achia, 2026-11-26, #212); returns how many. A symbolic link with the prefix is
     removed itself, without looking at what it points to, which is not touched. Every such entry is tried; when one cannot be
     removed, the first error is raised after the others were tried. A folder that does not
     exist gives 0.
@@ -145,26 +154,20 @@ def sweep_partials(folder: Path) -> int:
     Known limits:
     - Deeper folders are not looked at. A Windows junction with the prefix is left: it counts
       as a folder.
-    - A partial file that its writer made and has not yet held: if the writer's hold comes
-      while the sweep holds the file, the hold fails with OSError before it writes, the
-      target is as it was, and the sweep removes the file. If it comes after the sweep gave
-      the lock back and before the removal, the write goes on: on Windows the removal fails
-      and the sweep raises, and the write ends whole; on POSIX the removal succeeds and the
-      write fails at the rename, the target as it was. A partial file that its writer has
-      just closed, before the rename, is removed on every system: the write then fails at
-      the rename, the target as it was (the reviews of b7390ae and 5d1ee74).
-    - The sweep opens each partial file for a moment. On Windows a writer's rename in that
-      moment fails with PermissionError, the target as it was: measured in about 1 in 15
-      writes of four runs (1 in 50 of two runs) that wrote and swept the same folder at once
-      without a pause (the reviews of 5d1ee74 and 55fdeff). `write_atomic` makes such a write
-      again (RACES), and a sweep's take or removal that meets another run is tried again
-      (`locks.again`), before either fails loudly (#212).
+    - A crashed run's partial file younger than YOUNG_SECONDS is left for a later start: a
+      start within a minute of the crash leaves it. So is one whose last change the clock
+      puts in the future, until the clock passes it.
+    - A live write whose partial file was last changed YOUNG_SECONDS before and is not yet
+      held (a write stopped that long between the making of its file and its hold) can be
+      taken by a sweep: its hold then fails with OSError before it writes, the target as it
+      was (the review of b7390ae).
+    - A take or a removal refused with PermissionError (on Windows, a file another program
+      has open) is tried again (`locks.again`) before it counts as one that cannot be
+      removed. A partial file gone at its removal, renamed or removed by another run in that
+      moment, is no error and is not counted (#212).
     - An OSError from `locks.take` (a partial file that cannot be opened for reading and
       writing) counts as one that cannot be removed: the first such error is raised at the
-      end. A sweep can so fail, loudly, on another run's partial file that is being written
-      or renamed in that moment: about 1 in 7 calls in the same four-run stress, as a
-      PermissionError of the open or of the removal, or a FileNotFoundError of the removal
-      (the review of 55fdeff). Nothing is lost; the sweep runs again at the next start.
+      end. Nothing is lost; the sweep runs again at the next start.
     """
     if not folder.is_dir():
         return 0
@@ -174,6 +177,8 @@ def sweep_partials(folder: Path) -> int:
         if entry.name.startswith(PARTIAL_PREFIX) and not entry.is_dir(follow_symlinks=False):
             try:
                 if not entry.is_symlink():
+                    if time.time() - entry.stat().st_mtime < YOUNG_SECONDS:
+                        continue
                     # Taken, then given back before the removal: a writer whose hold comes
                     # while it is taken fails before it writes (the Known limits, issue #212).
                     taken = locks.again(partial(locks.take, Path(entry.path)), (PermissionError,))
