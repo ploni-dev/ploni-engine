@@ -1,4 +1,4 @@
-"""Tests of .github/workflows/pr-checks.yml: its code lines, exactly as merged in #229.
+"""Tests of .github/workflows/pr-checks.yml: its code lines, as merged in #229 or with the steps of #170.
 
 Why: pr-checks runs the small checks of a PR as steps of one job (issue #209; Achia, 2026-11-25,
 "Yes, add it (Recommended)", with its lines shown to him, and "Yes, trusted checks first
@@ -22,6 +22,25 @@ Equivalence class:
      at main-copy, then changed-paths, pr-size, pr-body, ratchet and waiver with the commands
      their own workflows had until those were deleted (#258). Any changed, added, removed or
      moved line is red; a comment is not.
+  F2 the pin (`pinned`): step 2 of the five PRs of issue #170 (Achia, 2026-11-26, "Yes, all
+     three (Recommended)", issuecomment-7200916140). Until the workflow PR lands, and the PR
+     after it drops the old shape, the code lines may also be those of the approved form: the 48
+     of EXPECTED with the 37 lines of that record inserted after its code line 32 (the run line
+     of the reviewed-commit check), 73 code lines. Those lines name the folder of the held-out
+     batch, which no test file outside the batch's own may name (the batch's isolation test in
+     tests/t8_privacy/ refuses it), so the pin holds their digest, NEXT_SHA256, and not their text
+     (see the comment beside it for how it is computed).
+       F2a the digest is the sha256 of the lines joined with LF, encoded as ASCII, in hex
+       F2b lines whose digest is NEXT_SHA256 are accepted (shown with a made-up list and its
+           digest put in its place, as the approved lines cannot be written here)
+       F2c refused: EXPECTED without its last line, with one line changed, with one line more;
+           the made-up 73-line list under the real digest
+     Not here: copies of the approved form edited (one line dropped, `-P` dropped, the PR's
+     workspace on the path, the check made `true`, the steps moved, one step only, the steps
+     twice). Each would spell the approved lines. They were run against this pin outside the
+     tests, from a copy of the record's lines, and refused (the message of commit e1c100c, "the
+     pin of pr-checks.yml accepts the approved score-guard steps too"); any one-character change
+     of the 73 lines changes the digest.
 Hebrew and document axes: do not apply; the input is a workflow file.
 Known limits: one PR with no .py file that edits fast.yml and fast-pin.yml together with
 pr-checks.yml stops this test with them, every check green (the fast suite runs the PR's copy of
@@ -48,7 +67,11 @@ does not run is refused by the merge gate since #241; what GitHub does with eith
 not measured (the same review, findings 2 and 8).
 """
 
+import hashlib
+import sys
 from pathlib import Path
+
+import pytest
 
 from tests.workflow_lines import code_lines
 
@@ -107,5 +130,54 @@ EXPECTED = [
 ]
 
 
+
+# Issue #170, step 2 of five (Achia, 2026-11-26, "Yes, all three (Recommended)",
+# issuecomment-7200916140). The approved form's 73 code lines: the 48 of EXPECTED with the 37
+# lines of that record (the block after "The 37 lines inserted after it, exactly as they would be
+# committed"), byte for byte, inserted after EXPECTED's code line 32, the run line of the
+# reviewed-commit check, and read with code_lines(). Their text cannot stand here: they name the
+# folder of the held-out batch, and the batch's isolation test in tests/t8_privacy/ refuses a
+# test file that does. So they are pinned by their digest. To recompute it: take the record's 37 lines (or,
+# after the workflow PR, .github/workflows/pr-checks.yml itself), read the file with code_lines(),
+# join the 73 lines with "\n" and no line end after the last, encode as ASCII, take sha256, and
+# write it in lowercase hex.
+NEXT_SHA256 = "95c26cc497753dc710532fe2dc1d7b404cf5248e77843ef0777bcf2294a3b3a2"
+# The run line of the reviewed-commit check is code line 32 (index 31) of EXPECTED.
+AFTER = 32
+# A made-up 73-line list, for F2b and F2c only: it is not the approved form.
+MADE_UP = EXPECTED[:AFTER] + ["      - run: echo made up"] * 25 + EXPECTED[AFTER:]
+
+
+def digest(lines: list[str]) -> str:
+    """Return the sha256, in hex, of code lines joined with LF and encoded as ASCII."""
+    return hashlib.sha256("\n".join(lines).encode("ascii")).hexdigest()
+
+
+def pinned(lines: list[str]) -> bool:
+    """Say whether a workflow's code lines are the ones the pin accepts: today's, or the approved form's."""
+    return lines == EXPECTED or digest(lines) == NEXT_SHA256
+
+
 def test_f1_the_workflow() -> None:
-    assert code_lines(WORKFLOW) == EXPECTED
+    assert pinned(code_lines(WORKFLOW))
+
+
+def test_f2a_the_digest() -> None:
+    assert digest(["a", "b"]) == hashlib.sha256(b"a\nb").hexdigest()
+    assert len(NEXT_SHA256) == 64 and set(NEXT_SHA256) <= set("0123456789abcdef")
+    assert digest(EXPECTED) != NEXT_SHA256 and len(MADE_UP) == 73
+
+
+def test_f2b_lines_with_the_pinned_digest_are_accepted(monkeypatch: pytest.MonkeyPatch) -> None:
+    monkeypatch.setattr(sys.modules[__name__], "NEXT_SHA256", digest(MADE_UP))
+    assert pinned(MADE_UP)
+    assert pinned(EXPECTED)
+
+
+@pytest.mark.parametrize(
+    "lines",
+    [EXPECTED[:-1], [*EXPECTED[:-1], "          PR_BODY: x"], [*EXPECTED, "      - run: true"], MADE_UP],
+    ids=["one line fewer", "one line changed", "one line more", "73 made-up lines"],
+)
+def test_f2c_other_lines_are_refused(lines: list[str]) -> None:
+    assert not pinned(lines)
