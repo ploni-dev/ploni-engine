@@ -67,6 +67,9 @@ The four retries (issue #212, Achia, 2026-11-26). Equivalence classes:
        another handle before its hold, or its folder gone after its hold), once -> started
        again in a new folder; the block runs once; the root is left as it was but for what the
        race left; where it lost to a removed folder, no lock file of its own is left
+  EC30 a start that loses the race after its hold    its folder is removed while its own lock file
+       is still there, as at a block's end, so that no sweep comes between (the review of
+       75c350d, finding 9)
   EC29 a start that loses the race every time -> the error after ATTEMPTS tries; the block never
        runs; no folder of its own is left
 The helper's own copy of tempfile (issue #278). Equivalence classes:
@@ -1143,3 +1146,23 @@ def test_ec29_a_start_that_loses_the_race_every_time(tmp_path: Path, monkeypatch
         assert list(tmp_path.iterdir()) == []
     assert len(starts) == locks.ATTEMPTS
     assert [entry for entry in tmp_path.iterdir() if entry.is_dir()] == []
+
+
+def test_ec30_a_lost_start_removes_its_folder_before_its_lock(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, no_pause: None) -> None:
+    taken: list[Any] = []
+    lost_race(monkeypatch, "folder gone", 1, taken)
+    real_remove = tempfiles._remove
+    locked_at_removal: list[bool] = []
+
+    def remove(folder: Path) -> None:
+        locked_at_removal.append(tempfiles._lock_of(folder).exists())
+        real_remove(folder)
+
+    monkeypatch.setattr(tempfiles, "_remove", remove)
+    try:
+        with tempfiles.private_dir(tmp_path):
+            pass
+    finally:
+        for handle in taken:
+            handle.close()
+    assert locked_at_removal == [True, True]

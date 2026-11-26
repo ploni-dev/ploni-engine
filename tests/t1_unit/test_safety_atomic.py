@@ -65,6 +65,8 @@ sweep_partials. Equivalence classes:
        no error, not counted
   EC16 a rename that finds its partial file gone (another run's sweep removed it between its
        close and its rename, #212)    the write is made again; the target holds all its bytes
+  EC17 a partial file whose last change is an hour ahead of the clock    left, not counted
+       (the Known limits; the review of 75c350d, finding 8)
   EC17 a partial file younger than YOUNG_SECONDS that no one holds (Achia, 2026-11-26, "Skip
        young files (Recommended)", #212)    left, not counted; one a second older than
        YOUNG_SECONDS    removed
@@ -90,16 +92,10 @@ from typing import BinaryIO
 import pytest
 
 from ploni.safety import atomic, locks
+from tests.locking import aged
 
 TEXT = "ישראל ישראלי, ת.ז. 123456782".encode()
 
-
-def aged(folder: Path) -> None:
-    """Make every partial file in a folder older than YOUNG_SECONDS, as a crashed run's is at the next start."""
-    then = time.time() - 2 * atomic.YOUNG_SECONDS
-    for entry in folder.iterdir():
-        if entry.name.startswith(atomic.PARTIAL_PREFIX) and not entry.is_symlink():
-            os.utime(entry, (then, then))
 
 
 def leftovers(folder: Path, keep: str) -> list[str]:
@@ -663,3 +659,12 @@ def test_ec17_the_sweep_goes_on_past_a_young_partial_file(tmp_path: Path) -> Non
     young.write_bytes(b"part")
     assert atomic.sweep_partials(tmp_path) == 1
     assert os.listdir(tmp_path) == [young.name]
+
+
+def test_ec17_a_partial_file_changed_in_the_future_is_left(tmp_path: Path) -> None:
+    path = tmp_path / f"{atomic.PARTIAL_PREFIX}a.docx.1"
+    path.write_bytes(b"part")
+    ahead = time.time() + 3600
+    os.utime(path, (ahead, ahead))
+    assert atomic.sweep_partials(tmp_path) == 0
+    assert path.exists()

@@ -29,24 +29,16 @@ the helpers' stated limit. The Hebrew and document-structure axes do not apply: 
 fixed.
 """
 
-import os
 import subprocess
 import sys
 import time
 from pathlib import Path
 
 from ploni.safety import atomic, tempfiles
-from tests.locking import held
+from tests.locking import aged, held
 
 ROOT = Path(__file__).resolve().parents[2]
 
-
-def aged(folder: Path) -> None:
-    """Make every partial file in a folder older than YOUNG_SECONDS, as a crashed run's is at the next start."""
-    then = time.time() - 2 * atomic.YOUNG_SECONDS
-    for entry in folder.iterdir():
-        if entry.name.startswith(atomic.PARTIAL_PREFIX) and not entry.is_symlink():
-            os.utime(entry, (then, then))
 
 CONTENT = b"what a live run is still working on"
 # How long a lock may stay after its process was killed: Windows frees it "after a delay"
