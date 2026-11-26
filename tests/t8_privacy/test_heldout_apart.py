@@ -48,10 +48,9 @@ read the batch; the author may not, by Claude's reading of issue 283):
     holds the batch's own compiled tests; R2 still reads such a file's imports.
 """
 
-import os
 from pathlib import Path
 
-from tests.project_imports import SOURCE_SUFFIXES, UNREADABLE, Import, imported, project_imports
+from tests.project_imports import UNREADABLE, Import, imported, project_imports
 
 ROOT = Path(__file__).resolve().parents[2]
 NAME = "heldout"
@@ -103,32 +102,17 @@ def by_text(root: Path) -> list[str]:
     return sorted(found)
 
 
-def _sources(root: Path) -> list[Path]:
-    """The Python files of CODE_FOLDERS, the folders of SKIPPED left out before they are walked.
+def _imports(root: Path) -> list[Import]:
+    """Every import of the Python files of CODE_FOLDERS and of the root itself.
 
     Why: a virtual environment under experiments/ holds thousands of third-party files, and
-    parsing them made the scan take minutes in the main checkout (review 3, finding 38).
+    parsing them made the scan take minutes in the main checkout (review 3, finding 38); so the
+    folders of SKIPPED are left out, but under ploni/ and tests/, where every file is read
+    (review 4, finding 40).
     """
-    found = []
-    for folder in CODE_FOLDERS:
-        for place, names, files in os.walk(root / folder):
-            names[:] = sorted(name for name in names if name not in SKIPPED)
-            found += [Path(place) / name for name in sorted(files) if Path(name).suffix.lower() in SOURCE_SUFFIXES]
-    return found
-
-
-def _imports(root: Path) -> list[Import]:
-    """Every import of the Python files of CODE_FOLDERS and of the root itself."""
-    found = []
-    for path in [*_sources(root), *sorted(root.glob("*.py"))]:
-        parts = path.relative_to(root).with_suffix("").parts
-        is_package = parts[-1] == "__init__"
-        importer, relative = ".".join(parts[:-1] if is_package else parts), path.relative_to(root).as_posix()
-        try:
-            lines = imported(path.read_bytes(), importer, is_package)
-        except (SyntaxError, ImportError) as error:
-            raise type(error)(f"{relative}: {error}") from error
-        found += [Import(relative, line, importer, module) for line, module in lines]
+    found = [item for folder in CODE_FOLDERS for item in project_imports(root, folder, () if folder in GUARDED else SKIPPED)]
+    for path in sorted(root.glob("*.py")):
+        found += [Import(path.name, line, path.stem, module) for line, module in imported(path.read_bytes(), path.stem)]
     return found
 
 
