@@ -58,6 +58,8 @@ PARTIAL_PREFIX = ".ploni-partial-"
 # target do not draw the same name. On Windows two such writers still collide at the rename
 # (see Known limits).
 NAME_BYTES = 8
+# The errors with which a write meets another run's sweep, and is made again (#212).
+RACES: tuple[type[OSError], ...] = (PermissionError, FileNotFoundError)
 
 
 def _open_partial(path: Path) -> BinaryIO:
@@ -88,17 +90,26 @@ def write_atomic(path: Path, data: bytes) -> None:
     Contract: `path` is the target. The bytes go to a new partial file in the same folder,
     are flushed to disk, and the partial file then replaces the target. The partial file is
     held while it is written (`ploni.safety.locks`). On any error before
-    the rename, also one that is not an Exception, the partial file is removed if it can be
-    and the first error passes through; among them the OSError of a hold that another run's
-    sweep took first, and, on Windows, the PermissionError of a rename in the moment another
-    run's sweep has the partial file open (the sweep's Known limits). The target is then as
-    it was. FileExistsError when the random name of the partial
-    file is taken: the file that has the name is left as it is. FileNotFoundError when the
-    folder does not exist. An OSError after the rename (the folder flush on POSIX) means the
-    target already holds all the new bytes.
+    the rename, also one that is not an Exception, the partial file is removed if it can be.
+    A try that meets another run's sweep (RACES: a hold the sweep took first, a rename in the
+    moment the sweep has the partial file open, or one that finds it removed between its close
+    and its rename) is made again with a new partial file, `locks.again`'s ATTEMPTS tries in
+    all (Achia, 2026-11-26, #212); then that error passes through, as does any other error of
+    the first try that fails. The target is then as it was. FileExistsError when the random
+    name of the partial file is taken: the file that has the name is left as it is.
+    FileNotFoundError when the folder does not exist, after ATTEMPTS tries. An OSError after
+    the rename (the folder flush on POSIX) means the target already holds all the new bytes.
 
-    Known limits: see the module docstring.
+    Known limits: see the module docstring. A target that cannot be replaced for good (on
+    Windows one that is read-only or open in another program) fails after ATTEMPTS tries,
+    0.08 s later than at once.
     """
+    locks.again(partial(_write_once, path, data), RACES)
+    _sync_folder(path.parent)
+
+
+def _write_once(path: Path, data: bytes) -> None:
+    """Write the bytes to a new partial file beside the target and put it in the target's place; remove it on any error."""
     partial_path = path.with_name(f"{PARTIAL_PREFIX}{path.name}.{secrets.token_hex(NAME_BYTES)}")
     # Opened before the try: a name that is taken raises here, and the file that has it is
     # another writer's, which must not be removed.
@@ -110,14 +121,12 @@ def write_atomic(path: Path, data: bytes) -> None:
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
-        # Tried again for a moment in which another run's sweep has the partial file open (#212).
-        locks.again(lambda: os.replace(partial_path, path), (PermissionError,))
+        os.replace(partial_path, path)
     except BaseException:
         # A clean-up that fails must not hide why the write failed; the sweep gets the file.
         with suppress(OSError):
             partial_path.unlink()
         raise
-    _sync_folder(path.parent)
 
 
 def sweep_partials(folder: Path) -> int:
@@ -147,7 +156,9 @@ def sweep_partials(folder: Path) -> int:
     - The sweep opens each partial file for a moment. On Windows a writer's rename in that
       moment fails with PermissionError, the target as it was: measured in about 1 in 15
       writes of four runs (1 in 50 of two runs) that wrote and swept the same folder at once
-      without a pause (the reviews of 5d1ee74 and 55fdeff).
+      without a pause (the reviews of 5d1ee74 and 55fdeff). `write_atomic` makes such a write
+      again (RACES), and a sweep's take or removal that meets another run is tried again
+      (`locks.again`), before either fails loudly (#212).
     - An OSError from `locks.take` (a partial file that cannot be opened for reading and
       writing) counts as one that cannot be removed: the first such error is raised at the
       end. A sweep can so fail, loudly, on another run's partial file that is being written
