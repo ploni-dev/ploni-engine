@@ -933,7 +933,11 @@ def test_ec18_a_run_whose_lock_file_a_sweep_made(tmp_path: Path, monkeypatch: py
     with pytest.raises(FileExistsError), tempfiles.private_dir(tmp_path):
         ran.append(True)
     assert ran == []
-    assert [entry.is_dir() for entry in tmp_path.iterdir()] == [False]
+    # A sweep made the lock file of every start, so each of the ATTEMPTS starts (#212) left one,
+    # the sweep's to remove; no folder is left.
+    entries = list(tmp_path.iterdir())
+    assert [entry.is_dir() for entry in entries] == [False] * locks.ATTEMPTS
+    assert all(entry.name.endswith(tempfiles.LOCK_SUFFIX) for entry in entries)
 
 
 def test_ec19_a_run_whose_folder_a_sweep_removed_before_the_hold(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:

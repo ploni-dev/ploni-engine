@@ -49,9 +49,11 @@ Known limits:
   folder's lock while it removes it, so the starting run cannot use it: it fails at its start,
   before its block runs, with FileExistsError (the sweep made the lock file), OSError (the
   sweep holds it) or FileNotFoundError (the sweep removed the folder). Two runs started in the
-  same millisecond can so cost one of them its start; no byte of a run that has begun is
-  changed (the review of b7390ae, finding 1). A sweep can itself fail, loudly, with a
-  PermissionError of opening a lock file of another run in that moment (`sweep`, Raises).
+  same millisecond so cost one of them a start, which `private_dir` makes again in a new folder,
+  a few times, before it fails loudly (`ploni.safety.locks.again`, #212); no byte of a run that
+  has begun is changed (the review of b7390ae, finding 1). A sweep's take of a lock file that
+  meets another run's in that moment is tried again the same way before the sweep fails loudly
+  (`sweep`, Raises).
 """
 
 import os
@@ -64,7 +66,9 @@ import threading
 from collections import Counter
 from collections.abc import Iterator
 from contextlib import contextmanager, suppress
+from functools import partial
 from pathlib import Path
+from typing import BinaryIO
 
 from ploni.safety import locks
 
@@ -77,6 +81,8 @@ PREFIX = "ploni-"
 # held while the block runs, so that another run's `sweep` leaves the folder (issue #212). It
 # stands beside the folder, not in it, so that the folder is empty when the block begins.
 LOCK_SUFFIX = ".lock"
+# The errors with which a start loses the race with another run's sweep (`_started`).
+STARTS_LOST: tuple[type[OSError], ...] = (FileExistsError, PermissionError, FileNotFoundError)
 
 # Zeros are written in pieces of this size, so that a large file needs no large buffer.
 CHUNK = 1024 * 1024
@@ -256,33 +262,54 @@ def private_dir(root: Path) -> Iterator[Path]:
         Raises: OSError when the folder cannot be made, and ValueError for a root that
             no path can be (one with a null character); FileExistsError, OSError or
             FileNotFoundError at the start, before the block runs, when another run's sweep
-            took the folder in that moment (the module docstring); NotRemoved when the folder cannot
+            took the folder in each of ATTEMPTS starts (`ploni.safety.locks`; one lost start is
+            made again in a new folder, the module docstring); NotRemoved when the folder cannot
             be removed at the end, also in place of an error of the block itself.
             Otherwise an error of the block passes through.
 
     Known limits: see the module docstring.
     """
     root.mkdir(mode=OWNER_ONLY, parents=True, exist_ok=True)
-    folder = Path(_tempfile.mkdtemp(prefix=PREFIX, dir=root))
+    # A start that loses the race with another run's sweep is made again in a new folder (#212).
+    folder, lock = locks.again(partial(_started, root), STARTS_LOST)
     lock_path = _lock_of(folder)
-    lock = None
     try:
-        lock = open(lock_path, "xb")
-        locks.hold(lock)
-        # A sweep that took the folder for a crashed run's in the moment before the hold has
-        # removed it: the block must not begin (the review of b7390ae, finding 1).
-        if not folder.is_dir():
-            raise FileNotFoundError("the private folder was removed before its block began")
         with _as_temp_of_process(folder):
             yield folder
     finally:
         try:
             _remove(folder)
         finally:
-            if lock is not None:
-                lock.close()
-                with suppress(OSError):
-                    lock_path.unlink()
+            lock.close()
+            with suppress(OSError):
+                lock_path.unlink()
+
+
+def _started(root: Path) -> tuple[Path, BinaryIO]:
+    """Make a private folder under root and hold its lock; when a sweep takes it meanwhile, leave nothing of it and raise.
+
+    The errors of a lost race are those of STARTS_LOST: FileExistsError (the sweep made the lock
+    file), PermissionError (it holds it) or FileNotFoundError (it removed the folder before the
+    hold; the review of b7390ae, finding 1). Any other error of making the folder passes as it is.
+    """
+    folder = Path(_tempfile.mkdtemp(prefix=PREFIX, dir=root))
+    lock_path = _lock_of(folder)
+    lock = None
+    try:
+        lock = open(lock_path, "xb")
+        locks.hold(lock)
+        if not folder.is_dir():
+            raise FileNotFoundError("the private folder was removed before its block began")
+    except BaseException:
+        # A lock file that this start did not make (the sweep's) is the sweep's to remove.
+        if lock is not None:
+            lock.close()
+            with suppress(OSError):
+                lock_path.unlink()
+        with suppress(OSError):
+            _remove(folder)
+        raise
+    return folder, lock
 
 
 def sweep(root: Path) -> int:
@@ -303,8 +330,8 @@ def sweep(root: Path) -> int:
             that could not be removed, OSError for a lock path that could not be opened (a
             folder in its place; or, on Windows, a PermissionError of opening the lock file
             of another run, most likely one being removed in that moment, the cause not
-            measured: about 1 in 180 sweeps of four runs at once, by the reviews of 5d1ee74
-            and 55fdeff); ValueError for a root that no path can be (one with a null
+            measured, when it lasts through ATTEMPTS tries of `ploni.safety.locks.again`);
+            ValueError for a root that no path can be (one with a null
             character).
 
     Known limits: a folder that can never be removed is tried, and reported, at every
@@ -339,7 +366,7 @@ def _sweep_one(folder: Path) -> int:
     # A link in the lock file's place is not followed: `take` would open, or make, its target.
     if _is_link(lock_path):
         lock_path.unlink()
-    lock = locks.take(lock_path)
+    lock = locks.again(partial(locks.take, lock_path), (PermissionError,))
     if lock is None:
         return 0
     try:

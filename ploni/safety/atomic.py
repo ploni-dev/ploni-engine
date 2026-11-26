@@ -45,6 +45,7 @@ Known limits:
 import os
 import secrets
 from contextlib import suppress
+from functools import partial
 from pathlib import Path
 from typing import BinaryIO
 
@@ -98,10 +99,10 @@ def write_atomic(path: Path, data: bytes) -> None:
 
     Known limits: see the module docstring.
     """
-    partial = path.with_name(f"{PARTIAL_PREFIX}{path.name}.{secrets.token_hex(NAME_BYTES)}")
+    partial_path = path.with_name(f"{PARTIAL_PREFIX}{path.name}.{secrets.token_hex(NAME_BYTES)}")
     # Opened before the try: a name that is taken raises here, and the file that has it is
     # another writer's, which must not be removed.
-    handle = _open_partial(partial)
+    handle = _open_partial(partial_path)
     try:
         with handle:
             # Held while it is written, so that another run's sweep leaves it (issue #212).
@@ -109,11 +110,12 @@ def write_atomic(path: Path, data: bytes) -> None:
             handle.write(data)
             handle.flush()
             os.fsync(handle.fileno())
-        os.replace(partial, path)
+        # Tried again for a moment in which another run's sweep has the partial file open (#212).
+        locks.again(lambda: os.replace(partial_path, path), (PermissionError,))
     except BaseException:
         # A clean-up that fails must not hide why the write failed; the sweep gets the file.
         with suppress(OSError):
-            partial.unlink()
+            partial_path.unlink()
         raise
     _sync_folder(path.parent)
 
@@ -163,11 +165,14 @@ def sweep_partials(folder: Path) -> int:
                 if not entry.is_symlink():
                     # Taken, then given back before the removal: a writer whose hold comes
                     # while it is taken fails before it writes (the Known limits, issue #212).
-                    taken = locks.take(Path(entry.path))
+                    taken = locks.again(partial(locks.take, Path(entry.path)), (PermissionError,))
                     if taken is None:
                         continue
                     taken.close()
-                os.unlink(entry.path)
+                locks.again(partial(os.unlink, entry.path), (PermissionError,))
+            except FileNotFoundError:
+                # Gone: its writer renamed it in that moment, which is no error (#212).
+                continue
             except OSError as error:
                 first = first or error
                 continue
