@@ -49,8 +49,9 @@ Known limits:
   folder's lock while it removes it, so the starting run cannot use it: it fails at its start,
   before its block runs, with FileExistsError (the sweep made the lock file), OSError (the
   sweep holds it) or FileNotFoundError (the sweep removed the folder). Two runs started in the
-  same millisecond can so cost one of them its start; no file of a run that has begun is
-  touched (the review of b7390ae, finding 1).
+  same millisecond can so cost one of them its start; no byte of a run that has begun is
+  changed (the review of b7390ae, finding 1). A sweep can itself fail, loudly, on a lock file
+  that its run is removing in that moment (`sweep`, Raises).
 """
 
 import os
@@ -296,7 +297,9 @@ def sweep(root: Path) -> int:
             a link with such a name are left alone; so is a folder whose lock is held.
         Raises: after every folder was tried, the first error: NotRemoved for a folder
             that could not be removed, OSError for a lock path that could not be opened (a
-            folder in its place); ValueError for a root that no path can be (one with a
+            folder in its place, or, on Windows, a lock file that its run is removing in
+            that moment, measured as PermissionError in about 1 in 200 sweeps of four runs
+            at once, by the review of 5d1ee74); ValueError for a root that no path can be (one with a
             null character).
 
     Known limits: a folder that can never be removed is tried, and reported, at every
@@ -323,10 +326,14 @@ def _sweep_one(folder: Path) -> int:
 
     The lock is taken and kept until the folder is gone, so that a run cannot begin to use the
     folder in between (the review of b7390ae, finding 1); the lock file is removed after, also
-    when the folder could not be. Raises NotRemoved as `_remove` does, and OSError for a lock
+    when the folder could not be. A link in the lock file's place is removed, not followed (the
+    review of 5d1ee74, finding 14). Raises NotRemoved as `_remove` does, and OSError for a lock
     path that cannot be opened.
     """
     lock_path = _lock_of(folder)
+    # A link in the lock file's place is not followed: `take` would open, or make, its target.
+    if _is_link(lock_path):
+        lock_path.unlink()
     lock = locks.take(lock_path)
     if lock is None:
         return 0

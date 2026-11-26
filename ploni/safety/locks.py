@@ -9,8 +9,9 @@ operating system frees the lock if the run crashes; the sweeps skip what is stil
 
 Contract: `hold` takes the lock on an open file and keeps it until that file is closed or its
 process ends, however it ends. `take` opens a file, made when it is missing, and takes its
-lock, or gives None when another handle holds it: a sweep keeps what it takes while it
-removes, so that no run can begin to use it in between (the review of b7390ae, finding 1).
+lock, or gives None when another handle holds it: `tempfiles.sweep` keeps what it takes while
+it removes the folder, so that no run can begin to use it in between (the review of b7390ae,
+finding 1); `atomic.sweep_partials` gives it back before it removes the file.
 The lock is the operating system's: on Windows a lock of the file's byte 0
 (`msvcrt.locking`), elsewhere `fcntl.flock`. Two handles of one file in one process count as
 two holders, as two processes do.
@@ -81,7 +82,9 @@ def take(path: Path) -> BinaryIO | None:
     and the sweep then removes what that run is writing (the review of b7390ae, finding 1).
 
     Contract:
-        Args: path, a file; made, empty and for its owner only, when it is missing.
+        Args: path, a file; made, empty, when it is missing (for its owner only on POSIX;
+            Windows keeps only the read-only bit of a mode). A link is followed: a caller
+            that must not follow one looks first, as `tempfiles.sweep` does.
         Returns: the open handle, holding the lock, which the caller closes; or None, the
             file left as it was, when another handle holds the lock.
         Raises: OSError when the file cannot be opened for reading and writing (a folder in
