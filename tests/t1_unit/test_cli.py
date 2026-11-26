@@ -61,14 +61,23 @@ import subprocess
 import sys
 import tomllib
 import warnings
+from collections.abc import Iterator
 from pathlib import Path
 
 import pytest
 
 import ploni.__main__ as cli
+from tests.logging_state import restored
 
 ROOT = Path(__file__).resolve().parents[2]
 STUBS = ["scan", "analyze", "review", "export", "verify", "restore", "rehydrate", "report", "usage"]
+
+
+@pytest.fixture(autouse=True)
+def logging_put_back() -> Iterator[None]:
+    """Put the logging state back after each case: `main` installs the log filter (issue #211)."""
+    with restored():
+        yield
 
 
 @pytest.mark.parametrize("command", STUBS)

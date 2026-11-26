@@ -120,10 +120,17 @@ def main(argv: list[str] | None = None) -> int:
     unknown one, or an argument a command does not take, and SystemExit(0) for `--help`, as
     argparse does. The output stream writes a character it cannot encode as an escape, so
     that a Hebrew folder name does not stop `selftest` on a console of another code page.
+    Effects on the process: first of all, before the arguments are read, the log filter of
+    `ploni.safety.logging` is installed on the error stream, so every log record from then
+    on, a library's too, is written by it, within the filter's Known limits: a record logged
+    while ploni/ is imported, before `main` runs, is not, nor one of a library that adds a
+    handler of its own later (issue #211).
 
     Known limits: a stub and a usage error both exit 2. An argument argparse does not know,
-    such as a file name, is repeated on the error stream.
+    such as a file name, is repeated on the error stream: that is argparse writing, not a log
+    record, and the filter does not see it.
     """
+    logging.install(sys.stderr)
     parser = argparse.ArgumentParser(prog="ploni", description=__doc__.splitlines()[0] if __doc__ else None)
     commands = parser.add_subparsers(dest="command", required=True)
     for name in ("selftest", *STUBS):
