@@ -1,33 +1,37 @@
 """The span property of build-plan.md Phase 1 over generated texts: every span inside, every type declared.
 
 Why: build-plan.md Phase 1, "Tests added": "T2 property: every returned span lies inside the
-projection and every returned type is declared." Issue #31. A span that is off by one breaks
-the contract only where the match touches an end of the text (T0, A3), which hand-picked
-texts reach by luck; generated ones reach it on purpose.
+projection and every returned type is declared." Issue #31. A span that is off by one is out
+of the text only where the match touches an end of it (T0, A3), which hand-picked texts reach
+by luck; generated ones reach it on purpose.
 
 The invariant, for every generated text and every detector of DETECTORS: the check of
-tests/detector_contract.py gives no line. That check holds the confidence rule too, so the
-property covers it as well.
+tests/detector_contract.py gives no line. That check holds the confidence rule and the five
+rules past the plan's three too (its rules 2 to 6), so the property covers them as well.
 
 Generated input: every sequence of 0 to 3 pieces of PIECES, 17 pieces, so 5,220 texts. The
 full suite runs all of them (at least the 5,000 of tests/sizes.py); the fast suite runs every
 tenth, 522 (at least 500). A piece is one of: a run of digits of one, two or nine
-characters; a Hebrew word with final letters, with niqqud, or with gershayim or a geresh in
-both forms; a Hebrew abbreviation with dots; a Latin word; a space, a newline, an RLM or LRM
-mark; a character outside the BMP. Every piece opens and closes some texts, so a run of digits
-does both, and sits next to every other piece.
+characters; a Hebrew word; a Hebrew word with niqqud; the five final letters with spaces
+between them; a Hebrew abbreviation with gershayim or a geresh, each in both forms; a Hebrew
+abbreviation with dots; a Latin word; a space, a newline, an RLM or LRM mark; a character
+outside the BMP. Every piece opens and closes some texts, so a run of digits does both, and
+sits next to every other piece.
 
 The property is shown to fail: PastTheEnd, BeforeTheStart and Undeclared each give a line on
 some generated text, and the texts include ones that start and ones that end with a digit and
-the empty one, the places where the first two break.
+the empty one, the places where the first two leave the text.
 
 Not applicable: the proclitic and ordinary-word axes, as the check judges no word.
 
-Why not hypothesis: Phase 1 names it, but it is not installed and not in requirements-dev.txt,
-and adding it would be a new dependency, which needs Achia's decision (CLAUDE.md, Merging).
-Enumeration stands in: every combination up to three pieces is a case, 5,220 in all, which
-meets CLAUDE.md's 500 generated cases (5,000 at phase close) with no dependency. Unlike a
-seeded `random`, it needs no suppression of ruff's S311.
+Why not hypothesis: build-plan.md section 7, under T2, says "Use `hypothesis` with custom
+strategies", and PROCESS.md line 337 says to "let `hypothesis` generate thousands of cases".
+It is not installed and not in requirements-dev.txt, and adding it would be a new dependency,
+which needs Achia's decision (CLAUDE.md, Merging). The repository's other T2 tests use a
+seeded `random` without hypothesis. Here enumeration stands in: every combination of up to
+three pieces is a case, 5,220 in all, which meets CLAUDE.md's 500 generated cases (5,000 at
+phase close) with no dependency. Unlike a seeded `random`, it needs no suppression of ruff's
+S311.
 """
 
 from itertools import product

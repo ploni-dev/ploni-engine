@@ -6,9 +6,9 @@ adapter makes one (anchors, a block break), and reads them through the protocol 
 fusion does (ADR-0004: fusion knows no detector).
 
 Matrix:
-  M1  Digits and a placeholder detector over one projection, with one context: their detections
-      pooled keep the contract, each surface is the text of its span, each names its detector,
-      and each type is one its own detector declares
+  M1  Digits and a placeholder detector over one projection, with one context: each keeps the
+      contract of tests/detector_contract.py (surface, part, own name and declared type
+      included), and their detections pooled are the three things in the text
   M2  which detectors need the morphology is read from the class, before any is built
 """
 
@@ -50,11 +50,10 @@ def test_m1_two_detectors_pooled_keep_the_contract() -> None:
     proj, ctx = adapter_projection(), DetectContext()
     detectors: list[Detector] = [Digits(), Placeholders()]
     assert [line for detector in detectors for line in breaks(detector, proj, ctx)] == []
-    pooled = [(detector, found) for detector in detectors for found in detector.detect(proj, ctx)]
-    assert sorted(found.surface for _, found in pooled) == ["123456782", "אלמוני", "פלוני"]
-    for detector, found in pooled:
-        assert proj.text[found.span.start : found.span.end] == found.surface
-        assert found.detector == detector.name and found.entity_type in detector.produces
+    pooled = [found for detector in detectors for found in detector.detect(proj, ctx)]
+    assert sorted((found.detector, found.surface) for found in pooled) == [
+        ("digits", "123456782"), ("placeholders", "אלמוני"), ("placeholders", "פלוני"),
+    ]  # fmt: skip
 
 
 def test_m2_the_morphology_need_is_read_from_the_class() -> None:
