@@ -344,11 +344,12 @@ def _sweep_lone_locks(root: Path) -> None:
     """Remove the lock files under root whose folder is gone and that no run holds.
 
     Such a file is left by a run that crashed between removing its folder and its lock file,
-    or that ended while a sweep held the lock. It is empty. One that cannot be taken stays.
+    or that ended while a sweep held the lock. It is empty. One that cannot be taken (a folder
+    of that name, for one) stays; a link of that name is not followed and stays.
     """
     for lock_path in sorted(root.glob(f"{PREFIX}*{LOCK_SUFFIX}")):
         folder = lock_path.with_name(lock_path.name.removesuffix(LOCK_SUFFIX))
-        if _is_link(lock_path) or not lock_path.is_file() or folder.exists():
+        if _is_link(lock_path) or folder.exists():
             continue
         with suppress(OSError):
             lock = locks.take(lock_path)

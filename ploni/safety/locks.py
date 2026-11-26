@@ -90,7 +90,7 @@ def take(path: Path) -> BinaryIO | None:
     Known limits: see the module docstring. A file that `take` made stays when the caller
     does not remove it.
     """
-    handle = os.fdopen(os.open(path, os.O_RDWR | os.O_CREAT | getattr(os, "O_BINARY", 0), OWNER_READ_WRITE), "r+b")
+    handle = os.fdopen(os.open(path, os.O_RDWR | os.O_CREAT, OWNER_READ_WRITE), "r+b")
     try:
         _lock(handle)
     except OSError:
