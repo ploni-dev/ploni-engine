@@ -44,6 +44,8 @@ Equivalence classes:
   EC9  a fresh interpreter that imports ploni.__main__ -> every module of ploni/safety/ is
        loaded, the lock helper of issue #212 among them, so that selftest's offline check
        sees what each loads
+  EC10 the same -> the detector protocol, ploni/detect/base.py of issue #31, is loaded, for
+       the same reason
 Boundaries:
   B1  the canary given as an argument of the record, not in its format string -> not written
   B2  an error whose own text cannot be made (its `__str__` raises, with the canary) -> the
@@ -348,3 +350,15 @@ print(" ".join(sorted(name for name in sys.modules if name.startswith("ploni.saf
 def test_ec9_the_program_loads_every_safety_helper() -> None:
     done = start(SAFETY_LOADED)
     assert done.stdout.split() == [b"ploni.safety.atomic", b"ploni.safety.locks", b"ploni.safety.logging", b"ploni.safety.tempfiles"]
+
+
+DETECT_LOADED = """
+import sys
+import ploni.__main__
+print(" ".join(sorted(name for name in sys.modules if name.startswith("ploni.detect."))))
+"""
+
+
+def test_ec10_the_program_loads_the_detector_protocol() -> None:
+    done = start(DETECT_LOADED)
+    assert done.stdout.split() == [b"ploni.detect.base"]
