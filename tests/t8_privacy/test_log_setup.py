@@ -12,7 +12,8 @@ This is that test.
 The rule, an allow-list (ALLOWED): a file judged may use the standard `logging` module only for
 its level constants, the `warnings` module only for `warn`, `filterwarnings` and `simplefilter`,
 and `ploni.safety.logging` only for `Event`, `event` and `install`, with `event` and `install`
-only called, each as a statement of its own, so that what they return is never read. Every
+only called, each as a statement of its own, so that what they return is never read, and
+`event` never with a `**` argument, so that every field key is written in the call (A7). Every
 other name of the three is refused, however it is reached: an attribute (`logging.getLogger`),
 a name imported from it, a submodule (`logging.config`), a module
 imported by a call (`importlib.import_module("logging")`, by keyword or relative name too), or
@@ -74,11 +75,12 @@ Adversarial:
   A5  the attribute `logging` of another module (`concurrent.futures._base.logging`)    refused
   A6  an escape from any object (ESCAPES), as an attribute or by getattr: every class, a
       function's globals or builtins, a frame's or a traceback's globals, locals, frame   refused
-  A7  a `**` argument in a call of `event`, however `event` is bound, a literal mapping too:
-      the filter writes every key that is a lower-case word, so a mapping built from a
-      document would write its words (issue #216)                          refused;
-      keyword arguments written in the call, `**` in a call of another function, and an
-      `event` of a project module outside ploni/safety/                    no line
+  A7  a `**` argument in a call of `event`, however `event` is bound, a literal mapping too,
+      before a written keyword too: the filter writes every key that is a lower-case word, so
+      a mapping built from a document would write its words (issue #216)   refused;
+      keyword arguments written in the call, `*args` alone, a `**` inside an argument or in a
+      call of another function, and an `event` of a project module outside ploni/safety/
+                                                                           no line
 
 Not applicable: the Hebrew axes and the document axes of the test-matrix skill, as the input
 is Python source and no document is handled.
@@ -91,7 +93,8 @@ Known limits:
     A route found later is a new case, or a line here.
   - A project module that hands the filter's names on under its own (`from ploni.obs import
     install`, or `ploni.__main__`'s own name `logging`, which is the filter) is not followed: the
-    result of such an `install` can be read, and a project module's field `logging` is allowed.
+    result of such an `install` can be read, a `**` into such an `event` is not seen (A7), and a
+    project module's field `logging` is allowed.
   - A module read as a mapping or through another reader: `vars(m)["logging"]`,
     `m.__dict__["logging"]`, `operator.attrgetter("logging")(m)`.
   - Reflection while the program runs, as a class: `gc`, frames and tracebacks reached by other
@@ -253,13 +256,14 @@ def _getattr_name(node: ast.Call) -> str | None:
     return name.value if isinstance(name, ast.Constant) and isinstance(name.value, str) else None
 
 
-def _judge(dotted: str, stated: bool) -> str | None:
+def _judge(dotted: str, stated: bool, spread: bool) -> str | None:
     """Say what a dotted name that a file reaches through an imported name uses past ALLOWED, or None.
 
     Why: one judgement for every way a name is reached, apart from how the chain was read.
 
     Contract: `stated` says whether the chain is the function of a call that stands as a
-    statement of its own.
+    statement of its own; `spread` whether it is the function of a call with a `**` argument,
+    which is refused for `event` (EVENT).
     """
     if why := _refused(dotted):
         return why
@@ -273,24 +277,24 @@ def _judge(dotted: str, stated: bool) -> str | None:
         return f"uses {dotted}"
     if dotted in CALLED_ONLY and not stated:
         return f"uses {dotted} other than as a call statement"
+    if dotted == EVENT and spread:
+        return f"spreads a mapping into {EVENT}"
     return None
 
 
 def _uses(tree: ast.AST, bound: dict[str, str]) -> list[tuple[int, str]]:
-    """Return the lines that use a name bound to a guarded module beyond what ALLOWED holds."""
+    """Return the lines that use a name bound to a guarded module beyond what ALLOWED holds, a `**` into `event` among them."""
     parents = {child: parent for parent in ast.walk(tree) for child in ast.iter_child_nodes(parent)}
     found = []
     for node in ast.walk(tree):
         if isinstance(node, ast.Name) and node.id in bound:
             attributes, outer = _chain(node, parents)
             call = parents.get(outer)
-            stated = isinstance(call, ast.Call) and call.func is outer and isinstance(parents.get(call), ast.Expr)
-            dotted = ".".join([bound[node.id], *attributes])
-            if why := _judge(dotted, stated):
+            called = isinstance(call, ast.Call) and call.func is outer
+            stated = called and isinstance(parents.get(call), ast.Expr)
+            spread = called and any(keyword.arg is None for keyword in call.keywords)
+            if why := _judge(".".join([bound[node.id], *attributes]), stated, spread):
                 found.append((node.lineno, why))
-            spread = isinstance(call, ast.Call) and call.func is outer and any(k.arg is None for k in call.keywords)
-            if dotted == EVENT and spread:
-                found.append((node.lineno, f"spreads a mapping into {EVENT}"))
     return found
 
 
@@ -667,6 +671,7 @@ def test_a6_an_escape_from_any_object(source: str) -> None:
         ("from ..safety.logging import event as emit\n\nemit(E.X, **counts)\n", "ploni.detect.fusion"),
         ("from ploni.safety.logging import event\n\nevent(E.X, **{'smith': 3})\n", "ploni.mod"),
         ("from ploni.safety.logging import event\n\ndef run():\n    event(E.X, **counts)\n", "ploni.mod"),
+        ("from ploni.safety.logging import event\n\nevent(E.X, **counts, level=WARNING)\n", "ploni.mod"),
     ],
 )
 def test_a7_a_mapping_spread_into_event(source: str, importer: str) -> None:
@@ -681,6 +686,8 @@ def test_a7_a_mapping_spread_into_event(source: str, importer: str) -> None:
         "from ploni.safety.logging import event\n\nreport(**counts)\n",
         "from ploni.safety.logging import event\n\nevent(E.X)\nsummary = dict(**counts)\n",
         "from ploni.obs import event\n\nevent(E.X, **counts)\n",
+        "from ploni.safety.logging import event\n\nevent(*args)\n",
+        "from ploni.safety.logging import event\n\nevent(E.X, pages=len(dict(**counts)))\n",
     ],
 )
 def test_a7_what_is_no_spread_into_event(source: str) -> None:
