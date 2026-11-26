@@ -41,6 +41,9 @@ Equivalence classes:
        Hebrew letters, a name that is a subclass of str -> `<value>`; a metaclass that
        answers any text, or raises, when asked for the name -> the class's own name, not
        what the metaclass answers, and no error
+  EC9  a fresh interpreter that imports ploni.__main__ -> every module of ploni/safety/ is
+       loaded, the lock helper of issue #212 among them, so that selftest's offline check
+       sees what each loads
 Boundaries:
   B1  the canary given as an argument of the record, not in its format string -> not written
   B2  an error whose own text cannot be made (its `__str__` raises, with the canary) -> the
@@ -333,3 +336,15 @@ def test_ec8_error_name(case: str) -> None:
 
 def test_b4_an_error_whose_class_raises_when_asked_its_name() -> None:
     assert_failed(crash("refusing-name", CANARY), "Bad", CANARY)
+
+
+SAFETY_LOADED = """
+import sys
+import ploni.__main__
+print(" ".join(sorted(name for name in sys.modules if name.startswith("ploni.safety."))))
+"""
+
+
+def test_ec9_the_program_loads_every_safety_helper() -> None:
+    done = start(SAFETY_LOADED)
+    assert done.stdout.split() == [b"ploni.safety.atomic", b"ploni.safety.locks", b"ploni.safety.logging", b"ploni.safety.tempfiles"]
