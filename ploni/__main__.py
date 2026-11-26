@@ -36,6 +36,7 @@ from typing import TextIO
 # loads. A computed import is refused under ploni/ (tests/t8_privacy/test_imports.py), so the
 # list is written out; a test holds it to the modules on disk.
 from ploni import errors, types  # noqa: F401
+from ploni.detect import base  # noqa: F401 imported so that selftest sees what it loads
 from ploni.safety import atomic, locks, logging, tempfiles  # noqa: F401
 
 # The models folder of a development checkout (see Known limits).
