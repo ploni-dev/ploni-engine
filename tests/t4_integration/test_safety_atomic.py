@@ -19,6 +19,7 @@ workflow exists it is run by hand: python -m pytest tests/t4_integration
 import os
 import subprocess
 import sys
+import time
 from pathlib import Path
 
 import pytest
@@ -26,6 +27,15 @@ import pytest
 from ploni.safety import atomic
 
 ROOT = Path(__file__).resolve().parents[2]
+
+
+def aged(folder: Path) -> None:
+    """Make every partial file in a folder older than YOUNG_SECONDS, as a crashed run's is at the next start."""
+    then = time.time() - 2 * atomic.YOUNG_SECONDS
+    for entry in folder.iterdir():
+        if entry.name.startswith(atomic.PARTIAL_PREFIX) and not entry.is_symlink():
+            os.utime(entry, (then, then))
+
 PROGRAM = """
 import os, sys
 from pathlib import Path
@@ -56,6 +66,7 @@ def test_m1_m2_killed_between_the_write_and_the_rename(tmp_path: Path, existing:
     assert run(target, "kill") == 9
     assert (target.read_bytes() == b"old") if existing else not target.exists()
     assert len(partials(tmp_path)) == 1
+    aged(tmp_path)
     assert atomic.sweep_partials(tmp_path) == 1
     assert partials(tmp_path) == []
     assert (target.read_bytes() == b"old") if existing else not target.exists()
