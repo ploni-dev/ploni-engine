@@ -17,7 +17,10 @@ per document of a batch and counts, per type, by exact span and type:
   from the key's (a word more, a prefix less), as against a detection with nothing under it.
 A detection returned twice is counted once. recall is tp / (tp + fn), precision tp / (tp + fp),
 each 0.0 when its denominator is 0. The total sums the counts over the types (micro-averaged).
-`report` gives one line per type and one for the total; `main` prints it for a named detector.
+A group of key items (an Item's group, as the names that stand once) has a line of its own,
+named type:group: tp, its items a detection matches exactly, and fn, the rest; no detection is
+of a group, so its fp stay on its type's line, and the group's line has none. `report` gives
+one line per type, one per group, and one for the total; `main` prints it for a named detector.
 
 Known limits: near misses are not counted apart, a detection of one is a fp of its type; a type
 name the detector invents is printed as given, so text in a type name would be printed.
@@ -31,7 +34,7 @@ from collections import defaultdict
 from collections.abc import Callable, Iterable
 from dataclasses import dataclass
 
-from eval.heldout.generator import Batch, build
+from eval.heldout.generator import GROUP_MARK, Batch, build
 
 Detection = tuple[int, int, str]
 Detector = Callable[[str], Iterable[Detection]]
@@ -75,11 +78,13 @@ class Scores:
     Why: what `score` returns and `report` prints.
 
     Contract: per_type maps to its Counts every type of the key and any other type a detector
-    returned, sorted by name. total holds the sums.
+    returned, sorted by name. total holds the sums of per_type. per_group maps each group of the
+    key, named type:group and sorted, to its tp and fn.
     """
 
     per_type: dict[str, Counts]
     total: Counts
+    per_group: dict[str, Counts]
 
 
 def _checked(detections: Iterable[object], doc: int, length: int) -> list[tuple[int, int, str]]:
@@ -159,23 +164,30 @@ def score(detector: Detector, batch: Batch | None = None) -> Scores:
             counts.partial += _partial(span, by_place)
     rows = {kind: per_type[kind] for kind in sorted({span[3] for span in key} | set(per_type))}
     total = Counts(*(sum(getattr(row, name) for row in rows.values()) for name in ("tp", "fp", "fn", "partial")))
-    return Scores(rows, total)
+    per_group: dict[str, Counts] = defaultdict(Counts)
+    for item in (item for item in batch.key if item.group):
+        counts = per_group[f"{item.type}{GROUP_MARK}{item.group}"]
+        if (item.doc, item.start, item.end, item.type) in found:
+            counts.tp += 1
+        else:
+            counts.fn += 1
+    return Scores(rows, total, dict(sorted(per_group.items())))
 
 
 def report(scores: Scores) -> list[str]:
-    """Return the lines that show scores: one per type, sorted, then the total.
+    """Return the lines that show scores: one per type, sorted, one per group, then the total.
 
     Why: what a PR body and the session that writes the detectors read; names and numbers only.
 
-    Contract: each line is the type name, then tp, fp, fn, partial, recall and precision, each
-    after its label, recall and precision with three decimals. The last line is TOTAL's.
+    Contract: a type's line is its name, then tp, fp, fn, partial, recall and precision, each
+    after its label, recall and precision with three decimals; a group's line is its name, tp,
+    fn and recall. The last line is TOTAL's.
     """
-    rows = [*scores.per_type.items(), (TOTAL, scores.total)]
-    return [
-        f"{name:<17} tp {row.tp:5d}  fp {row.fp:5d}  fn {row.fn:5d}  partial {row.partial:5d}  "
-        f"recall {row.recall:.3f}  precision {row.precision:.3f}"
-        for name, row in rows
-    ]
+    def line(name: str, row: Counts) -> str:
+        return f"{name:<17} tp {row.tp:5d}  fp {row.fp:5d}  fn {row.fn:5d}  partial {row.partial:5d}  recall {row.recall:.3f}  precision {row.precision:.3f}"
+
+    groups = [f"{name:<17} tp {row.tp:5d}  fn {row.fn:5d}  recall {row.recall:.3f}" for name, row in scores.per_group.items()]
+    return [*(line(name, row) for name, row in scores.per_type.items()), *groups, line(TOTAL, scores.total)]
 
 
 def main(argv: list[str]) -> int:
