@@ -13,7 +13,8 @@ The rules:
   R2  no Python file of CODE_FOLDERS or of the repository's root, outside eval/heldout/ and
       OWN, imports a module of eval.heldout, in any way tests/project_imports.py reads (a helper
       under scripts/, or a script at the root, that a detector test imports would hand the
-      batch on)
+      batch on); outside ploni/ and tests/ the folders of SKIPPED are not read (virtual
+      environments, caches), inside them every Python file is (review 4, finding 40)
   R3  no Python file under ploni/ or tests/ makes an import whose name cannot be read (a
       computed name, a walk of a package), but the three that do so today on purpose
       (UNREADABLE_ALLOWED), which read imports themselves
@@ -24,12 +25,14 @@ Test matrix:
        ploni/ that holds the name in capitals, a test that imports a module of it, a test that
        imports the package from eval, a test that imports it by a call with a literal name, a
        root conftest.py and a pyproject.toml that name it, a helper under scripts/ and a script
-       at the root that import it, a test and a ploni/ file that import a computed name
+       at the root that import it, a test and a ploni/ file that import a computed name, a
+       Python file in a cache folder under tests/ that imports it
                                                         one line each, with the file
   EC3  in the same tree: an own test, a file under eval/heldout/, a test that imports eval
        only, a word that only holds part of the name ("held out", "held-out"), a test of
        UNREADABLE_ALLOWED, and a file in a virtual environment or a cache folder under a code
-       folder, which R2 does not read (review 3, finding 38)          no line
+       folder other than ploni/ and tests/, which R2 does not read (review 3, finding 38)
+                                                        no line
   EC4  every file of OWN and of UNREADABLE_ALLOWED exists, so that the lists are not stale
   B1   a tree with no ploni/ and no tests/ folder, and a helper under scripts/ that imports the
        batch                                            the import line only
@@ -39,7 +42,10 @@ read the batch; the author may not, by Claude's reading of issue 283):
   - a name built while the program runs, as "held" + "out", in a path or an import;
   - a glob or a directory walk that reads the generator's source, and runpy with a computed path;
   - a pytest plugin named on the command line, and a path read from a setting;
-  - a Python file in a top-level folder other than CODE_FOLDERS.
+  - a Python file in a top-level folder other than CODE_FOLDERS, or in a folder of SKIPPED
+    under one of CODE_FOLDERS other than ploni/ and tests/;
+  - the text of a file in a folder of SKIPPED, which R1 does not read, as a cache under tests/
+    holds the batch's own compiled tests; R2 still reads such a file's imports.
 """
 
 import os
@@ -173,6 +179,7 @@ TREE = {
     "run_batch.py": "import eval.heldout.scorer\n",
     "experiments/.venv/Lib/site-packages/tool/run.py": "from eval.heldout.generator import build\n",
     "experiments/e9/__pycache__/run.py": "from eval.heldout.generator import build\n",
+    "tests/t1_unit/__pycache__/hidden.py": "import eval.heldout.generator\n",
     "eval/heldout/generator.py": "SEED = 1\n",
     "eval/heldout/scorer.py": "from eval.heldout.generator import build\n",
 }
@@ -200,6 +207,7 @@ def test_ec2_ec3_a_tree_on_disk(tmp_path: Path) -> None:
     assert by_import(tmp_path) == [
         "scripts/helper.py:1: imports eval.heldout.generator",
         "scripts/helper.py:1: imports eval.heldout.generator.build",
+        "tests/t1_unit/__pycache__/hidden.py:1: imports eval.heldout.generator",
         "tests/t1_unit/test_case.py:1: imports eval.heldout",
         "tests/t1_unit/test_ids.py:1: imports eval.heldout.generator",
         "tests/t1_unit/test_ids.py:1: imports eval.heldout.generator.build",
