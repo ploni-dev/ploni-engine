@@ -20,11 +20,12 @@ Equivalence classes:
   EC2  each of the four classes with text, every hidden field holding the canary, printed in
        each way Python prints an object (repr, str, an f-string, `%s` and `%r`, `format`, a
        list holding it) -> the canary is not in the text; each field that is not hidden is
-       (its value still printed)
+       still named in it; the canary in Hebrew and in Latin letters
   EC3  an Entity holding Detections and a Surrogate, the canary in every hidden field of
        each -> not in the text
-  EC4  hidden is not gone: the fields read back as given, and two objects that differ only
-       in a hidden field are not equal
+  EC4  hidden is not gone: four of the hidden fields read back as given (Detection.surface,
+       lemma, metadata, Entity.canonical), and two objects that differ only in a hidden field
+       are not equal
 
 Boundaries:
   B1  a hidden field left at its default (lemma None, metadata empty): printed the same way
@@ -32,17 +33,21 @@ Boundaries:
       (Entity.variants): not in the text
 
 Adversarial:
-  A1  the canary in Hebrew, and as a string a field that is not hidden does not hold
+  A1  the positive control: the canary in a field that is not hidden (`detector`) is printed,
+      so the cases above cannot pass by printing nothing
   A2  an error raised with an object in its message, `str(error)` and its traceback text:
       no canary
 
 Known limits:
-  - A field that is not hidden is printed as it is: an id, a type name, places, a
-    confidence, a gender, the proclitic letters (`prefix`, `suffix`), the detector's name.
-    They hold no name by the plan; a caller that puts document text into one of them is not
-    seen here.
-  - `dataclasses.asdict`, `vars()` and a field read by name still give the text: hiding is
-    about printing, not about access.
+  - A field that is not hidden is printed as it is: the ids, the type names, places,
+    confidence, band, gender, the detector's name, the proclitic and suffix letters (`prefix`,
+    `suffix`), and `Detection.review_reason`, `Entity.family_group`, `ReviewItem.target` and
+    `resolution`, `Anchor.node_path`, `TableCell.table_id`. The plan does not say what the
+    last six hold; the phase that first fills one asks Achia whether to hide it. The ids are
+    hashes of names with no key by section 5; whether they may be printed is issue #220.
+  - `dataclasses.asdict`, `astuple`, `vars()` and a field read by name still give the text:
+    hiding is about printing, not about access. And pytest's explanation of a failed `==`
+    between two such objects shows each field that differs, hidden ones too.
 
 The document-structure axes of the test-matrix skill do not apply: no document is read.
 """

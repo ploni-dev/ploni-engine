@@ -8,7 +8,7 @@ of the Ponytail pass at the close of Phase 0 found that nothing under ploni/ cal
 (issue #211). `main` is the one entry point of the command line, so it calls `install` first.
 Finding 3 (issue #213): an error that no code catches is printed by Python with its message,
 and a message can quote its input (`int()` on text does) or a core object; so `main` catches
-it and writes only the command, the error's type and an exit code of its own.
+it, writes only the command and the error's type, and returns an exit code of its own.
 
 The file is named for the module, `test___main__.py`, so that scripts/check_commit_order.py
 counts it as the test of ploni/__main__.py (its Known limits: tests/t1_unit/test_cli.py does
@@ -29,14 +29,21 @@ Equivalence classes:
        (SystemExit 2) -> the same: the filter is installed by every command, and before the
        arguments are read
   EC4  an error raised inside a command, its message the canary (ValueError, and an error of
-       a class of the program's own) -> exit code 3; the error stream is the one line
+       a class of the program's own) -> exit code 4; the error stream is the one line
        "ploni selftest: failed: <type name>"; the canary is on neither stream
   EC5  an error raised while another was handled, and one raised from another -> the same,
        naming the outer error's type only
+  EC6  Ctrl+C inside a command, alone and while an error with the canary was being handled
+       -> exit code 130 and the one line "ploni selftest: interrupted"; no canary
+  EC7  an exit raised inside a command (SystemExit(5)) -> passes through: exit code 5, nothing
+       written
+  EC8  `error_name`: a plain type name -> the name; a name with a line break, a name in
+       Hebrew letters, and a metaclass that answers with any text -> `<value>`
 Boundaries:
   B1  the canary given as an argument of the record, not in its format string -> not written
   B2  an error whose own text cannot be made (its `__str__` raises, with the canary) -> the
       same line, its type
+  B3  an error of a class whose name holds a line break and the canary -> one line, `<value>`
 Adversarial:
   A1  the canary in Hebrew -> not written, in UTF-8 or in the laptop's code page (cp1255)
   A2  the canary in Hebrew in an error's message -> the same as EC4
@@ -48,10 +55,12 @@ Known limits:
     repeats an argument it does not know (`main`'s Known limits).
   - The two start-up sweeps that finding 1 also names are not called here: they come with
     the first command that writes a temp file, after issue #212.
-  - An interrupt (Ctrl+C) and an exit are not errors (`BaseException`): they are not caught,
-    and Python prints an interrupt's traceback, which shows lines of code, not their data.
-  - The error's type name is written as it is: a class built at run time with a name taken
-    from a document would show it, the filter's own limit for names of code.
+  - An exit raised inside a command passes through, and an exit given a text prints the
+    text: no command calls `sys.exit` with a text (`main`'s Known limits). Ctrl+C before the
+    arguments are read is not caught.
+  - A type name that is a plain identifier is written as it is: a class built at run time
+    with a name taken from a document (`Jacob`) would show it, the filter's own limit for
+    names of code.
 
 Not applicable: the document-structure axes of the test-matrix skill; no document is read.
 """
@@ -62,6 +71,8 @@ import sys
 from pathlib import Path
 
 import pytest
+
+import ploni.__main__ as cli
 
 ROOT = Path(__file__).resolve().parents[2]
 CANARY = "CANARY-7f3a"
@@ -170,6 +181,17 @@ def selftest(models, out):
         raise PloniError(message)
     if kind == "Unprintable":
         raise Unprintable()
+    if kind == "odd-name":
+        raise type("Line1\\nTraceback " + message, (Exception,), {})()
+    if kind == "exit":
+        raise SystemExit(5)
+    if kind == "interrupt":
+        raise KeyboardInterrupt
+    if kind == "interrupt-in-error":
+        try:
+            int(message)
+        except ValueError:
+            raise KeyboardInterrupt
     try:
         raise KeyError(message)
     except KeyError as inner:
@@ -180,9 +202,10 @@ def selftest(models, out):
 cli.selftest = selftest
 raise SystemExit(cli.main(["selftest"]))
 """
-# ploni/__main__.py: the exit code of a command stopped by an error no code caught; 1 is
-# selftest's "not offline" and 2 a stub or a usage error.
-FAILED = 3
+# ploni/__main__.py: the exit codes of a command stopped by an error no code caught, and by
+# Ctrl+C; 1 is selftest's "not offline" and 2 a stub or a usage error.
+FAILED = 4
+INTERRUPTED = 130
 
 
 def crash(kind: str, message: str) -> subprocess.CompletedProcess[bytes]:
@@ -190,10 +213,11 @@ def crash(kind: str, message: str) -> subprocess.CompletedProcess[bytes]:
     return start(CRASHING, kind, message)
 
 
-def assert_failed(done: subprocess.CompletedProcess[bytes], name: str, canary: str) -> None:
+def assert_failed(done: subprocess.CompletedProcess[bytes], name: str, canary: str, code: int = FAILED) -> None:
     """Assert the exit code, the one line naming the error's type, and no canary on either stream."""
-    assert done.returncode == FAILED, done.stderr
-    assert done.stderr.splitlines() == [f"ploni selftest: failed: {name}".encode()]
+    assert done.returncode == code, done.stderr
+    line = f"ploni selftest: failed: {name}" if code == FAILED else "ploni selftest: interrupted"
+    assert done.stderr.splitlines() == [line.encode()]
     assert done.stdout == b""
     for form in [canary.encode(encoding) for encoding in ENCODINGS] + [canary.encode("ascii", "backslashreplace")]:
         assert form not in done.stderr + done.stdout
@@ -215,3 +239,38 @@ def test_b2_an_error_whose_text_cannot_be_made() -> None:
 
 def test_a2_a_hebrew_canary_in_an_error() -> None:
     assert_failed(crash("ValueError", HEBREW_CANARY), "ValueError", HEBREW_CANARY)
+
+
+def test_b3_an_error_of_a_class_whose_name_holds_a_line_break() -> None:
+    assert_failed(crash("odd-name", CANARY), "<value>", CANARY)
+
+
+@pytest.mark.parametrize("kind", ["interrupt", "interrupt-in-error"])
+def test_ec6_ctrl_c_inside_a_command(kind: str) -> None:
+    assert_failed(crash(kind, CANARY), "", CANARY, INTERRUPTED)
+
+
+def test_ec7_an_exit_inside_a_command_passes_through() -> None:
+    done = crash("exit", CANARY)
+    assert (done.returncode, done.stderr, done.stdout) == (5, b"", b"")
+
+
+class Answers(type):
+    """A metaclass whose classes answer any text when asked for their name."""
+
+    @property
+    def __name__(cls) -> str:
+        return "CANARY shown by a metaclass"
+
+
+@pytest.mark.parametrize(
+    ("error", "name"),
+    [
+        (ValueError("x"), "ValueError"),
+        (type("Line1\nTraceback", (Exception,), {})(), "<value>"),
+        (type("שגיאה", (Exception,), {})(), "<value>"),
+        (Answers("Odd", (Exception,), {})(), "<value>"),
+    ],
+)
+def test_ec8_error_name(error: BaseException, name: str) -> None:
+    assert cli.error_name(error) == name
