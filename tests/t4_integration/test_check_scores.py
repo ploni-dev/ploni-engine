@@ -52,11 +52,11 @@ def test_m1_no_drop(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pyt
 
 def test_m2_a_made_up_drop_is_refused(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
     assert check(tmp_path, monkeypatch, DROPPED) == 1
-    assert capsys.readouterr().err == "held-out drop: IL_ID recall 0.900 -> 0.880\n"
+    assert capsys.readouterr().err == "held-out drop: IL_ID recall 0.900 -> 0.880 (45/50 -> 44/50)\n"
 
 
 def test_m3_an_accepted_drop(tmp_path: Path, monkeypatch: pytest.MonkeyPatch, capsys: pytest.CaptureFixture[str]) -> None:
-    assert check(tmp_path, monkeypatch, DROPPED, f"score-drop-accepted: IL_ID recall 0.900 0.880 {REASON}\n") == 0
+    assert check(tmp_path, monkeypatch, DROPPED, f"score-drop-accepted: IL_ID recall 45/50 44/50 {REASON}\n") == 0
     out, err = capsys.readouterr()
     assert err == ""
     assert REASON not in out

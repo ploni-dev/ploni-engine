@@ -20,8 +20,8 @@ The protocol:
 
 Equivalence classes of the check, each broken detector breaking its rule alone:
   EC1  every detector of DETECTORS, over every text of TEXTS, in the body and in a header: no
-       line. DETECTORS holds the detectors of ploni/ (none yet) and Digits, which keeps the
-       contract
+       line. DETECTORS holds the detectors of ploni/, read from eval.detectors.DETECTORS, the
+       one list the held-out batch scores (none yet), and Digits, which keeps the contract
   EC2  a span that ends past the text (PastTheEnd, on a text that ends in a number)    one line
   EC3  a span that starts before the text (BeforeTheStart, on a text that starts with one)
   EC4  a span that ends before it starts (Reversed)
@@ -76,6 +76,7 @@ from typing import ClassVar
 
 import pytest
 
+from eval import detectors
 from ploni.detect.base import DetectContext, Detector
 from ploni.types import Detection, Span, TextProjection
 from tests.detector_contract import (
@@ -97,8 +98,10 @@ from tests.detector_contract import (
     projection,
 )
 
-# Each detector of ploni/ is added here as it is written, so that it runs through EC1.
-DETECTORS: tuple[Detector, ...] = (Digits(),)
+# The detectors of ploni/ come from the one list the held-out batch scores, so that a detector
+# cannot run through EC1 and be left out of the score, or the other way round (the review of
+# 78dd363, finding 5).
+DETECTORS: tuple[Detector, ...] = (*detectors.DETECTORS, Digits())
 
 TEXTS = (
     "",
