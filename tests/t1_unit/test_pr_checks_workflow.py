@@ -38,8 +38,9 @@ Equivalence class:
      Not here: copies of the approved form edited (one line dropped, `-P` dropped, the PR's
      workspace on the path, the check made `true`, the steps moved, one step only, the steps
      twice). Each would spell the approved lines. They were run against this pin outside the
-     tests, from a copy of the record's lines, and refused (the message of the commit that made
-     F2); any one-character change of the 73 lines changes the digest.
+     tests, from a copy of the record's lines, and refused (the message of commit e1c100c, "the
+     pin of pr-checks.yml accepts the approved score-guard steps too"); any one-character change
+     of the 73 lines changes the digest.
 Hebrew and document axes: do not apply; the input is a workflow file.
 Known limits: one PR with no .py file that edits fast.yml and fast-pin.yml together with
 pr-checks.yml stops this test with them, every check green (the fast suite runs the PR's copy of
