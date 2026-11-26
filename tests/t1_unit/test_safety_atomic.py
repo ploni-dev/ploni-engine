@@ -65,8 +65,6 @@ sweep_partials. Equivalence classes:
        no error, not counted
   EC16 a rename that finds its partial file gone (another run's sweep removed it between its
        close and its rename, #212)    the write is made again; the target holds all its bytes
-  EC17 a partial file whose last change is an hour ahead of the clock    left, not counted
-       (the Known limits; the review of 75c350d, finding 8)
   EC17 a partial file younger than YOUNG_SECONDS that no one holds (Achia, 2026-11-26, "Skip
        young files (Recommended)", #212)    left, not counted; one a second older than
        YOUNG_SECONDS    removed
@@ -76,6 +74,8 @@ sweep_partials. Equivalence classes:
        another program)    that error after ATTEMPTS tries of the rename alone, the bytes
        written once, the target as it was, the partial file removed (the review of d5de41e,
        finding 3)
+  EC20 a partial file whose last change is an hour ahead of the clock    left, not counted
+       (the Known limits; the review of 75c350d, finding 8)
   EC6  a folder that does not exist, an empty folder, a path that is a file    0
   EC12 a partial file that a live write holds (issue #212): the sweep runs between the write
        and the rename    left, not counted, and a dead partial file after it is removed; the
@@ -661,7 +661,7 @@ def test_ec17_the_sweep_goes_on_past_a_young_partial_file(tmp_path: Path) -> Non
     assert os.listdir(tmp_path) == [young.name]
 
 
-def test_ec17_a_partial_file_changed_in_the_future_is_left(tmp_path: Path) -> None:
+def test_ec20_a_partial_file_changed_in_the_future_is_left(tmp_path: Path) -> None:
     path = tmp_path / f"{atomic.PARTIAL_PREFIX}a.docx.1"
     path.write_bytes(b"part")
     ahead = time.time() + 3600

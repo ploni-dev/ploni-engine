@@ -67,11 +67,11 @@ The four retries (issue #212, Achia, 2026-11-26). Equivalence classes:
        another handle before its hold, or its folder gone after its hold), once -> started
        again in a new folder; the block runs once; the root is left as it was but for what the
        race left; where it lost to a removed folder, no lock file of its own is left
-  EC30 a start that loses the race after its hold    its folder is removed while its own lock file
-       is still there, as at a block's end, so that no sweep comes between (the review of
-       75c350d, finding 9)
   EC29 a start that loses the race every time -> the error after ATTEMPTS tries; the block never
        runs; no folder of its own is left
+  EC30 a start that loses the race after its hold    its folder is removed while its own lock is
+       still held, as at a block's end, so that no sweep comes between (the review of 75c350d,
+       finding 9; of 64b37f7, finding 13)
 The helper's own copy of tempfile (issue #278). Equivalence classes:
   EC26 no public name of the helper is the tempfile module or a function or class of it,
        and `__all__` lists exactly the names the helper defines for its callers; a star
@@ -1155,7 +1155,7 @@ def test_ec30_a_lost_start_removes_its_folder_before_its_lock(tmp_path: Path, mo
     locked_at_removal: list[bool] = []
 
     def remove(folder: Path) -> None:
-        locked_at_removal.append(tempfiles._lock_of(folder).exists())
+        locked_at_removal.append(held(tempfiles._lock_of(folder)))
         real_remove(folder)
 
     monkeypatch.setattr(tempfiles, "_remove", remove)
