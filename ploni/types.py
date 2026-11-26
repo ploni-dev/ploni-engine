@@ -19,7 +19,9 @@ The fields that hold document text are left out when an object is printed (`repr
 `TextProjection.text`; `Detection.surface`, `lemma` and `metadata`; `Entity.canonical` and
 `variants`; every field of `Surrogate` that holds a name or its spellings (Achia, 2026-11-25
 and 2026-11-26, issue #213). Names, order, types and defaults stay those of section 5; a
-field is still read, compared and copied as before, and `dataclasses.asdict` still gives it.
+field is still read, compared and copied as before, and `dataclasses.asdict` and `astuple`
+still give it; pytest's explanation of a failed `==` between two objects shows each field that
+differs, hidden ones too.
 """
 
 from __future__ import annotations

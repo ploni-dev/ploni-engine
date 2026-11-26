@@ -9,7 +9,8 @@ Contract: `ploni <command>` once installed (pyproject.toml), or `python -m ploni
 the models folder, and one per name folder that holds files outside a revision folder, then "offline OK", and exits 0; or a line that names the networking
 modules that are loaded, and exits 1. Each other command writes one line on the error
 stream that says it is not built yet, and exits 2. No command, or an unknown one, is a usage
-error (exit 2).
+error (exit 2). An error that no code caught ends any command with one line and exit 4, and
+Ctrl+C with one line and exit 130 (`main`).
 
 Known limits:
 - "offline" means: after every module of `ploni/` is imported in this process (by the list
@@ -49,7 +50,11 @@ STUBS = ("scan", "analyze", "review", "export", "verify", "restore", "rehydrate"
 NOT_BUILT = 2
 # A command stopped by an error no code caught: a code of its own, apart from selftest's 1 ("not
 # offline") and the 2 of a stub or a usage error, so that a caller can tell a failure (issue #213).
-FAILED = 3
+# Not 3: on Windows a native crash that raises a C signal exits 3 too (measured in the review of
+# 58bdd1b with faulthandler._sigsegv()).
+FAILED = 4
+# A command stopped by Ctrl+C: 128 + 2 (SIGINT), the code the shells give a program so stopped.
+INTERRUPTED = 130
 
 
 def inventory(models: Path) -> list[str]:
@@ -112,6 +117,23 @@ def selftest(models: Path, out: TextIO) -> int:
     return 0
 
 
+def error_name(error: BaseException) -> str:
+    """Return the name of an error's type, or `<value>` when it is no plain name of code.
+
+    Why: `main` writes the name of an error no code caught, and must write one line with no
+    document text in it. A class made at run time can have any name: a line break in it would
+    start a second line, and a metaclass can answer with any text.
+
+    Contract: the type's `__name__` when it is a string of ASCII that is a Python identifier;
+    otherwise `<value>`. Raises nothing.
+
+    Known limits: an identifier taken from a document as a class name (`Jacob`) is written, as
+    the log filter writes names of code (its Known limits).
+    """
+    name = type(error).__name__
+    return name if isinstance(name, str) and name.isascii() and name.isidentifier() else "<value>"
+
+
 def main(argv: list[str] | None = None) -> int:
     """Run one command; return its exit code.
 
@@ -129,14 +151,16 @@ def main(argv: list[str] | None = None) -> int:
     while ploni/ is imported, before `main` runs, is not, nor one of a library that adds a
     handler of its own later (issue #211). An error that a command raises and no code catches
     stops the command with FAILED and one line on the error stream, "ploni <command>: failed:
-    <type name>": its message, which may quote a document, is not written, nor its traceback
-    (issue #213).
+    <name>", the name as `error_name` gives it: the error's message, which may quote a
+    document, is not written, nor its traceback (issue #213). Ctrl+C during a command stops it
+    with INTERRUPTED and the line "ploni <command>: interrupted", also while an error was being
+    handled, whose message Python would otherwise print with the interrupt's.
 
     Known limits: a stub and a usage error both exit 2. An argument argparse does not know,
     such as a file name, is repeated on the error stream: that is argparse writing, not a log
-    record, and the filter does not see it. An interrupt (Ctrl+C) and an exit are not errors
-    and are not caught. A type name is written as it is, so a class named at run time from a
-    document would show that name.
+    record, and the filter does not see it. An exit raised inside a command passes through: its
+    number is the exit code, and a text given to it is printed, so no command calls `sys.exit`
+    with a text. Ctrl+C before the arguments are read is not caught.
     """
     logging.install(sys.stderr)
     parser = argparse.ArgumentParser(prog="ploni", description=__doc__.splitlines()[0] if __doc__ else None)
@@ -151,8 +175,11 @@ def main(argv: list[str] | None = None) -> int:
             return selftest(MODELS, sys.stdout)
         sys.stderr.write(f"ploni {command}: not built yet\n")
         return NOT_BUILT
+    except KeyboardInterrupt:
+        sys.stderr.write(f"ploni {command}: interrupted\n")
+        return INTERRUPTED
     except Exception as error:  # noqa: BLE001 the program's last catch: an error's message may quote a document, so only its type is written (issue #213)
-        sys.stderr.write(f"ploni {command}: failed: {type(error).__name__}\n")
+        sys.stderr.write(f"ploni {command}: failed: {error_name(error)}\n")
         return FAILED
 
 
