@@ -72,7 +72,9 @@ The detector (`Phone`):
   A11 a star and three digits; a star and five               nothing
   A12 under another number's label: an ID label before a landline 2-3-4 and 2-7, a company
       label, a bank account's, a card's                      nothing; with a phone label too
-      (a combined label)                                     found
+      (a combined label)                                     found; a phone after a refused
+      number, in the same text                               found (added after the code, for
+      a mutant of Cosmic Ray that survived: the refusal's `continue` made `break`)
   A13 CANDIDATE itself: each prefix of the plan matches whole; 01X, 06X and a mobile a digit
       long do not
 
@@ -467,6 +469,12 @@ def test_a12_under_another_numbers_label(case: str) -> None:
 def test_a12_with_a_phone_label_too() -> None:
     text = f"טלפון/ת.ז.: {groups(LANDLINE, (2, 7))}"
     assert found(text) == only(text, groups(LANDLINE, (2, 7)))
+
+
+def test_a12_a_phone_after_a_refused_number() -> None:
+    refused, phone_number = groups(LANDLINE, (2, 7)), groups(MOBILE, (3, 7))
+    text = f"ת.ז. {refused}, נייד {phone_number}"
+    assert found(text) == only(text, phone_number)
 
 
 def test_a13_the_candidate_pattern() -> None:
