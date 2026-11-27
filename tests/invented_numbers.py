@@ -328,7 +328,9 @@ class Phones:
     each area code 0[23489], and seven digits (9). voip: 6, 07[2-9] and seven (10). service: 4,
     1800 or 1700 and six (10). short: 4, a star and four digits. abroad_mobile: 8, "+972" and a
     mobile without its 0; abroad_landline: 5, one per area code; abroad_voip: 2; double_zero: 4,
-    "00972" and a mobile without its 0. wrong_area: 8, 01X or 06X and seven digits (10) and 4,
+    "00972" and a mobile without its 0. kept_zero: 4, "+972" and a national number with its 0 kept
+    (two landlines, a mobile, a VoIP number; Achia, 2026-11-27, #36: "Yes, find them
+    (Recommended)"). wrong_area: 8, 01X or 06X and seven digits (10) and 4,
     01, 05, 06 or 07 and seven (9). short_line: 2 mobiles and 2 landlines a digit short; long_line:
     2 and 2 a digit long.
 
@@ -345,6 +347,7 @@ class Phones:
     abroad_landline: tuple[str, ...]
     abroad_voip: tuple[str, ...]
     double_zero: tuple[str, ...]
+    kept_zero: tuple[str, ...]
     wrong_area: tuple[str, ...]
     short_line: tuple[str, ...]
     long_line: tuple[str, ...]
@@ -363,6 +366,12 @@ def phones(seed: int) -> Phones:
         abroad_landline=abroad(tuple(invent_phones(digits(seed, "phone_abroad_landline"), 1, (a,), SUBSCRIBER)[0] for a in LANDLINE_AREAS), "+"),
         abroad_voip=abroad(invent_phones(digits(seed, "phone_abroad_voip"), 2, VOIP_AREAS, SUBSCRIBER), "+"),
         double_zero=abroad(invent_phones(digits(seed, "phone_double_zero"), 4, MOBILE_AREAS, SUBSCRIBER), "00"),
+        kept_zero=tuple(
+            "+" + COUNTRY + n
+            for n in invent_phones(digits(seed, "phone_kept_zero"), 2, LANDLINE_AREAS, SUBSCRIBER)
+            + invent_phones(digits(seed, "phone_kept_zero_mobile"), 1, MOBILE_AREAS, SUBSCRIBER)
+            + invent_phones(digits(seed, "phone_kept_zero_voip"), 1, VOIP_AREAS, SUBSCRIBER)
+        ),
         wrong_area=invent_phones(digits(seed, "phone_wrong_long"), 8, WRONG_AREAS_LONG, SUBSCRIBER)
         + invent_phones(digits(seed, "phone_wrong_short"), 4, WRONG_AREAS_SHORT, SUBSCRIBER),
         short_line=invent_phones(digits(seed, "phone_short_line"), 2, MOBILE_AREAS, SUBSCRIBER - 1)

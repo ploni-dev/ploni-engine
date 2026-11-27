@@ -49,7 +49,9 @@
   {"text": "סניף הבנק: {voip[3]:ddd-ddddddd}", "found": [0]},
   {"text": "טלפונים: {mobile[6]:ddd-ddddddd} {mobile[7]:ddd-ddddddd}", "found": [0, 1]},
   {"text": "המשרד: {mobile[8]:ddd-ddddddd}/{mobile[9]:ddd-ddddddd}", "found": [0, 1]},
-  {"text": "טל' {landline[8]:dd-ddddddd}/{landline[9]:d}", "found": [0]}
+  {"text": "טל' {landline[8]:dd-ddddddd}/{landline[9]:d}", "found": [0]},
+  {"text": "Tel: {kept_zero[0]:dddd-dd-ddddddd} | Fax: {kept_zero[1]:dddd (d)d ddddddd}", "found": [0, 1]},
+  {"text": "נייד בחו\"ל: {kept_zero[2]:dddd ddd ddd dddd}", "found": [0]}
  ],
  "negatives": [
   {"text": "טלפון {wrong_area[0]:ddd-ddddddd}"},

@@ -55,7 +55,8 @@ phones, PHONES (issue #36; the plan's prefixes, build-plan.md Phase 1, "Israeli 
       lead of a number from abroad and the star of a short number
   PH2 the prefixes: mobile 05X; landline 0[23489], two of each; voip 07[2-9]; service 1800 and
       1700, both; short a star; abroad "+972" with a mobile, a landline of each area code and a
-      VoIP number after it, double_zero "00972" and a mobile; wrong_area 01X or 06X (ten digits)
+      VoIP number after it, double_zero "00972" and a mobile; kept_zero "+972" and two landlines,
+      a mobile and a VoIP number with their 0 (#36); wrong_area 01X or 06X (ten digits)
       and 01, 05, 06 or 07 (nine), both kinds; short_line and long_line a mobile's or a
       landline's prefix, a digit short or long
   PH3 the same seed twice                           equal; another seed: other numbers
@@ -287,9 +288,11 @@ def test_cd6_a_card_in_a_slot() -> None:
 PHONE_COUNTS = {
     "mobile": (12, {10}), "landline": (10, {9}), "voip": (6, {10}), "service": (4, {10}), "short": (4, {5}),
     "abroad_mobile": (8, {13}), "abroad_landline": (5, {12}), "abroad_voip": (2, {13}), "double_zero": (4, {14}),
+    "kept_zero": (4, {13, 14}),
     "wrong_area": (12, {9, 10}), "short_line": (4, {8, 9}), "long_line": (4, {10, 11}),
 }  # fmt: skip
-LEADS = {"short": "*", "abroad_mobile": "+", "abroad_landline": "+", "abroad_voip": "+"}
+LANDLINE_PREFIXES = ("02", "03", "04", "08", "09")
+LEADS = {"short": "*", "abroad_mobile": "+", "abroad_landline": "+", "abroad_voip": "+", "kept_zero": "+"}
 
 
 @pytest.mark.parametrize("field", PHONE_COUNTS)
@@ -311,6 +314,8 @@ def test_ph2_the_prefixes_of_the_plan() -> None:
     assert sorted(n[4] for n in PHONES.abroad_landline) == ["2", "3", "4", "8", "9"]
     assert all(n.startswith("+9727") and n[5] in "23456789" for n in PHONES.abroad_voip)
     assert all(n.startswith("009725") for n in PHONES.double_zero)
+    assert [n[4:6] in LANDLINE_PREFIXES for n in PHONES.kept_zero] == [True, True, False, False]
+    assert PHONES.kept_zero[2][4:6] == "05" and PHONES.kept_zero[3][4:6] == "07" and all(n[:4] == "+972" for n in PHONES.kept_zero)
     assert all(n[:2] in ("01", "06") for n in PHONES.wrong_area if len(n) == 10)
     assert all(n[:2] in ("01", "05", "06", "07") for n in PHONES.wrong_area if len(n) == 9)
     assert {len(n) for n in PHONES.wrong_area} == {9, 10}

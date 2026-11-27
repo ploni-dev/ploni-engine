@@ -69,7 +69,13 @@ The detector (`Phone`):
       second line's last digit)                              the landline's span; a phone and a
       digit after one plain space ("<phone> 3 ילדים")         the phone (until that review, A3
       asked nothing here: it now asks more)
-  B1 the number alone, at the start and at the end of the text    found
+  EC13 from abroad with the 0 kept, "0" or "(0)" right before the area code (Achia, 2026-11-27,
+      #36, "Yes, find them (Recommended)"): +972-0X-XXXXXXX, +972 (0)X XXXXXXX, +972-05X-XXXXXXX,
+      +972 (0)5X-XXX-XXXX, +9720X..., 00972-0..., 972 (0)..., a VoIP number, with a phone label and
+      with none                                              found, the span from the + (or the
+      first 9 or 0) to the last digit (until that answer, A9 asked nothing of these: it now asks
+      more)
+  B1the number alone, at the start and at the end of the text    found
   B2  the empty text; a text with no digit                    nothing
   A1  an area code the plan does not name: 01X and 06X (ten digits), 01, 05, 06, 07 (nine), each
       plain and with a separator after the area code          nothing
@@ -84,7 +90,9 @@ The detector (`Phone`):
   A7  Arabic-Indic digits                                     nothing
   A8  groupings no phone is written in: a mobile 4-6, a landline 3-6, a landline 8-1 (an ID with
       its check digit apart), a landline 2-4-3                nothing
-  A9  from abroad with the 0 kept (+972-05X-...): a known limit    nothing
+  A9  from abroad with the 0 kept and a separator between it and the area code (+972-0-5X-...,
+      +972 (0) 3 ...): the rule Achia chose names the 0 or (0) glued to the area code    nothing;
+      an area code the plan does not name after the kept 0 (+972-01X-...)    nothing
   A10 a mobile without its 0 (5X-XXXXXXX) with no label or a phone label: a known limit, the
       question of docs/DEBT.md row 16                         nothing
   A11 a star and three digits; a star and five               nothing
@@ -553,8 +561,38 @@ def test_a8_groupings_no_phone_is_written_in(grouping: str) -> None:
     assert found(f"המספר {groups(number, sizes)} נרשם") == []
 
 
-def test_a9_from_abroad_with_the_zero_kept() -> None:
-    assert found(f"טלפון +972-{groups(MOBILE, (3, 7))}") == []
+def kept_zero_forms() -> dict[str, str]:
+    """Return numbers from abroad with their 0 kept, as letterheads write them, by name."""
+    land, other, mob, voip = PHONES.kept_zero
+    return {
+        "+972-0X-XXXXXXX": groups(land, (4, 2, 7)),
+        "+972 (0)X XXXXXXX": f"{land[:4]} ({land[4]}){land[5]} {land[6:]}",
+        "+972 0X XXX XXXX": groups(other, (4, 2, 3, 4), " "),
+        "+972-05X-XXXXXXX": groups(mob, (4, 3, 7)),
+        "+972 (0)5X-XXX-XXXX": f"{mob[:4]} ({mob[4]}){mob[5:7]}-{mob[7:10]}-{mob[10:]}",
+        "plain": land,
+        "00972-0X-XXXXXXX": groups("00" + land[1:], (5, 2, 7)),
+        "972 (0)X XXXXXXX": f"{land[1:4]} ({land[4]}){land[5]} {land[6:]}",
+        "voip": groups(voip, (4, 3, 7)),
+    }
+
+
+@pytest.mark.parametrize("before", ["Tel: ", "טלפון: ", "המשרד "], ids=["latin", "label", "no label"])
+@pytest.mark.parametrize("form", list(kept_zero_forms()))
+def test_ec13_from_abroad_with_the_zero_kept(form: str, before: str) -> None:
+    written = kept_zero_forms()[form]
+    text = f"{before}{written}, עד כאן"
+    assert found(text) == only(text, written)
+
+
+def test_a9_a_separator_after_the_kept_zero() -> None:
+    land, _, mob, _ = PHONES.kept_zero
+    for written in (f"{mob[:4]}-{mob[4]}-{mob[5:7]}-{mob[7:]}", f"{land[:4]} ({land[4]}) {land[5]}-{land[6:]}"):
+        assert found(f"טלפון {written}") == []
+
+
+def test_a9_an_area_code_the_plan_does_not_name_after_the_kept_zero() -> None:
+    assert found(f"טלפון +972-{groups(PHONES.wrong_area[0], (3, 7))}") == []
 
 
 @pytest.mark.parametrize("before", ["המספר ", "נייד "], ids=["no label", "phone label"])

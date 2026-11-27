@@ -9,19 +9,21 @@ Invariant 1, found means a number of the plan: over every sequence of up to four
 pieces, 11,111 texts; the full suite runs all, the fast suite every 22nd, 506), each
 detection's text, its separators and brackets taken out, is one of the plan's shapes, written
 here apart from the module (OF_THE_PLAN): a 0 and an area code of 0[23489] and seven digits;
-05X or 07[2-9] and seven; the same from abroad, "+972", "972" or "00972" in place of the 0;
+05X or 07[2-9] and seven; the same from abroad, "+972", "972" or "00972" in place of the 0, or
+before the 0 kept (Achia, 2026-11-27, #36, "Yes, find them (Recommended)");
 1800 or 1700 and six; a star and four. PIECES mix a mobile, a landline, a number of an area
 code the plan does not name, a mobile a digit short, one from abroad, a digit, separators, a
 bracket and a phone label, so that runs of digits join into longer numbers and split across
 separators.
 
 Invariant 2, every phone is found: each of NUMBERS (the 28 invented mobiles, landlines and VoIP
-numbers of tests/invented_numbers.py), in each of FORMS (8: plain; the area code and the seven
+numbers of tests/invented_numbers.py), in each of FORMS (10: plain; the area code and the seven
 with a hyphen and with a space; three and four after the area code, with hyphens and with
-spaces; the area code in brackets; from abroad, "+972" and hyphens; "00972" and spaces), after
+spaces; the area code in brackets; from abroad, "+972" and hyphens; "00972" and spaces; "+972"
+before the 0 kept, with hyphens, and before "(0)", glued to the area code, and a space), after
 each of LEFT (8: phone labels, a proclitic glued to one, a geresh, a letter glued to the number,
-a bracket, a phrase, nothing), before each of RIGHT (7): 12,544 texts, all in the full suite,
-every 25th in the fast one (502). Each gives exactly one detection, the number's place.
+a bracket, a phrase, nothing), before each of RIGHT (7): 15,680 texts, all in the full suite,
+every 31st in the fast one (506). Each gives exactly one detection, the number's place.
 
 Not applicable: the proclitic and ordinary-word axes of names.
 """
@@ -45,7 +47,7 @@ CTX = DetectContext()
 # build-plan.md Phase 1, "Israeli phone": "Landline `0[23489]`, mobile `05\d`, VoIP `07[2-9]`,
 # `+972` forms, `*NNNN` service numbers"; and the 1-800 and 1-700 numbers.
 NATIONAL = r"(?:[23489][0-9]{7}|5[0-9]{8}|7[2-9][0-9]{7})"
-OF_THE_PLAN = re.compile(rf"0{NATIONAL}|(?:\+|00)?972{NATIONAL}|1[78]00[0-9]{{6}}|\*[0-9]{{4}}")
+OF_THE_PLAN = re.compile(rf"0{NATIONAL}|(?:\+|00)?9720?{NATIONAL}|1[78]00[0-9]{{6}}|\*[0-9]{{4}}")
 
 
 def area(number: str) -> int:
@@ -63,6 +65,8 @@ FORMS: tuple[Form, ...] = (
     lambda n: f"({n[: area(n)]}) {n[area(n) :]}",
     lambda n: f"+972-{n[1 : area(n)]}-{n[area(n) :]}",
     lambda n: f"00972 {n[1 : area(n)]} {n[area(n) :]}",
+    lambda n: f"+972-{n[: area(n)]}-{n[area(n) :]}",
+    lambda n: f"+972 (0){n[1 : area(n)]} {n[area(n) :]}",
 )
 NUMBERS = [*PHONES.mobile, *PHONES.landline, *PHONES.voip]
 LEFT = ("", "טלפון ", "טל' ", "נייד: ", "בפקס ", "(", "ב", "ניתן להתקשר ")
