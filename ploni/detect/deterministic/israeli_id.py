@@ -10,13 +10,16 @@ Contract: `IsraeliId` is a Detector (`ploni/detect/base.py`) of type IL_ID. A de
 of nine ASCII digits, with at most one separator (SEPARATORS) between any two, not touching
 another digit (or a separator and a digit) on either side, whose digits pass
 `israeli_id_checksum_ok`, do not start with COMPANY_PREFIX, are not trivial (`is_trivial`), and
-whose written shape is not that of another number (`is_other_shape`). Its span is the number
-only, first digit to last, separators included, in code points of the projection's text (the
-held-out batch's span rule for IL_ID); a label before it is not read and not in the span.
+whose written shape is not that of another number (`is_other_shape`), and which no label of
+another number stands before (`label_before`). Its span is the number only, first digit to last,
+separators included, in code points of the projection's text (the held-out batch's span rule for
+IL_ID); the label before it is read, never put in the span. Under an ID label its confidence is
+CONFIDENCE_LABELLED, otherwise CONFIDENCE.
 
-Known limits: a landline written as nine digits with no separator (0X1234567) is found as an ID;
-an ID written with fewer than nine digits (a leading zero dropped) is not found; the label is not
-read, so a valid number in another context (a reference number) is found as an ID. The detection
+Known limits: a landline written as nine digits with no separator (0X1234567) and no phone label
+is found as an ID; an ID written with fewer than nine digits (a leading zero dropped) is not
+found; a valid number in another context whose label is not one of OTHER_LABELS (a reference
+number) is found as an ID. The detection
 carries no id (detection_id is ""): ids are made just after detection, with the matter's key,
 never inside a detector (Achia, 2026-11-26, issue #169, "Use the secret key (Recommended)").
 """
@@ -48,9 +51,34 @@ _SEP = "[" + re.escape(SEPARATORS) + "]"
 CANDIDATE = re.compile(rf"(?<![0-9])(?<![0-9]{_SEP})[0-9](?:{_SEP}?[0-9]){{{ID_LENGTH - 1}}}(?!{_SEP}?[0-9])")
 # shortcut: one fixed confidence for every checksum match until calibration (build-plan.md
 # section 4.7, detect/calibration.py) gives a measured one; a random nine-digit number passes the
-# check one time in ten.
+# check one time in ten, and an ID label before it is more evidence.
 CONFIDENCE = 0.95
+CONFIDENCE_LABELLED = 0.99
 BAND = "high"
+# How far before a number its label is looked for, in characters on the same line: a label and
+# the few words forms put between it and the number ("מס'", a colon, "של המבקש").
+LABEL_WINDOW = 20
+# A label: up to two proclitic letters glued before it (ו, ב, ל, ה, ש, מ, כ), no Hebrew letter
+# before those, and none right after the label, so that its letters inside a longer word do not count.
+_BEFORE = r"(?<![א-ת])[ובלהשמכ]{0,2}"
+_AFTER = r"(?![א-ת])"
+# The labels of an ID in forms and court papers: ת.ז. with or without its dots, ת"ז with either
+# gershayim, תעודת זהות, מס' זהות and מספר זהות with either geresh, and the Latin ID.
+ID_LABELS = (
+    r"ת\.\s?ז\.?", r"ת[\"״]ז", r"תעודת\s+(?:ה)?זהות", r"מס(?:['׳]|פר)\s*(?:(?:ה)?תעודת\s+)?(?:ה)?זהות",
+)  # fmt: skip
+# The labels of the numbers that are not an ID and are written the same way: company and
+# non-profit (build-plan.md Phase 1), passport, bank account, phone, health fund, military,
+# licence and card numbers.
+OTHER_LABELS = (
+    r"ח\.\s?פ\.?", r"ח[\"״]פ", r"ע\.\s?ר\.?", r"ע[\"״]ר", r"דרכון", r"חשבון", r"סניף", r"בנק", r"טלפון", r"טל['׳.]",
+    r"פקס", r"נייד", r"פלאפון", r"קופת\s+חולים", r"קופ[\"״]ח", r"מס(?:['׳]|פר)\s*(?:חבר|אישי|רישוי|רכב|לקוח|תיק)",
+    r"מ\.\s?א\.?", r"מ[\"״]א", r"רישיון", r"רישוי", r"כרטיס", r"אשראי",
+)  # fmt: skip
+LABEL = re.compile(
+    rf"(?P<id>{_BEFORE}(?:{'|'.join(ID_LABELS)}){_AFTER}|(?<![A-Za-z])I\.?D\.?(?![A-Za-z]))"
+    rf"|(?P<other>{_BEFORE}(?:{'|'.join(OTHER_LABELS)}){_AFTER})"
+)
 
 
 def israeli_id_checksum_ok(digits: str) -> bool:
@@ -110,18 +138,40 @@ def is_other_shape(raw: str) -> bool:
     return landline or groups == CASE_NUMBER_GROUPS
 
 
-def is_israeli_id(raw: str) -> bool:
-    """Say whether a candidate, as written, is an Israeli ID.
+def label_before(text: str, start: int) -> str | None:
+    """Return the kind of the label that stands before a number: "id", "other", or None.
+
+    Why: the label is how a form says what a number is; a valid number under a passport's or a
+    phone's label is that number, and one under ת.ז. is an ID with more evidence than its checksum.
+
+    Contract: `start` is the number's first character in `text`. Looks at the LABEL_WINDOW
+    characters before it, on its line; the last label there counts, when no digit stands between
+    it and the number. "id" for one of ID_LABELS or the Latin ID, "other" for one of OTHER_LABELS.
+
+    Known limits: a label further away, on the line before, or not in the two lists is not seen.
+    """
+    line = text.rfind("\n", 0, start) + 1
+    window = text[max(line, start - LABEL_WINDOW) : start]
+    labels = list(LABEL.finditer(window))
+    last = labels[-1] if labels else None  # the nearest label is the last one found
+    if last is None or any(ch.isdigit() for ch in window[last.end() :]):
+        return None
+    return "id" if last.group("id") else "other"
+
+
+def is_israeli_id(raw: str, label: str | None) -> bool:
+    """Say whether a candidate, as written and under its label, is an Israeli ID.
 
     Why: the decision of the detector, apart from the search, so each rule is tested by itself.
 
-    Contract: `raw`, a match of CANDIDATE. True when its digits pass the checksum, do not start
-    with COMPANY_PREFIX, are not trivial, and its shape is not another number's.
+    Contract: `raw`, a match of CANDIDATE; `label`, what `label_before` gives for it. True when no
+    label of another number stands before it, its digits pass the checksum, do not start with
+    COMPANY_PREFIX, are not trivial, and its shape is not another number's.
 
     Known limits: those of the module.
     """
     digits = re.sub(_SEP, "", raw)
-    if not israeli_id_checksum_ok(digits) or digits.startswith(COMPANY_PREFIX):
+    if label == "other" or not israeli_id_checksum_ok(digits) or digits.startswith(COMPANY_PREFIX):
         return False
     return not is_trivial(digits) and not is_other_shape(raw)
 
@@ -148,13 +198,16 @@ class IsraeliId:
         Why: the one call fusion makes of this detector.
 
         Contract: returns a Detection per number, with the part of `proj`, its surface the text
-        of its span, CONFIDENCE and BAND, no base span, and detection_id "" (the module
-        docstring). Raises nothing.
+        of its span, CONFIDENCE_LABELLED under an ID label and CONFIDENCE otherwise, BAND, no base
+        span, and detection_id "" (the module docstring). Raises nothing.
 
         Known limits: those of the module.
         """
-        return [
-            Detection("", proj.part, Span(match.start(), match.end()), match.group(), ENTITY_TYPE, CONFIDENCE, BAND, self.name, None)
-            for match in CANDIDATE.finditer(proj.text)
-            if is_israeli_id(match.group())
-        ]
+        found = []
+        for match in CANDIDATE.finditer(proj.text):
+            label = label_before(proj.text, match.start())
+            if is_israeli_id(match.group(), label):
+                confidence = CONFIDENCE_LABELLED if label == "id" else CONFIDENCE
+                span = Span(match.start(), match.end())
+                found.append(Detection("", proj.part, span, match.group(), ENTITY_TYPE, confidence, BAND, self.name, None))
+        return found
