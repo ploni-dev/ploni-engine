@@ -80,7 +80,7 @@ from ploni.detect.deterministic import company_number, israeli_id
 from ploni.detect.deterministic.company_number import CompanyNumber, number_type
 from ploni.types import Span
 from tests.detector_contract import projection
-from tests.invented_numbers import ISRAELI_IDS, complete, read_cases
+from tests.invented_numbers import BANK_NUMBERS, ISRAELI_IDS, combined, complete, read_cases
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "detect" / "company_number.json"
 # Invented numbers, made when the tests run (tests/invented_numbers.py).
@@ -256,7 +256,7 @@ def test_a3_under_another_numbers_label(before: str) -> None:
 
 def cases() -> tuple[list[tuple[str, set[tuple[int, int, str]]]], int, int]:
     """Read the fixture, its numbers filled in: each text with its expected places and types, and the counts."""
-    positives, negatives = read_cases(FIXTURE, ISRAELI_IDS)
+    positives, negatives = read_cases(FIXTURE, combined(ISRAELI_IDS, BANK_NUMBERS))
     data = json.loads(FIXTURE.read_text(encoding="utf-8"))
     typed = [(text, {(start, end, TYPE[kind]) for (start, end), kind in zip(spans, case["types"], strict=True)}) for (text, spans), case in zip(positives, data["positives"], strict=True)]
     return typed + [(text, set()) for text, _ in negatives], len(positives), len(negatives)

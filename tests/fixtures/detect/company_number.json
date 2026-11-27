@@ -502,7 +502,7 @@
    "text": "בשנים 2019 {company[20]:dddd dd ddd}"
   },
   {
-   "text": "חשבון IL62 0108 0000 0009 9999 999"
+   "text": "חשבון {iban[39]:dddd dddd dddd dddd dddd ddd}"
   },
   {
    "text": "כרטיס אשראי 4580 1234 5678 9012"

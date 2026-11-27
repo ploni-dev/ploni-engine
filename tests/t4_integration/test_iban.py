@@ -19,7 +19,6 @@ Matrix:
 
 import json
 from pathlib import Path
-from types import SimpleNamespace
 
 from eval import detectors
 from ploni.detect.base import DetectContext
@@ -28,11 +27,11 @@ from ploni.detect.deterministic.credit_card import CreditCard
 from ploni.detect.deterministic.iban import Iban
 from ploni.detect.deterministic.israeli_id import IsraeliId
 from tests.detector_contract import breaks, projection
-from tests.invented_numbers import BANK_NUMBERS, CARDS, ISRAELI_IDS, fill, read_cases
+from tests.invented_numbers import BANK_NUMBERS, CARDS, ISRAELI_IDS, combined, fill, read_cases
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "detect"
 FIXTURE = FIXTURES / "iban.json"
-NUMBERS = SimpleNamespace(**vars(BANK_NUMBERS), **vars(ISRAELI_IDS))
+NUMBERS = combined(ISRAELI_IDS, BANK_NUMBERS)
 TYPE = {"iban": "IBAN", "bank": "BANK_ACCOUNT"}
 OURS = frozenset(TYPE.values())
 
@@ -66,7 +65,7 @@ def test_m3_registered_and_needs_no_morphology() -> None:
 
 def test_m4_no_span_shared_with_another_detector() -> None:
     every = [text for text, _ in texts()]
-    for name, numbers in (("il_id.json", ISRAELI_IDS), ("company_number.json", ISRAELI_IDS), ("credit_card.json", CARDS)):
+    for name, numbers in (("il_id.json", NUMBERS), ("company_number.json", NUMBERS), ("credit_card.json", combined(CARDS, BANK_NUMBERS))):
         positives, negatives = read_cases(FIXTURES / name, numbers)
         every += [text for text, _ in positives + negatives]
     for text in every:

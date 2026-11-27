@@ -80,6 +80,9 @@ each item, the first and the last slot it covers, and "types" the type of each, 
   F2  per type, recall and precision counted by exact span and type; IBAN at or above 0.98
       (build-plan.md Phase 1, Gate, checksum-backed); BANK_ACCOUNT printed, not gated
       (pattern-only, issue #34); the counts and every miss printed, a miss by its case's place
+  F3  no file under tests/fixtures/detect/ holds, outside its slots, an IBAN that passes the
+      check (widened from this fixture to every one by the review of #34 at 28b6032, finding 1:
+      the ID and the company number fixtures held a published example IBAN, now a slot)
 
 Hebrew axes: gershayim as ", ״ and two ASCII apostrophes (ח"ן); geresh as ' and ׳ (מס'); a
 proclitic glued to a label and to the words between the numbers; the maqaf as a separator;
@@ -431,9 +434,12 @@ def test_f2_recall_and_precision_on_the_fixture(capsys: pytest.CaptureFixture[st
     assert recall >= 0.98 and precision >= 0.98
 
 
-def test_f2_the_fixture_never_holds_a_valid_iban_as_a_literal() -> None:
-    data = json.loads(FIXTURE.read_text(encoding="utf-8"))
-    for case in data["positives"] + data["negatives"]:
-        literal = re.sub(r"\{[^}]*\}", "", case["text"])
-        for candidate in re.findall(r"[A-Za-z]{2}[0-9 ]{14,40}", literal):
-            assert not iban_ok(re.sub(r"[^0-9A-Za-z]", "", candidate))
+def test_f3_no_fixture_holds_a_valid_iban_as_a_literal() -> None:
+    files = sorted(FIXTURE.parent.glob("*.json"))
+    assert FIXTURE in files and len(files) >= 4
+    for path in files:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        for case in [case for value in data.values() if isinstance(value, list) for case in value]:
+            literal = re.sub(r"\{[^}]*\}", "", case["text"])
+            for candidate in re.findall(r"[A-Za-z]{2}[0-9 \-./ ‎‏]{13,60}", literal):
+                assert not iban_ok(re.sub(r"[^0-9A-Za-z]", "", candidate)), path.name
