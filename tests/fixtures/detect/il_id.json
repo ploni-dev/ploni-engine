@@ -1,0 +1,415 @@
+{
+ "about": "Invented for this project (issue #32): hand-written Hebrew sentences; each number is a slot, {name[i]} or {name[i]:shape}, that tests/invented_numbers.py fills when the tests run, from a fixed seed, with numbers made by the checksum of build-plan.md Phase 1, so that no number that passes it is stored (Achia, 2026-11-27, issue #32, \"Make them fresh too (Recommended)\"). A positive's \"found\" lists the slots the detector must find, by their order in the text; a span is the number only, first digit to last, separators included (the span rule of IL_ID). No real document.",
+ "positives": [
+  {
+   "text": "ת.ז. {valid[0]}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת.ז. {valid[1]:ddd.ddd.ddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת\"ז {valid[2]:ddd-ddd-ddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת\"ז {valid[3]:dddddddd־d}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת״ז {valid[4]:ddd ddd ddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת״ז {valid[5]:dddddddd–d}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מס' זהות {valid[6]:dddddddd/d}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מס' זהות {valid[7]}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מס׳ זהות {valid[8]}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מס׳ זהות {valid[9]:ddd-ddd-ddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "התובע, נושא תעודת זהות מספר {valid[10]:dddddddd-d}, הגיש תביעה נגד הנתבעת.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "התובע, נושא תעודת זהות מספר {valid[11]:ddd ddd ddd}, הגיש תביעה נגד הנתבעת.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "הנתבעת (ת.ז. {valid[12]:ddd.ddd.ddd}) לא התייצבה לדיון שנקבע.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "הנתבעת (ת.ז. {valid[13]:dddddddd/d}) לא התייצבה לדיון שנקבע.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "{valid[14]:dddddddd־d} הוא מספר הזהות של המבקש.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "{valid[15]} הוא מספר הזהות של המבקש.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מספר הזהות של המשיב הוא {valid[16]:dddddddd–d}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מספר הזהות של המשיב הוא {valid[17]:dddddddd-d}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ע\"י ב\"כ עו\"ד כהן, ת.ז. {valid[18]}.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ע\"י ב\"כ עו\"ד כהן, ת.ז. {valid[19]:ddd.ddd.ddd}.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת.ז.: {valid[20]:ddd-ddd-ddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת.ז.: {valid[21]:dddddddd־d}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת.ז.{valid[22]:ddd ddd ddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת.ז.{valid[23]:dddddddd–d}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ות.ז. {valid[24]:dddddddd/d} של העד צורפה לתיק.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ות.ז. {valid[25]} של העד צורפה לתיק.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "שם: ישראל ישראלי\nת.ז. {valid[26]}\nכתובת: רחוב הרצל 1",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "שם: ישראל ישראלי\nת.ז. {valid[27]:ddd-ddd-ddd}\nכתובת: רחוב הרצל 1",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "המצהיר, ID {valid[28]:dddddddd-d}, Israeli resident",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "המצהיר, ID {valid[29]:ddd ddd ddd}, Israeli resident",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת.ז. ‏{valid[30]:ddd.ddd.ddd}‎",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת.ז. ‏{valid[31]:dddddddd/d}‎",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "לכב' השופט: המבקשת, ת״ז {valid[32]:dddddddd־d}, מבקשת דחייה.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "לכב' השופט: המבקשת, ת״ז {valid[33]}, מבקשת דחייה.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "שָׁלוֹם רַב, ת.ז. {valid[34]:dddddddd–d} מצורפת בזאת.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "שָׁלוֹם רַב, ת.ז. {valid[35]:dddddddd-d} מצורפת בזאת.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "הצדדים: פלוני (ת\"ז {valid[36]}) ואלמוני.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "הצדדים: פלוני (ת\"ז {valid[37]:ddd.ddd.ddd}) ואלמוני.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "בתצהיר נרשם ת.ז. {valid[38]:ddd-ddd-ddd}; העותק נשמר.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "בתצהיר נרשם ת.ז. {valid[39]:dddddddd־d}; העותק נשמר.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "בעל ת.ז. {valid[40]:ddd ddd ddd} ובעלת ת.ז. {valid[41]:dddddddd־d} חתמו על ההסכם.",
+   "found": [
+    0,
+    1
+   ]
+  },
+  {
+   "text": "העדים: {valid[42]:dddddddd/d}, {valid[43]:dddddddd–d}.",
+   "found": [
+    0,
+    1
+   ]
+  },
+  {
+   "text": "ת\"ז {valid[44]} / ת״ז {valid[45]}",
+   "found": [
+    0,
+    1
+   ]
+  },
+  {
+   "text": "ת.ז. {zeros[0]} (בתוספת אפס בתחילתו)",
+   "found": [
+    0
+   ]
+  }
+ ],
+ "negatives": [
+  {
+   "text": "ת.ז. {near[0]}"
+  },
+  {
+   "text": "ת\"ז {near[1]:dddddddd-d}"
+  },
+  {
+   "text": "ת״ז {near[2]:ddd-ddd-ddd}"
+  },
+  {
+   "text": "מס' זהות {near[3]:ddd.ddd.ddd}"
+  },
+  {
+   "text": "מס׳ זהות {near[4]:ddd ddd ddd}"
+  },
+  {
+   "text": "התובע, נושא תעודת זהות מספר {near[5]:dddddddd־d}, הגיש תביעה נגד הנתבעת."
+  },
+  {
+   "text": "הנתבעת (ת.ז. {near[6]:dddddddd/d}) לא התייצבה לדיון שנקבע."
+  },
+  {
+   "text": "{near[7]:dddddddd–d} הוא מספר הזהות של המבקש."
+  },
+  {
+   "text": "מספר הזהות של המשיב הוא {near[8]}"
+  },
+  {
+   "text": "ע\"י ב\"כ עו\"ד כהן, ת.ז. {near[9]}."
+  },
+  {
+   "text": "ת.ז.: {near[10]:dddddddd-d}"
+  },
+  {
+   "text": "ת.ז.{near[11]:ddd-ddd-ddd}"
+  },
+  {
+   "text": "ות.ז. {near[12]:ddd.ddd.ddd} של העד צורפה לתיק."
+  },
+  {
+   "text": "שם: ישראל ישראלי\nת.ז. {near[13]:ddd ddd ddd}\nכתובת: רחוב הרצל 1"
+  },
+  {
+   "text": "המצהיר, ID {near[14]:dddddddd־d}, Israeli resident"
+  },
+  {
+   "text": "ת.ז. ‏{near[15]:dddddddd/d}‎"
+  },
+  {
+   "text": "לכב' השופט: המבקשת, ת״ז {near[16]:dddddddd–d}, מבקשת דחייה."
+  },
+  {
+   "text": "שָׁלוֹם רַב, ת.ז. {near[17]} מצורפת בזאת."
+  },
+  {
+   "text": "הצדדים: פלוני (ת\"ז {near[18]}) ואלמוני."
+  },
+  {
+   "text": "בתצהיר נרשם ת.ז. {near[19]:dddddddd-d}; העותק נשמר."
+  },
+  {
+   "text": "ת.ז. {cut[0]:dddddddd}"
+  },
+  {
+   "text": "ת.ז. {valid[51]}7"
+  },
+  {
+   "text": "ח.פ. {company[0]}"
+  },
+  {
+   "text": "ח\"פ {company[1]:dd-ddddddd}"
+  },
+  {
+   "text": "חברה בע\"מ, ח״פ {company[2]}"
+  },
+  {
+   "text": "ע.ר. {nonprofit[0]}"
+  },
+  {
+   "text": "ע״ר {nonprofit[1]:dd-ddddddd}"
+  },
+  {
+   "text": "העמותה (ע\"ר {nonprofit[2]}) הגישה בקשה."
+  },
+  {
+   "text": "ת.ז. 000000000"
+  },
+  {
+   "text": "ת.ז. 123456782 (מספר לדוגמה בטופס)"
+  },
+  {
+   "text": "ת.ז. 012345674"
+  },
+  {
+   "text": "טל' {landline[0]:dd-ddddddd}"
+  },
+  {
+   "text": "טלפון: {landline[1]:dd ddddddd}"
+  },
+  {
+   "text": "פקס {landline[2]:dd-ddddddd}"
+  },
+  {
+   "text": "נייד 050-1234567"
+  },
+  {
+   "text": "ת\"א {case:ddddd-dd-dd}"
+  },
+  {
+   "text": "ע\"א 1234/20"
+  },
+  {
+   "text": "ביום 12.03.2020 התקיים הדיון."
+  },
+  {
+   "text": "סך של 1,234,567 ש\"ח שולם במלואו."
+  },
+  {
+   "text": "כרטיס אשראי 4580 1234 5678 9012"
+  },
+  {
+   "text": "חשבון IL62 0108 0000 0009 9999 999"
+  },
+  {
+   "text": "מספר {valid[52]}-5 בטופס"
+  },
+  {
+   "text": "7-{valid[53]} בטבלה"
+  },
+  {
+   "text": "{valid[54]}3 הוא מספר ארוך מדי"
+  },
+  {
+   "text": "רכב מספר 12-345-67 חנה ליד הבית."
+  },
+  {
+   "text": "התובע הגיש תצהיר ללא מספר זהות."
+  },
+  {
+   "text": "שָׁלוֹם עֲלֵיכֶם, אין כאן מספר."
+  }
+ ]
+}

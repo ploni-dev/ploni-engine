@@ -2,13 +2,14 @@
 
 Why: the scorer takes "a callable from a document's text to a list of (start, end, type)"
 (the scorer's contract, PR #288). The score check of issue 170 scores main and the PR with the
-same function, so the function must exist on main before the workflow that calls it. It holds
-no detector today: main's score is that of no detector.
+same function, so the function must exist on main before the workflow that calls it. Its list
+holds the detectors of ploni/, the Israeli ID detector first (issue #32).
 
 Test matrix:
 
 Equivalence classes:
-  EC1  the detectors of DETECTORS: none today        [] for any text
+  EC1  the detectors of DETECTORS: the Israeli ID detector    its detections, by default; the
+                                                     placeholder number 123456782 is not one
   EC2  one detector given                            its detections as (start, end, type), in its order
   EC3  two detectors given                           the first one's, then the second one's
   EC4  the projection a detector gets                part "body"; the whole text; one anchor over it
@@ -32,6 +33,7 @@ from eval import detectors
 from ploni.detect.base import DetectContext, Detector
 from ploni.types import Anchor, Detection, Span, TextProjection
 from tests.detector_contract import Digits
+from tests.invented_numbers import ISRAELI_IDS
 
 
 class Seen:
@@ -68,9 +70,11 @@ class Words:
 TEXT = "שָׁלוֹם, ת.ז. 123456782 ו-‏55‎"
 
 
-def test_ec1_no_detector_today() -> None:
-    assert detectors.DETECTORS == ()
+def test_ec1_the_detectors_of_ploni() -> None:
+    assert [type(each).__name__ for each in detectors.DETECTORS] == ["IsraeliId"]
     assert detectors.detect_all(TEXT) == []
+    text = "ת.ז. " + ISRAELI_IDS.valid[0]
+    assert detectors.detect_all(text) == [(5, 14, "IL_ID")]
 
 
 def test_ec2_one_detector() -> None:
