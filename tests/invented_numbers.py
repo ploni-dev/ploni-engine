@@ -26,7 +26,13 @@ Contract:
   ploni/detect/deterministic/iban.py, as `israeli_id_checksum_ok` is. `with_check(country,
   bban)`: the country, the two check digits that make it pass, and the bban.
 - `bank_numbers(seed)`: a `BankNumbers` (its fields say what each list holds), each list from its
-  own stream of the same seed. BANK_NUMBERS is `bank_numbers(SEED)`.
+  own stream of the same seed. BANK_NUMBERS is `bank_numbers(SEED)`. `iban_remainder(chars)`: the
+  remainder of ISO 7064 MOD 97-10 reduced one digit at a time, the second way to it that the
+  tests share.
+- `combined(*numbers)`: one namespace with the fields of each, for a fixture that holds two kinds
+  of numbers. Raises ValueError when a field name is in two, naming it.
+- `typed_slots(template, numbers, kinds)`: (start, end, type) of each slot of `template` whose
+  list is a key of `kinds`, typed by it, in the order of the slots.
 - `fill(template, numbers)`: (text, spans). A slot is written as a field of str.format: `{name}`
   or `{name[i]}`, a field of `numbers` (a dataclass), optionally `{name[i]:shape}`. The shape
   writes the number: "d" writes its next digit, "x" skips one, "+" writes the next digit plus one,
@@ -50,6 +56,7 @@ import dataclasses
 import hashlib
 import json
 import string
+import types
 from collections.abc import Callable, Iterator, Sequence
 from itertools import count, islice
 from pathlib import Path
@@ -314,6 +321,15 @@ def with_check(country: str, bban: str) -> str:
     return f"{country}{MOD + 1 - as_number(bban + country + '00') % MOD:02d}{bban}"
 
 
+def iban_remainder(chars: str) -> int:
+    """Return the ISO 7064 MOD 97-10 remainder of an IBAN's characters, reduced one digit at a time, apart from iban_ok."""
+    value = 0
+    for ch in (chars[4:] + chars[:4]).upper():
+        for digit in str(ord(ch) - ord("A") + 10) if ch.isalpha() else ch:
+            value = (value * 10 + int(digit)) % MOD
+    return value
+
+
 def invent_ibans(stream: Iterator[str], how_many: int, country: str, length: int) -> tuple[str, ...]:
     """Make distinct IBANs of one country: digits of the stream as the bban, `length` of them, and the check digits."""
     made: list[str] = []
@@ -425,3 +441,21 @@ def read_cases(path: Path, numbers: object) -> tuple[list[Case], list[Case]]:
         positives.append((text, [spans[k] for k in case["found"]]))
     negatives: list[Case] = [(fill(case["text"], numbers)[0], []) for case in data["negatives"]]
     return positives, negatives
+
+
+def combined(*numbers: object) -> types.SimpleNamespace:
+    """Return one namespace with the fields of each set of numbers, for a fixture that holds two kinds."""
+    fields: dict[str, object] = {}
+    for each in numbers:
+        for name, value in vars(each).items():
+            if name in fields:
+                raise ValueError(f"the field {name} is in two sets of numbers")
+            fields[name] = value
+    return types.SimpleNamespace(**fields)
+
+
+def typed_slots(template: str, numbers: object, kinds: dict[str, str]) -> list[tuple[int, int, str]]:
+    """Return the places of a template's slots whose list is a key of `kinds`, filled, typed by it."""
+    names = [name.split("[")[0] for _, name, _, _ in string.Formatter().parse(template) if name is not None]
+    _, spans = fill(template, numbers)
+    return [(start, end, kinds[name]) for name, (start, end) in zip(names, spans, strict=True) if name in kinds]
