@@ -135,24 +135,24 @@ def label_before(text: str, start: int) -> str | None:
     return "phone" if "phone" in kinds else "id" if "id" in kinds else "other" if kinds else None
 
 
-def refused(raw: str, label: str | None, beside: bool) -> bool:
+def refused(raw: str, label: str | None) -> bool:
     """Say whether the label before a candidate makes it another number.
 
     Why: under an ID label the ID detector may take the same digits, and under another number's
     label a number of an ID's length may be that number; a candidate that cannot be is a phone
     (the review of b2f3790, findings 1 and 2).
 
-    Contract: `raw`, a match of CANDIDATE; `label`, what `label_before` gives for it; `beside`,
-    whether another number follows it (israeli_id.NUMBER_AFTER matches right after it). True
-    under an ID label when `israeli_id.is_israeli_id(raw, "id", beside)` is; True under another
-    number's label when `raw` holds SHARED_LENGTH digits or fewer and is no short number (a
-    star and four digits); False otherwise, and under a phone label or none.
+    Contract: `raw`, a match of CANDIDATE; `label`, what `label_before` gives for it. True under
+    an ID label when `israeli_id.is_israeli_id(raw, "id", False)` is (under an ID label that
+    function does not read whether another number follows, so none is looked for); True under
+    another number's label when `raw` holds SHARED_LENGTH digits or fewer and is no short number
+    (a star and four digits); False otherwise, and under a phone label or none.
 
     Known limits: the ID detector reads its own candidate; where its candidate and this one differ
     in their edges, `is_israeli_id` on this one's text is what is asked.
     """
     if label == "id":
-        return israeli_id.is_israeli_id(raw, label, beside)
+        return israeli_id.is_israeli_id(raw, label, beside=False)
     digits = sum(ch.isdigit() for ch in raw)
     return label == "other" and digits <= SHARED_LENGTH and not raw.startswith(SHORT_MARK)
 
@@ -209,8 +209,7 @@ class Phone:
         found = []
         for match in CANDIDATE.finditer(proj.text):
             label = label_before(proj.text, match.start())
-            beside = israeli_id.NUMBER_AFTER.match(proj.text, match.end()) is not None
-            if refused(match.group(), label, beside):
+            if refused(match.group(), label):
                 continue
             confidence = CONFIDENCE_LABELLED if label == "phone" else CONFIDENCE
             reason = review_reason(match.group(), label)

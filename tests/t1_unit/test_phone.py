@@ -250,7 +250,7 @@ ANY_NUMBER = {"landline": groups(LANDLINE, (2, 7)), "mobile": groups(MOBILE, (3,
 @pytest.mark.parametrize("label", [None, "phone"], ids=["no label", "phone label"])
 @pytest.mark.parametrize("which", ANY_NUMBER)
 def test_rf1_no_label_or_a_phone_label(label: str | None, which: str) -> None:
-    assert not refused(ANY_NUMBER[which], label, False)
+    assert not refused(ANY_NUMBER[which], label)
 
 
 UNDER_ANOTHER = {
@@ -266,7 +266,7 @@ UNDER_ANOTHER = {
 @pytest.mark.parametrize("which", UNDER_ANOTHER)
 def test_rf2_another_numbers_label(which: str) -> None:
     raw, expected = UNDER_ANOTHER[which]
-    assert refused(raw, "other", False) is expected
+    assert refused(raw, "other") is expected
 
 
 def under_an_id_label() -> dict[str, tuple[str, bool]]:
@@ -284,7 +284,7 @@ def under_an_id_label() -> dict[str, tuple[str, bool]]:
 @pytest.mark.parametrize("which", list(under_an_id_label()))
 def test_rf3_an_id_label(which: str) -> None:
     raw, expected = under_an_id_label()[which]
-    assert refused(raw, "id", False) is expected
+    assert refused(raw, "id") is expected
 
 
 MOBILE_FORMS = {
