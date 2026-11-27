@@ -16,6 +16,10 @@ Test matrix:
       under "true"             exit 2, the error still an error; the number nowhere; the file
                                named on an ERROR line
   EC5 this repository's own test run               tests/conftest.py is one of its plugins
+  EC6 a fixture that raises with the number in its teardown, after a passing test, under "true"
+                               exit 1; the number nowhere; the test named on an ERROR line
+  EC7 a warning whose text holds the number, under "true"    the text still printed: the
+                               module's known limit, pinned so that a change of it is seen
 """
 
 import importlib
@@ -63,6 +67,30 @@ def test_passes():
 # The line of FAILING that holds the assert on the number, counted from 1.
 ASSERT_LINE = FAILING.splitlines().index('    assert number == "0"') + 1
 BROKEN = 'NUMBER = "".join(str((i * 7 + 4) % 10) for i in range(9))\nraise ValueError("no import of " + NUMBER)\n'
+TEARDOWN = '''
+import pytest
+
+NUMBER = "".join(str((i * 7 + 4) % 10) for i in range(9))
+
+
+@pytest.fixture
+def left_open():
+    yield
+    raise ValueError("cannot close " + NUMBER)
+
+
+def test_teardown(left_open):
+    pass
+'''
+WARNED = '''
+import warnings
+
+NUMBER = "".join(str((i * 7 + 4) % 10) for i in range(9))
+
+
+def test_warned():
+    warnings.warn("warned of " + NUMBER, UserWarning, stacklevel=1)
+'''
 TIMING = re.compile(r" in [0-9.]+s")
 # The modules of the small test files, as pytest's importlib mode names them.
 SMALL_FILES = ("test_fail", "test_ok")
@@ -127,6 +155,19 @@ def test_ec4_a_file_that_fails_to_import(tmp_path: Path, capsys: pytest.CaptureF
     assert code == 2
     assert NUMBER not in output
     assert "ERROR test_fail.py" in output
+
+
+def test_ec6_a_fixture_that_fails_in_its_teardown(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    code, output = run(tmp_path, capsys, TEARDOWN, with_conftest=True, value="true")
+    assert code == 1
+    assert NUMBER not in output
+    assert "ERROR test_fail.py::test_teardown" in output
+
+
+def test_ec7_a_warning_is_still_printed(tmp_path: Path, capsys: pytest.CaptureFixture[str]) -> None:
+    code, output = run(tmp_path, capsys, WARNED, with_conftest=True, value="true")
+    assert code == 0
+    assert NUMBER in output
 
 
 
