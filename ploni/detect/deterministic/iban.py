@@ -52,7 +52,9 @@ the account word is a bank label and no other number's label stands beside it
 (`bank_label_before` at the account's first digit), no other number follows it
 (`israeli_id.NUMBER_AFTER`: separators, the plain space among them, and a digit), it is in at
 most LONE_GROUPS groups of digits (three or more are a triple's shape, which TRIPLE judges), and
-it is not in a landline's shape (`israeli_id.is_other_shape`). Its span runs from the branch's
+it is not in a landline's shape (`israeli_id.is_other_shape`). With a branch or none, it is
+refused where the phone detector takes a number that starts at the account (`phone_at`): a
+phone after the account word stays a phone, and no span is both. Its span runs from the branch's
 first digit, or with no branch from the account's, to the account's last; the words before
 them are read, never put in it. A match that shares a character with an accepted triple is
 dropped: the triple holds the account. A bank named by its name before the branch ("בנק לאומי,
@@ -102,23 +104,26 @@ Since issue #315 a number of 4 to 13 digits, in one group or two, right after an
 with no currency, decimal part or other number after it, is found as an account whatever it is.
 Measured on invented texts, 3,000 per form after each of חשבון, ח-ן, "חשבון מס'" and בחשבונו, by
 a scratch script that is not in the repository (its table is in the text of this detector's PR,
-issue #315): found 1.000 after each, an ID of nine digits; a company number of nine; a landline
-0XXXXXXXX with no separator; a mobile 05X-XXXXXXX and 05XXXXXXXX; an amount XXXXX with no
-currency, -XXXXX, and XXXXX דולר; a case number NNNN/YY; a year; and so the sentences "הופקדו
+issue #315): found 1.000 after each, an ID of nine digits; a company number of nine; an amount
+XXXXX with no currency, -XXXXX, and XXXXX דולר; a case number NNNN/YY; a year; a landline
+0XXXXXXXX with no separator after חשבון and "חשבון מס'" (the phone detector leaves nine digits
+under that label to the account), 0.000 after ח-ן and בחשבונו (it takes them there); and so the sentences "הופקדו
 לחשבון XXXXX דולר", "יתרה בחשבון XXXXX", "יתרה בחשבון -XXXXX" and "על חשבון XXXX". Found 0.000
 after each: an ID 3-3-3; a company number 2-6-1; a card in fours with spaces or hyphens, and of
-sixteen digits; a landline 0X-XXXXXXX, 0X-XXX-XXXX and 0X XXX XXXX; a mobile 05X-XXX-XXXX and
-+972-5X-XXX-XXXX; an amount XX,XXX ש"ח, XX,XXX, X,XXX,XXX, XXXXX ש"ח, XXXXX ₪, XXXXX.XX,
+sixteen digits; a landline 0X-XXXXXXX, 0X-XXX-XXXX and 0X XXX XXXX; a mobile 05X-XXX-XXXX,
+05X-XXXXXXX, 05XXXXXXXX (since `phone_at`; 1.000 before it) and +972-5X-XXX-XXXX; an amount XX,XXX ש"ח, XX,XXX, X,XXX,XXX, XXXXX ש"ח, XXXXX ₪, XXXXX.XX,
 XXXXX,XX, XX XXX ש"ח, XX XXX XXX, XX.XXX.XXX, X XXX XXX XXX, XX XXX XXX.XX and XX XXX XXXX ש"ח; a
 case number NNNNN-MM-YY; a date DD.MM.YYYY, D.M.YYYY, DD/MM/YYYY and D/M/YY, and DD.MM.YYYY after
 מיום; an IBAN, paper and electronic, as BANK_ACCOUNT; and the sentences "הופקדו לחשבון XX,XXX
 ש"ח", "יתרה בחשבון XX,XXX ש"ח", "הופקדו לחשבון XXXXX ש"ח", "יתרה בחשבון XXXXX.XX ש"ח" and "על
-חשבון XXXX ש"ח". An account alone of nine digits right after ח-ן, ח"ן or a possessive form
+חשבון XXXX ש"ח". No BANK_ACCOUNT shares a character with a PHONE in any text of those forms
+and sentences (0 texts). An account alone of nine digits right after ח-ן, ח"ן or a possessive form
 (בחשבונו) is also found by the Israeli ID or the company number detector when it passes their
 check (the same script, 3,000 invented accounts per word: 0.107 after ח-ן, 0.099 after ח"ן,
 0.102 after ח״ן, 0.098 after בחשבונו; 0.000 after חשבון and "חשבון מס'"; accounts of 4 to 13
 digits 0.006 to 0.013 after those four, 0.001 after חשבון and "חשבון מס'", a few of them cards of
-thirteen digits that the card detector finds); so is a triple's account of nine digits after ח-ן
+thirteen digits that the card detector finds; found 3,000 of 3,000 after each word but "חשבון
+מס'", 2,999, where one is a number the phone detector takes); so is a triple's account of nine digits after ח-ן
 or ח"ן, with words between (by the reviewer's script of the review of #34 at 28b6032, 3,000
 invented triples per form: 0.104 after ח-ן, 0.088 after ח"ן, 0.104 after ח״ן; 0.000 after
 חשבון, and grouped after ח-ן): their labels of other numbers do not hold ח-ן, ח"ן and the
@@ -134,7 +139,7 @@ import re
 from typing import ClassVar
 
 from ploni.detect.base import DetectContext
-from ploni.detect.deterministic import israeli_id
+from ploni.detect.deterministic import israeli_id, phone
 from ploni.detect.deterministic.israeli_id import _AFTER, _BEFORE, _GERSHAYIM, _SEP, _TIGHT, SEPARATORS
 from ploni.types import Detection, Span, TextProjection
 
@@ -298,12 +303,30 @@ def is_lone_account(match: re.Match[str], labelled: bool, beside: bool) -> bool:
     return labelled and not beside and grouped and not israeli_id.is_other_shape(raw)
 
 
+def phone_at(text: str, start: int) -> bool:
+    """Say whether the phone detector takes a number that starts where an account does.
+
+    Why: a mobile, a VoIP or 1-800 number, or a landline where the phone detector reads no label,
+    may stand right after an account word; it is that phone, and no span is both a phone and an
+    account (#36, merged before issue #315 was built).
+
+    Contract: `start`, the account's first digit in `text`. True when `phone.CANDIDATE` matches
+    there and `phone.refused` does not refuse it under `phone.label_before`, as `Phone.detect`
+    reads each candidate. False otherwise.
+
+    Known limits: those of `phone.refused`: under חשבון a number of nine digits or fewer is left
+    to the account, so a landline of nine digits right after חשבון is an account here.
+    """
+    match = phone.CANDIDATE.match(text, start)
+    return match is not None and not phone.refused(text, match, phone.label_before(text, start))
+
+
 class Iban:
     """The detector of IBANs and bank accounts, IBAN and BANK_ACCOUNT.
 
     Why: the fourth deterministic detector of Phase 1 (issue #34), registered in
-    eval.detectors.DETECTORS last, after the credit card detector, so the held-out batch scores
-    it and the T0 suite checks it.
+    eval.detectors.DETECTORS after the credit card detector and before the phone detector, so
+    the held-out batch scores it and the T0 suite checks it.
 
     Contract: a Detector; `detect` returns the IBANs and the bank accounts, as the module
     docstring says.
@@ -379,17 +402,18 @@ class Iban:
         Why: the half of `accounts` that Achia's answer of 2026-11-27 on issue #315 adds, "Yes,
         with the word (Recommended)".
 
-        Contract: one Span per match of ALONE that `is_lone_account` accepts, under
-        `bank_label_before` at its account's first digit, and with `israeli_id.NUMBER_AFTER`
-        read right after the account; from the branch's first digit when its group branch
-        matched, else from the account's, to the account's last digit.
+        Contract: one Span per match of ALONE where no phone starts at its account (`phone_at`)
+        and that `is_lone_account` accepts, under `bank_label_before` at its account's first
+        digit, and with `israeli_id.NUMBER_AFTER` read right after the account; from the branch's
+        first digit when its group branch matched, else from the account's, to the account's
+        last digit.
 
         Known limits: those of the module.
         """
-        return [
-            Span(match.start("branch") if match["branch"] is not None else match.start("account"), match.end("account"))
-            for match in ALONE.finditer(text)
-            if is_lone_account(
-                match, bank_label_before(text, match.start("account")), israeli_id.NUMBER_AFTER.match(text, match.end("account")) is not None
-            )
-        ]
+        places = []
+        for match in ALONE.finditer(text):
+            start, end = match.start("account"), match.end("account")
+            beside = israeli_id.NUMBER_AFTER.match(text, end) is not None
+            if not phone_at(text, start) and is_lone_account(match, bank_label_before(text, start), beside):
+                places.append(Span(match.start("branch") if match["branch"] is not None else start, end))
+        return places
