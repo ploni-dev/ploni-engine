@@ -15,7 +15,10 @@ repository). A number is the 0 and the area code, then the seven digits in one g
 separator, or one after the area code), or after one separator as three and four, or three, two
 and two (SUBSCRIBER); the area code with its 0 may stand in brackets, with or without a
 separator after them. From abroad, "+972", "972" or "00972" stands in place of the 0, with an
-optional separator after it, and the area code may stand in brackets. A 1-800 or 1-700 number
+optional separator after it, and the area code may stand in brackets; or the 0 is kept, as "0"
+or "(0)" right before the area code ("+972-03-...", "+972 (0)3 ...": KEPT_ZERO; Achia,
+2026-11-27, #36, "Yes, find them (Recommended)": "an optional "(0)" or "0" after 972 and its
+separator"). A 1-800 or 1-700 number
 is 1, 800 or 700, and six digits, as one group, with a separator after 1 or not, then the six
 with or without a separator before them, as six, three and three, or two, two and two (SERVICE).
 A short number is a star and four digits. SEPARATORS are those of
@@ -37,7 +40,8 @@ since nine digits from 0[23489] are an ID's length too; one under an ID label th
 detector does not take is flagged with ID_LABEL_REASON (`review_reason`).
 
 Known limits: a phone written with two separators in a row ("05X - XXXXXXX"), in another grouping
-(05X-XXXX-XXX, 0X-XXXX-XXX), from abroad with its 0 kept (+972-05X-..., +972 (0)5X-...), or
+(05X-XXXX-XXX, 0X-XXXX-XXX), from abroad with its 0 kept and a separator after the 0
+(+972-0-5X-..., +972 (0) 3-...) or the area code in brackets after it (+972 0(3) ...), or
 without its 0 and with no country code (5X-XXXXXXX, which is also a company number's grouping:
 docs/DEBT.md row 16), is not found; nor is one with another number after a hyphen or another
 tight separator ("<phone>-8"), nor a short number of three or five digits, nor a 1-800 or 1-700
@@ -63,7 +67,11 @@ are the same with this detector and without it (it changes none of them; detect_
 detections beside theirs). A mobile under ת.ז., ח.פ., כרטיס ביקור, חשבון, סניף הבנק, בנק or
 דרכון, 1.000 (a landline under the six but ת.ז., 0.000); two mobiles joined by a space, a
 slash, a comma, ו- or או, 1.000 each; the phone forms of these tables with every phone label and
-none, 1.000, but the limits above (0.000).
+none, 1.000, but the limits above (0.000). The 0 kept from abroad (+972-0X-XXXXXXX, +972 (0)X
+XXXXXXX, +972-05X-XXXXXXX, +972 (0)5X-XXX-XXXX, +972-07X-XXXXXXX): 1.000 each (0.000 before
+Achia's answer). Its cost: the number 972 written before a number from 0 by one plain space,
+with no plus ("עמוד 972 0X-XXXXXXX", "עמוד 972 <ID from 0[23489]>"), is read as one number from
+abroad, the 972 in its span, 1.000, and not flagged.
 The detection carries no id (detection_id is ""): ids are made just after detection, with the
 matter's key, never inside a detector (Achia, 2026-11-26, issue #169, "Use the secret key
 (Recommended)").
@@ -92,8 +100,10 @@ AREA = "(?:[23489]|5[0-9]|7[2-9])"
 GROUPED = rf"(?:[0-9]{{7}}|[0-9]{{3}}{_SEP}[0-9]{{4}}|[0-9]{{3}}{_SEP}[0-9]{{2}}{_SEP}[0-9]{{2}})"
 SUBSCRIBER = rf"(?:[0-9]{{7}}|{_SEP}{GROUPED})"
 NATIONAL = rf"0{AREA}{SUBSCRIBER}|\(0{AREA}\){_SEP}?{GROUPED}"
-# From abroad the country code, 972, stands in place of the 0 (the plan's "`+972` forms").
-ABROAD = rf"(?:\+|00)?972{_SEP}?(?:{AREA}{SUBSCRIBER}|\({AREA}\){_SEP}?{GROUPED})"
+# From abroad the country code, 972, stands in place of the 0 (the plan's "`+972` forms"), or
+# before the 0 kept, glued to the area code (Achia, 2026-11-27, #36, "Yes, find them (Recommended)").
+KEPT_ZERO = r"(?:\(0\)|0)?"
+ABROAD = rf"(?:\+|00)?972{_SEP}?(?:{KEPT_ZERO}{AREA}{SUBSCRIBER}|\({AREA}\){_SEP}?{GROUPED})"
 # The 1-800 and 1-700 numbers: 1, 800 or 700, and six digits.
 SERVICE = rf"1{_SEP}?[78]00(?:[0-9]{{6}}|{_SEP}(?:[0-9]{{6}}|[0-9]{{3}}{_SEP}[0-9]{{3}}|[0-9]{{2}}{_SEP}[0-9]{{2}}{_SEP}[0-9]{{2}}))"
 # build-plan.md Phase 1: "`*NNNN` service numbers".
