@@ -30,7 +30,7 @@ and brackets around them), or one separator, with a plain space on either side o
 left no Latin letter, no digit, nor a digit and a separator; on its right no digit, nor a
 separator but the plain space and a digit, nor a decimal part (a comma and one or two digits
 that end there; a comma and another number is a list, and each account in it is found), nor a
-currency (CURRENCY: ₪, ש"ח, NIS, שקל) after spaces: so an amount's decimal part or currency
+currency (CURRENCY: ₪, ש"ח, ש.ח, NIS, שקל) after spaces: so an amount's decimal part or currency
 refuses it. `is_bank_account` accepts it when a word stands
 between two of its numbers, or, with none, when a bank label stands before it
 (`bank_label_before`: חשבון, ח-ן, ח"ן, בנק or סניף, with no label of another number beside
