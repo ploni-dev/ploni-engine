@@ -44,7 +44,8 @@ The detector (`IsraeliId`):
   EC3 the label glued to the number (ת.ז.123..., a proclitic on the label, Latin "ID", a
       letter)                                              found
   EC4 the fields: part the projection's, surface the text of the span, type IL_ID, detector
-      "israeli_id", base_span None, confidence CONFIDENCE, band "high", needs_review False,
+      "israeli_id", base_span None, confidence CONFIDENCE_LABELLED (the text has an ID label),
+      band "high", needs_review False,
       detection_id "" (ids are made after detection: Achia, 2026-11-26, #169)
   B1  the number alone, at the start and at the end of the text    found
   B2  the empty text; a text with no digit                 nothing
@@ -56,6 +57,24 @@ The detector (`IsraeliId`):
   A5  trivial numbers                                      nothing
   A6  a landline shape and a case-number shape that pass the checksum    nothing
   A7  Arabic-Indic digits                                  nothing
+
+label_before (the label nearest before a number, on its line, within LABEL_WINDOW characters,
+with no digit between; build-plan.md Phase 1: company and non-profit numbers are their own
+type, and forms write the label of a number before it):
+  L1 each ID label: ת.ז., ת.ז, ת"ז, ת״ז, תעודת זהות, תעודת הזהות, מס' זהות, מס׳ זהות, מספר
+     זהות, מספר תעודת זהות, ID, I.D.                       "id"
+  L2 each label of another number: ח.פ., ח"פ, ע.ר., ע״ר, דרכון, חשבון, טלפון, טל', טל׳, פקס,
+     נייד, קופת חולים, מס' חבר, מספר אישי, מ.א., רישיון    "other"
+  L3 no label                                              None
+  L4 two labels: the nearer one counts, either way round
+  L5 a label further than LABEL_WINDOW before the number  None
+  L6 a label on the line before                            None
+  L7 a digit between the label and the number              None
+  L8 a proclitic glued to a label (ות.ז., לת"ז, ובדרכון)   its kind
+  L9 a label's letters inside a longer word (מתזמן, טלפונית)    not a label
+The detector, with labels:
+  EC5 a valid number after a label of another number      nothing (the fixture has each kind)
+  EC6 after an ID label: CONFIDENCE_LABELLED; with no label: CONFIDENCE
 
 The fixture (tests/fixtures/detect/il_id.json; its numbers are filled in when the tests run, by
 tests/invented_numbers.py):
@@ -69,8 +88,8 @@ glued to the label (ות.ז.); niqqud around the number; RLM and LRM around it; 
 separator. Names that are ordinary words do not apply: the detector reads digits. Document
 axes: a number on a line of its own; the part is the projection's.
 
-Known limits: a landline written as nine digits with no separator (0X1234567) cannot be told from
-an ID that starts with 0 and is found as one; the label before a number is not read.
+Known limits: a landline written as nine digits with no separator (0X1234567) and with no phone
+label before it cannot be told from an ID that starts with 0, and is found as one.
 """
 
 from pathlib import Path
@@ -178,7 +197,7 @@ def test_ec4_the_fields() -> None:
     [detection] = IsraeliId().detect(proj, CTX)
     assert detection.span == Span(proj.text.index(ZERO), proj.text.index(ZERO) + 9)
     assert (detection.part, detection.surface, detection.entity_type, detection.detector) == ("header1", ZERO, "IL_ID", "israeli_id")
-    assert (detection.confidence, detection.band, detection.base_span) == (israeli_id.CONFIDENCE, "high", None)
+    assert (detection.confidence, detection.band, detection.base_span) == (israeli_id.CONFIDENCE_LABELLED, "high", None)
     assert (detection.detection_id, detection.needs_review, detection.review_reason) == ("", False, None)
 
 
@@ -233,6 +252,75 @@ def test_a6_other_shapes(text: str) -> None:
 
 def test_a7_arabic_indic_digits() -> None:
     assert found("ת.ז. " + "".join(chr(0x0660 + int(d)) for d in VALID)) == []
+
+
+def label(before: str) -> str | None:
+    """Return the kind of label the detector reads before a number that follows `before`."""
+    text = before + VALID
+    result: str | None = israeli_id.label_before(text, len(before))
+    return result
+
+
+ID_LABELS = ["ת.ז. ", "ת.ז ", "ת\"ז ", "ת״ז ", "תעודת זהות ", "תעודת הזהות ", "מס' זהות ", "מס׳ זהות ", "מספר זהות: ", "מספר תעודת זהות ", "ID ", "I.D. "]
+OTHER_LABELS = [
+    "ח.פ. ", "ח\"פ ", "ע.ר. ", "ע״ר ", "דרכון ", "חשבון ", "טלפון ", "טל' ", "טל׳ ", "פקס ", "נייד ", "קופת חולים ", "מס' חבר ",
+    "מספר אישי ", "מ.א. ", "רישיון ",
+]  # fmt: skip
+
+
+@pytest.mark.parametrize("before", ID_LABELS)
+def test_l1_id_labels(before: str) -> None:
+    assert label(before) == "id"
+
+
+@pytest.mark.parametrize("before", OTHER_LABELS)
+def test_l2_labels_of_other_numbers(before: str) -> None:
+    assert label(before) == "other"
+
+
+@pytest.mark.parametrize("before", ["", "המספר ", "שָׁלוֹם, "])
+def test_l3_no_label(before: str) -> None:
+    assert label(before) is None
+
+
+@pytest.mark.parametrize(("before", "kind"), [("דרכון ות.ז. ", "id"), ("ת.ז. או דרכון ", "other")], ids=["id nearer", "other nearer"])
+def test_l4_the_nearer_label_counts(before: str, kind: str) -> None:
+    assert label(before) == kind
+
+
+def test_l5_a_label_too_far_before() -> None:
+    assert label("ת.ז. " + "א" * israeli_id.LABEL_WINDOW + " ") is None
+    assert label("ת.ז. " + "א" * (israeli_id.LABEL_WINDOW - 10) + " ") == "id"
+
+
+def test_l6_a_label_on_the_line_before() -> None:
+    assert label("ת.ז.\n") is None
+
+
+def test_l7_a_digit_between() -> None:
+    assert label("ת.ז. 3 ו") is None
+
+
+@pytest.mark.parametrize(("before", "kind"), [("ות.ז. ", "id"), ("לת\"ז ", "id"), ("ובדרכון ", "other")])
+def test_l8_a_proclitic_on_the_label(before: str, kind: str) -> None:
+    assert label(before) == kind
+
+
+@pytest.mark.parametrize("before", ["מתזמן ", "טלפונית "])
+def test_l9_letters_inside_a_longer_word(before: str) -> None:
+    assert label(before) is None
+
+
+@pytest.mark.parametrize("before", OTHER_LABELS)
+def test_ec5_a_valid_number_after_a_label_of_another_number(before: str) -> None:
+    assert found(before + VALID) == []
+
+
+@pytest.mark.parametrize(("before", "confidence"), [("ת.ז. ", "CONFIDENCE_LABELLED"), ("המספר ", "CONFIDENCE")])
+def test_ec6_the_confidence(before: str, confidence: str) -> None:
+    [detection] = IsraeliId().detect(projection(before + VALID), CTX)
+    assert detection.confidence == getattr(israeli_id, confidence)
+    assert israeli_id.CONFIDENCE < israeli_id.CONFIDENCE_LABELLED <= 1.0
 
 
 def cases() -> tuple[list[tuple[str, set[tuple[int, int]]]], int, int]:
