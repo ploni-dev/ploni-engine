@@ -122,6 +122,16 @@ with zeros, `digits.zfill(9)`, so a number of fewer digits is an ID read with th
   SH9 eight digits followed by a plain space and a digit, after an ID label: the short forms
       keep the separator-run edge (issue #299, finding 3)  nothing
 
+is_israeli_id (the decision alone, one row per rule; added after the code, by the review of
+79c192f, item 5: a public function gets its own test):
+  I1 under another number's label                          False
+  I2 no label, another number beside it                    False
+  I3 no label, a short form                                False
+  I4 an ID label, another number beside it                 True
+  I5 an ID label, a short form                             True
+  I6 no label, nine valid digits, nothing beside           True
+  I7 no label, nine digits that fail the checksum          False
+
 The fixture (tests/fixtures/detect/il_id.json; its numbers are filled in when the tests run, by
 tests/invented_numbers.py):
   F1  at least 40 positive and 40 negative texts
@@ -144,7 +154,7 @@ import pytest
 
 from ploni.detect.base import DetectContext
 from ploni.detect.deterministic import israeli_id
-from ploni.detect.deterministic.israeli_id import IsraeliId, is_other_shape, is_trivial, israeli_id_checksum_ok
+from ploni.detect.deterministic.israeli_id import IsraeliId, is_israeli_id, is_other_shape, is_trivial, israeli_id_checksum_ok
 from ploni.types import Span
 from tests.detector_contract import projection
 from tests.invented_numbers import ISRAELI_IDS, read_cases
@@ -515,6 +525,18 @@ def test_sh8_a_short_form_inside_a_longer_number(tail: str) -> None:
 def test_sh9_a_short_form_beside_another_number_by_a_plain_space() -> None:
     assert israeli_id_checksum_ok(EIGHT)
     assert found("ת.ז. " + EIGHT + " 12 שנים") == []
+
+
+@pytest.mark.parametrize(
+    ("raw", "kind", "beside", "expected"),
+    [
+        (VALID, "other", False, False), (VALID, None, True, False), (EIGHT, None, False, False), (VALID, "id", True, True),
+        (EIGHT, "id", False, True), (VALID, None, False, True), (NEAR, None, False, False),
+    ],
+    ids=["i1 other label", "i2 no label beside", "i3 no label short", "i4 id label beside", "i5 id label short", "i6 plain valid", "i7 plain invalid"],
+)  # fmt: skip
+def test_i_the_decision(raw: str, kind: str | None, beside: bool, expected: bool) -> None:
+    assert is_israeli_id(raw, kind, beside) is expected
 
 
 def cases() -> tuple[list[tuple[str, set[tuple[int, int]]]], int, int]:
