@@ -25,6 +25,9 @@ iban_ok (the check alone, the separators taken out):
 bank_label_before (the labels of the grouped triple):
   L1  each label: חשבון, ח-ן, ח־ן, ח"ן, ח״ן, ח''ן, בנק, סניף, מס' חשבון, מס׳ חשבון, חשבון בנק    True
   L2  a proclitic glued to it: בחשבון, לחשבון, ובבנק              True
+  L5  the account word with a possessive suffix: חשבונו, חשבונה, חשבונם, חשבוני, חשבוננו, and
+      with a proclitic, בחשבונו, לחשבונה (the review of #34 at 28b6032, finding 3: found 0.000
+      before)                                                    True; the plural חשבונות    False
   L3  the label's letters inside a longer word: חשבונית; no label    False
   L4  another number's label beside it: טלפון, ת.ז., ח.פ., דרכון with חשבון; a digit between
       the label and the number                                   False
@@ -52,7 +55,8 @@ The detector (`Iban`), IBAN:
 The detector, BANK_ACCOUNT:
   EA1 words between: בנק B סניף R חשבון A, with commas, colons, מס' and מספר, a proclitic on
       סניף and on חשבון, ח-ן and ח"ן for the account, the bank's name and its number in
-      brackets, no word before                                   one BANK_ACCOUNT, from the
+      brackets, no word before; the account word with a possessive suffix (בחשבונו); the bank's
+      name in brackets after its number (finding 3)              one BANK_ACCOUNT, from the
                                                                  bank's first digit to the
                                                                  account's last, words in
   EA2 grouped under a bank label: hyphens, slashes, dots, spaces, the maqaf, a hyphen with a
@@ -68,6 +72,13 @@ The detector, BANK_ACCOUNT:
   NA3 inside a longer number: a digit and a hyphen before the bank's number    nothing
   NA4 words between, a bank of four digits; a branch of four digits    nothing (added after the
       code, for the mutants that survived on BANK_LONGEST and BRANCH_LONGEST, 3 made 4)
+  EA6 the bank named by its name and no number, then the branch and the account with their
+      words: בנק לאומי, סניף R, חשבון A; with a proclitic on בנק and on the words; a name of
+      one, two and three words, with gershayim (בע"מ)    one BANK_ACCOUNT, from the branch's
+      first digit to the account's last (the batch's rule starts at the bank's number; with
+      none, at the first number) (finding 3)
+  NA5 by name: a name of four words; no account word before the account; no account; no
+      bank word, a branch and an account alone (#315)            nothing
 Both:
   EB1 an IBAN and a triple in one text                           both, in the order of the text
   B1  the empty text; a text with no digit                       nothing
@@ -171,6 +182,7 @@ def test_k4_the_shortest_and_a_letter_z() -> None:
 
 
 LABELS = ["חשבון ", "ח-ן ", "ח־ן ", 'ח"ן ', "ח״ן ", "ח''ן ", "בנק ", "סניף ", "מס' חשבון ", "מס׳ חשבון ", "חשבון בנק: "]
+POSSESSIVES = ["חשבונו ", "חשבונה ", "חשבונם ", "חשבוני ", "חשבוננו ", "בחשבונו ", "לחשבונה "]
 
 
 @pytest.mark.parametrize("before", LABELS)
@@ -181,6 +193,15 @@ def test_l1_bank_labels(before: str) -> None:
 @pytest.mark.parametrize("before", ["בחשבון ", "לחשבון ", "ובבנק "])
 def test_l2_a_proclitic_on_the_label(before: str) -> None:
     assert bank_label_before(before + GROUPED, len(before))
+
+
+@pytest.mark.parametrize("before", POSSESSIVES)
+def test_l5_a_possessive_account_word(before: str) -> None:
+    assert bank_label_before(before + GROUPED, len(before))
+
+
+def test_l5_the_plural_is_no_label() -> None:
+    assert not bank_label_before("חשבונות " + GROUPED, len("חשבונות "))
 
 
 @pytest.mark.parametrize("before", ["חשבונית ", "", "המספר "])
@@ -291,6 +312,8 @@ WORDED = {
     "ח״ן": f"בנק {BANK} סניף {BRANCH} ח״ן {NUMBER}",
     "the bank's name and number in brackets": f"בנק לאומי ({BANK}), סניף {BRANCH}, חשבון {NUMBER}",
     "no word before": f"{BANK} סניף {BRANCH} חשבון {NUMBER}",
+    "a possessive account word": f"בנק {BANK} סניף {BRANCH} בחשבונו {NUMBER}",
+    "the bank's name in brackets after its number": f"בנק {BANK} (לאומי) סניף {BRANCH} חשבון {NUMBER}",
 }
 
 
@@ -358,6 +381,37 @@ NOT_ACCOUNTS = {
 @pytest.mark.parametrize("case", NOT_ACCOUNTS)
 def test_na_not_an_account(case: str) -> None:
     assert found(NOT_ACCOUNTS[case]) == []
+
+
+BY_NAME = {
+    "one word": f"בנק לאומי, סניף {BRANCH}, חשבון {NUMBER}",
+    "two words, proclitics": f"בבנק הפועלים בסניף {BRANCH} בחשבון מס' {NUMBER}",
+    "three words, ח-ן": f"בנק מזרחי טפחות בע\"מ סניף {BRANCH} ח-ן {NUMBER}",
+    "colons, a possessive": f"בנק דיסקונט, סניף: {BRANCH}, חשבונו: {NUMBER}",
+}
+
+
+@pytest.mark.parametrize("form", BY_NAME)
+def test_ea6_the_bank_by_its_name(form: str) -> None:
+    text = f"{BY_NAME[form]}, כמוסכם."
+    start = text.index(BRANCH)
+    end = text.index(NUMBER, start) + len(NUMBER)
+    assert found(text) == [(start, end, "BANK_ACCOUNT")]
+    [detection] = Iban().detect(projection(text), CTX)
+    assert detection.needs_review is True and detection.band == "medium"
+
+
+NOT_BY_NAME = {
+    "a name of four words": f"בנק אחד שתיים שלוש ארבע סניף {BRANCH} חשבון {NUMBER}",
+    "no account word": f"בנק לאומי סניף {BRANCH} {NUMBER}",
+    "no account": f"בנק לאומי סניף {BRANCH} ברחוב הרצל",
+    "no bank word": f"סניף {BRANCH} חשבון {NUMBER}",
+}
+
+
+@pytest.mark.parametrize("case", NOT_BY_NAME)
+def test_na5_not_by_name(case: str) -> None:
+    assert found(NOT_BY_NAME[case]) == []
 
 
 @pytest.mark.parametrize("which", ["bank", "branch"])

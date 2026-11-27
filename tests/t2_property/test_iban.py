@@ -16,9 +16,10 @@ account number, digits, separators and the bank words, so that runs of digits jo
 
 Invariant 2, every one is found: each of the 40 invented IBANs in each of IBAN_FORMS (6) after
 each of IBAN_LEFT (6) before each of RIGHT (4), 5,760 texts; each of the 40 invented triples in
-each of WORDED (4) after each of WORDED_LEFT (3) before each of RIGHT, 1,920, and in each of
-GROUPED (4) after each of LABELLED (4) before each of RIGHT, 2,560: 10,240 in all, all in the
-full suite, every 20th in the fast one (512). Each gives exactly one detection, the item's place
+each of WORDED (4) after each of WORDED_LEFT (3) before each of RIGHT, 1,920, in each of
+GROUPED (4) after each of LABELLED (6, the possessives among them) before each of RIGHT, 3,840,
+and in each of BY_NAME (2, the bank named by its name) after nothing or ו before each of RIGHT,
+640: 12,160 in all, all in the full suite, every 24th in the fast one (507). Each gives exactly one detection, the item's place
 and type.
 
 Not applicable: the proclitic and ordinary-word axes of names.
@@ -67,11 +68,18 @@ GROUPED = (
     lambda n: f"{n[:2]}.{n[2:5]}.{n[5:13]}",
     lambda n: f"{n[:2]} {n[2:5]} {n[5:]}",
 )
-LABELLED = ("חשבון ", "ח-ן ", 'ח"ן ', "פרטי חשבון הבנק: ")
+# The possessive labels, by the review of #34 at 28b6032, finding 3.
+LABELLED = ("חשבון ", "ח-ן ", 'ח"ן ', "פרטי חשבון הבנק: ", "בחשבונו ", "לחשבונה ")
+# A triple whose bank is named by its name, no number: (the text, its item from the branch on).
+BY_NAME = (
+    lambda n: (f"בנק לאומי, סניף {n[2:5]}, חשבון {n[5:11]}", f"{n[2:5]}, חשבון {n[5:11]}"),
+    lambda n: (f"בבנק הפועלים בסניף {n[2:5]} בחשבונו {n[5:13]}", f"{n[2:5]} בחשבונו {n[5:13]}"),
+)
 RECALL_ALL = (
     [(form(n), left, right, "IBAN") for n, form, left, right in product(BANK_NUMBERS.iban, IBAN_FORMS, IBAN_LEFT, RIGHT)]
     + [(form(n), left, right, "BANK_ACCOUNT") for n, form, left, right in product(BANK_NUMBERS.account, WORDED, WORDED_LEFT, RIGHT)]
     + [(form(n), left, right, "BANK_ACCOUNT") for n, form, left, right in product(BANK_NUMBERS.account, GROUPED, LABELLED, RIGHT)]
+    + [(form(n), left, right, "BANK_ACCOUNT") for n, form, left, right in product(BANK_NUMBERS.account, BY_NAME, ("", "ו"), RIGHT)]
 )  # fmt: skip
 RECALL = RECALL_ALL if full() else RECALL_ALL[:: len(RECALL_ALL) // FAST]
 
@@ -124,8 +132,10 @@ def test_invariant_1_found_means_valid() -> None:
 def test_invariant_2_every_one_is_found(chunk: int) -> None:
     missed = []
     for written, left, right, kind in RECALL[chunk::4]:
-        text = left + written + right
+        whole, item = written if isinstance(written, tuple) else (written, written)
+        text = left + whole + right
+        start = len(left) + whole.index(item)
         got = [(d.span.start, d.span.end, d.entity_type) for d in Iban().detect(projection(text), CTX)]
-        if got != [(len(left), len(left) + len(written), kind)]:
+        if got != [(start, start + len(item), kind)]:
             missed.append(text)
     assert missed == []

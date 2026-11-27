@@ -579,6 +579,54 @@
     "bank",
     "iban"
    ]
+  },
+  {
+   "text": "הכסף הועבר לחשבונה {account[30]:dd-ddd-dddddd}.",
+   "found": [
+    [
+     0,
+     0
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
+  },
+  {
+   "text": "בנק {account[31]:dd} (לאומי) סניף {account[31]:xxddd} חשבון {account[31]:xxxxxdddddd}",
+   "found": [
+    [
+     0,
+     2
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
+  },
+  {
+   "text": "בנק לאומי, סניף {account[32]:xxddd}, חשבון {account[32]:xxxxxddddddd}",
+   "found": [
+    [
+     0,
+     1
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
+  },
+  {
+   "text": "התשלום לבנק הפועלים בסניף {account[33]:xxddd} בחשבונו מס' {account[33]:xxxxxdddddd}",
+   "found": [
+    [
+     0,
+     1
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
   }
  ],
  "negatives": [
