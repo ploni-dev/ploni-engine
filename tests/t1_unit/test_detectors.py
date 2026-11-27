@@ -8,8 +8,9 @@ holds the detectors of ploni/, the Israeli ID detector first (issue #32).
 Test matrix:
 
 Equivalence classes:
-  EC1  the detectors of DETECTORS: the Israeli ID detector    its detections, by default; the
-                                                     placeholder number 123456782 is not one
+  EC1  the detectors of DETECTORS: the Israeli ID detector, then the company number detector
+       (issue #33)                                   their detections, by default, in that order;
+                                                     the placeholder number 123456782 is not one
   EC2  one detector given                            its detections as (start, end, type), in its order
   EC3  two detectors given                           the first one's, then the second one's
   EC4  the projection a detector gets                part "body"; the whole text; one anchor over it
@@ -71,10 +72,12 @@ TEXT = "שָׁלוֹם, ת.ז. 123456782 ו-‏55‎"
 
 
 def test_ec1_the_detectors_of_ploni() -> None:
-    assert [type(each).__name__ for each in detectors.DETECTORS] == ["IsraeliId"]
+    assert [type(each).__name__ for each in detectors.DETECTORS] == ["IsraeliId", "CompanyNumber"]
     assert detectors.detect_all(TEXT) == []
     text = "ת.ז. " + ISRAELI_IDS.valid[0]
     assert detectors.detect_all(text) == [(5, 14, "IL_ID")]
+    text = f"ח.פ. {ISRAELI_IDS.company[0]}, ת.ז. {ISRAELI_IDS.valid[0]}"
+    assert detectors.detect_all(text) == [(21, 30, "IL_ID"), (5, 14, "COMPANY_NUMBER")]
 
 
 def test_ec2_one_detector() -> None:
