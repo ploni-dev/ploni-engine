@@ -181,7 +181,7 @@ from ploni.detect.deterministic import israeli_id
 from ploni.detect.deterministic.israeli_id import IsraeliId, is_israeli_id, is_other_shape, is_trivial, israeli_id_checksum_ok
 from ploni.types import Span
 from tests.detector_contract import projection
-from tests.invented_numbers import ISRAELI_IDS, read_cases
+from tests.invented_numbers import BANK_NUMBERS, ISRAELI_IDS, combined, read_cases
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "detect" / "il_id.json"
 # Invented numbers, made when the tests run (tests/invented_numbers.py): valid by the plan's
@@ -622,7 +622,7 @@ def test_i_the_decision(raw: str, kind: str | None, beside: bool, expected: bool
 
 def cases() -> tuple[list[tuple[str, set[tuple[int, int]]]], int, int]:
     """Read the fixture, its numbers filled in: each text with its expected places, and the counts of positive and negative texts."""
-    positives, negatives = read_cases(FIXTURE, ISRAELI_IDS)
+    positives, negatives = read_cases(FIXTURE, combined(ISRAELI_IDS, BANK_NUMBERS))
     read = [(text, set(spans)) for text, spans in positives + negatives]
     return read, len(positives), len(negatives)
 

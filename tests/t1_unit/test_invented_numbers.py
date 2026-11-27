@@ -50,6 +50,28 @@ cards, CARDS (issue #35):
       a mastercard prefix at 15
   CD5 the same seed twice                           equal; another seed: other numbers
   CD6 fill writes a card into a slot of a shape     the shape's groups, its span
+iban_ok (ISO 13616's check, ISO 7064 MOD 97-10, written apart from ploni/detect/deterministic/iban.py; issue #34):
+  IB1 an IBAN of BANK_NUMBERS                       True; with one digit changed    False
+  IB2 the empty string; four characters; a non-ASCII digit; a space inside; a Hebrew letter    False
+  IB3 iban_ok agrees with the remainder reduced one digit at a time (a second way to the same
+      remainder), over every IBAN of BANK_NUMBERS and its near misses
+with_check:
+  WC1 over 500 stems of the stream: the two check digits are 02 to 98, the result passes iban_ok
+bank_numbers, BANK_NUMBERS (issue #34):
+  BN1 iban: 40, distinct, 23 characters, IL and 21 ASCII digits, iban_ok; iban_near: 20, the
+      first 22 characters of iban[i] and another last digit, each failing iban_ok
+  BN2 iban_lengths: IL and 20, and IL and 22, digits (the check digits among them), each passing
+      iban_ok; iban_foreign: 3, DE and 20 digits, each passing iban_ok
+  BN3 account: 40, distinct, 14 ASCII digits (bank 2, branch 3, account 9), the first not 0
+  BN4 the same seed twice                           equal; another seed: other numbers
+  BN5 fill writes an IBAN into a slot of the paper format's groups of four    the groups, its span
+iban_remainder (the remainder reduced one digit at a time, the one copy the tests share; the review of #34 at 28b6032):
+  RM1 four characters, IL62, in either case          the remainder of 182162, computed in the test
+  RM2 an IBAN, and its check digits one less         1, and 0
+combined, typed_slots (the review of #34 at 28b6032, finding 1: a fixture that holds IDs and an IBAN):
+  CB1 two kinds of numbers                          one namespace with the fields of both, which fill reads
+  CB2 a field name in both                          ValueError, naming the field
+  TS1 a template's slots of the listed kinds        their places, typed; a template with no slot: []
 
 Not applicable: Hebrew axes beyond a Hebrew template (the helper writes digits).
 """
@@ -61,7 +83,7 @@ from pathlib import Path
 import pytest
 
 from tests import invented_numbers as inv
-from tests.invented_numbers import CARDS, ISRAELI_IDS, israeli_id_checksum_ok, luhn_ok
+from tests.invented_numbers import BANK_NUMBERS, CARDS, ISRAELI_IDS, iban_ok, israeli_id_checksum_ok, luhn_ok
 
 FIELDS = ("valid", "near", "zeros", "two_zeros", "cut", "nested", "company", "nonprofit", "landline")
 LENGTHS = {"valid": 60, "near": 30, "zeros": 3, "two_zeros": 1, "cut": 1, "nested": 1, "company": 30, "nonprofit": 30, "landline": 6}
@@ -272,3 +294,102 @@ def test_cd6_a_card_in_a_slot() -> None:
     card = CARDS.amex[0]
     text, spans = inv.fill("כרטיס {amex[0]:dddd dddddd ddddd}.", CARDS)
     assert text == f"כרטיס {card[:4]} {card[4:10]} {card[10:]}." and spans == [(6, 23)]
+
+
+def test_rm1_the_remainder_of_four_characters() -> None:
+    # IL62 moved is IL62 itself: I = 18, L = 21, so the number 182162, whose remainder is computed here.
+    assert inv.iban_remainder("IL62") == 182162 % 97
+    assert inv.iban_remainder("il62") == 182162 % 97
+
+
+def test_rm2_one_less_in_the_check_digits_leaves_zero() -> None:
+    iban = BANK_NUMBERS.iban[3]
+    assert inv.iban_remainder(iban) == 1
+    assert inv.iban_remainder(f"{iban[:2]}{int(iban[2:4]) - 1:02d}{iban[4:]}") == 0
+
+
+def test_cb1_combined_holds_the_fields_of_each() -> None:
+    both = inv.combined(ISRAELI_IDS, BANK_NUMBERS)
+    assert both.valid == ISRAELI_IDS.valid and both.iban == BANK_NUMBERS.iban and both.account == BANK_NUMBERS.account
+    assert inv.fill("{valid[0]} {iban[0]}", both)[0] == f"{ISRAELI_IDS.valid[0]} {BANK_NUMBERS.iban[0]}"
+
+
+def test_cb2_a_field_in_two_is_refused() -> None:
+    with pytest.raises(ValueError, match="near"):
+        inv.combined(ISRAELI_IDS, CARDS)
+
+
+def test_ts1_typed_slots() -> None:
+    template = "ח.פ. {company[0]}, ת.ז. {valid[0]}, חשבון {iban[0]:dddd dddd dddd dddd dddd ddd}"
+    numbers = inv.combined(ISRAELI_IDS, BANK_NUMBERS)
+    text, spans = inv.fill(template, numbers)
+    assert inv.typed_slots(template, numbers, {"company": "COMPANY_NUMBER", "iban": "IBAN"}) == [
+        (*spans[0], "COMPANY_NUMBER"), (*spans[2], "IBAN"),
+    ]  # fmt: skip
+    assert inv.typed_slots("אין כאן מספר", numbers, {"iban": "IBAN"}) == []
+
+
+def test_ib1_an_iban_and_one_digit_changed() -> None:
+    iban = BANK_NUMBERS.iban[0]
+    assert iban_ok(iban)
+    assert not iban_ok(iban[:10] + str((int(iban[10]) + 1) % 10) + iban[11:])
+
+
+@pytest.mark.parametrize("which", ["empty", "four characters", "arabic-indic digit", "space inside", "hebrew letter"])
+def test_ib2_these_fail(which: str) -> None:
+    iban = BANK_NUMBERS.iban[1]
+    text = {
+        "empty": "",
+        "four characters": iban[:4],
+        "arabic-indic digit": iban[:-1] + "٣",
+        "space inside": iban[:4] + " " + iban[4:],
+        "hebrew letter": iban[:-1] + "א",
+    }[which]
+    assert not iban_ok(text)
+
+
+def test_ib3_iban_ok_agrees_with_the_digit_by_digit_remainder() -> None:
+    every = BANK_NUMBERS.iban + BANK_NUMBERS.iban_near + BANK_NUMBERS.iban_lengths + BANK_NUMBERS.iban_foreign
+    assert all(iban_ok(iban) is (inv.iban_remainder(iban) == 1) for iban in every)
+    assert sum(iban_ok(iban) for iban in every) == len(every) - len(BANK_NUMBERS.iban_near)
+
+
+def test_wc1_with_check() -> None:
+    stream = inv.digits(inv.SEED, "with_check")
+    for _ in range(500):
+        iban = inv.with_check("IL", inv.take(stream, 19))
+        assert 2 <= int(iban[2:4]) <= 98 and iban_ok(iban) and inv.iban_remainder(iban) == 1
+
+
+def test_bn1_ibans_and_their_near_misses() -> None:
+    ibans, near = BANK_NUMBERS.iban, BANK_NUMBERS.iban_near
+    assert len(ibans) == 40 and len(set(ibans)) == 40
+    assert all(len(n) == 23 and n[:2] == "IL" and n[2:].isascii() and n[2:].isdigit() and iban_ok(n) for n in ibans)
+    assert len(near) == 20
+    assert all(n[:22] == v[:22] and n[22] != v[22] and not iban_ok(n) for n, v in zip(near, ibans, strict=False))
+
+
+def test_bn2_other_lengths_and_another_country() -> None:
+    assert [len(n) for n in BANK_NUMBERS.iban_lengths] == [22, 24]
+    assert all(n[:2] == "IL" and n[2:].isdigit() and iban_ok(n) for n in BANK_NUMBERS.iban_lengths)
+    assert len(BANK_NUMBERS.iban_foreign) == 3
+    assert all(len(n) == 22 and n[:2] == "DE" and n[2:].isdigit() and iban_ok(n) for n in BANK_NUMBERS.iban_foreign)
+
+
+def test_bn3_accounts() -> None:
+    accounts = BANK_NUMBERS.account
+    assert len(accounts) == 40 and len(set(accounts)) == 40
+    assert all(len(n) == 14 and n.isascii() and n.isdigit() and n[0] != "0" for n in accounts)
+
+
+def test_bn4_the_seed() -> None:
+    assert inv.bank_numbers(inv.SEED) == BANK_NUMBERS
+    other = inv.bank_numbers(inv.SEED + 1)
+    assert set(other.iban).isdisjoint(BANK_NUMBERS.iban) and set(other.account).isdisjoint(BANK_NUMBERS.account)
+
+
+def test_bn5_an_iban_in_a_slot() -> None:
+    iban = BANK_NUMBERS.iban[2]
+    text, spans = inv.fill("חשבון {iban[2]:dddd dddd dddd dddd dddd ddd}.", BANK_NUMBERS)
+    paper = " ".join(iban[i : i + 4] for i in range(0, 23, 4))
+    assert text == f"חשבון {paper}." and spans == [(6, 6 + len(paper))]

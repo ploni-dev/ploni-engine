@@ -12,7 +12,8 @@ Matrix:
   M2  every fixture text keeps the Detector contract (tests/detector_contract.py), as a header
       part too
   M3  the detector is registered in eval.detectors.DETECTORS, after the Israeli ID detector and
-      before the credit card detector of issue #35, and requires no morphology
+      before the credit card detector of issue #35 and the IBAN and bank account detector of
+      issue #34, and requires no morphology
   M4  the two detectors never claim the same span: over both fixtures, no span is typed both
       IL_ID and a company's or a non-profit's (the ID detector refuses a number that starts
       with 5; this one finds only those)
@@ -25,9 +26,10 @@ from eval import detectors
 from ploni.detect.base import DetectContext
 from ploni.detect.deterministic.company_number import CompanyNumber
 from ploni.detect.deterministic.credit_card import CreditCard
+from ploni.detect.deterministic.iban import Iban
 from ploni.detect.deterministic.israeli_id import IsraeliId
 from tests.detector_contract import breaks, projection
-from tests.invented_numbers import ISRAELI_IDS, read_cases
+from tests.invented_numbers import BANK_NUMBERS, ISRAELI_IDS, combined, read_cases
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "detect"
 FIXTURE = FIXTURES / "company_number.json"
@@ -37,7 +39,7 @@ OURS = frozenset(TYPE.values())
 
 def texts() -> list[tuple[str, list[tuple[int, int, str]]]]:
     """Read every fixture text, its numbers filled in, with its expected places and types."""
-    positives, negatives = read_cases(FIXTURE, ISRAELI_IDS)
+    positives, negatives = read_cases(FIXTURE, combined(ISRAELI_IDS, BANK_NUMBERS))
     data = json.loads(FIXTURE.read_text(encoding="utf-8"))
     typed = [
         (text, [(start, end, TYPE[kind]) for (start, end), kind in zip(spans, case["types"], strict=True)])
@@ -58,14 +60,14 @@ def test_m2_the_contract_over_the_fixture() -> None:
 
 
 def test_m3_registered_and_needs_no_morphology() -> None:
-    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, CreditCard]
+    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, CreditCard, Iban]
     assert CompanyNumber.requires_morph is False and CompanyNumber.produces == OURS
 
 
 def test_m4_the_two_detectors_never_claim_one_span() -> None:
     every = [text for text, _ in texts()]
     for name in ("il_id.json", "company_number.json"):
-        positives, negatives = read_cases(FIXTURES / name, ISRAELI_IDS)
+        positives, negatives = read_cases(FIXTURES / name, combined(ISRAELI_IDS, BANK_NUMBERS))
         every += [text for text, _ in positives + negatives]
     for text in every:
         found = detectors.detect_all(text)
