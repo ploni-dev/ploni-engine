@@ -41,16 +41,22 @@ is_bank_account (the decision on a match of TRIPLE):
 
 The detector (`Iban`), IBAN:
   EI1 each written form: 23 characters with no separator; the paper format, groups of four
-      with spaces; no-break spaces; hyphens; a space after IL only; il in small letters
+      with spaces; no-break spaces; hyphens; a space after IL only; il in small letters; two
+      and three spaces between groups; an RLM after IL; an LRM in each gap (the review of #34
+      at 28b6032, finding 5: the plan's "Widen the regex. Never weaken the checksum"; found
+      0.000 before)
                                                                  one IBAN, its span from I to
                                                                  the last digit
   EI2 each context: after "IBAN:", after חשבון, a proclitic glued before IL, in brackets, at
-      the end of a sentence with a full stop                     found, the label and marks out
+      the end of a sentence with a full stop; a plain space and a date after the paper format;
+      a plain space and a number after the electronic format (finding 5)    found, the label
+                                                                 and marks out
   EI3 the fields: part, surface, type IBAN, detector "iban", base_span None, band "high",
       confidence CONFIDENCE, needs_review False, detection_id ""
   NI1 a near miss (another last digit); IL with 20 and 22 digits; a valid German IBAN
                                                                  nothing
-  NI2 edges: a Latin letter or a digit before IL; a digit, or a separator and a digit, after
+  NI2 edges: a Latin letter or a digit before IL; a digit, or a separator but the plain space
+      and a digit (a hyphen, a dot, a no-break space), after; four spaces between two groups
                                                                  nothing
 The detector, BANK_ACCOUNT:
   EA1 words between: בנק B סניף R חשבון A, with commas, colons, מס' and מספר, a proclitic on
@@ -249,6 +255,10 @@ IBAN_FORMS = {
     "hyphens": PAPER.replace(" ", "-"),
     "a space after IL": f"{IBAN[:2]} {IBAN[2:]}",
     "small letters": "il" + IBAN[2:],
+    "two spaces between groups": PAPER.replace(" ", "  "),
+    "three spaces between groups": PAPER.replace(" ", "   "),
+    "an RLM after IL": IBAN[:2] + "\u200f" + PAPER[2:],
+    "an LRM in each gap": PAPER.replace(" ", "\u200e "),
 }
 
 
@@ -264,6 +274,8 @@ IBAN_CONTEXTS = {
     "a proclitic glued": f"הכסף הועבר ב{IBAN} אתמול",
     "in brackets": f"החשבון ({PAPER}) נסגר",
     "a full stop after": f"החשבון הוא {PAPER}.",
+    "a space and a date after": f"החשבון {PAPER} 12.3.2020 נפתח",
+    "a space and a number after": f"IBAN {IBAN} 2 עותקים",
 }
 
 
@@ -293,7 +305,9 @@ NOT_IBANS = {
     "a digit before": "7" + IBAN,
     "a digit after": IBAN + "4",
     "a hyphen and a digit after": IBAN + "-4",
-    "a space and a digit after": PAPER + " 4",
+    "a dot and a digit after": IBAN + ".4",
+    "a no-break space and a digit after": IBAN + "\u00a04",
+    "four spaces between two groups": PAPER.replace(" ", "    ", 1),
 }
 
 

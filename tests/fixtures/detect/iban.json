@@ -627,6 +627,54 @@
    "types": [
     "bank"
    ]
+  },
+  {
+   "text": "IBAN: {iban[26]:dddd  dddd  dddd  dddd  dddd  ddd}",
+   "found": [
+    [
+     0,
+     0
+    ]
+   ],
+   "types": [
+    "iban"
+   ]
+  },
+  {
+   "text": "לחשבון {iban[27]:dd‏dd dddd dddd dddd dddd ddd} של המשיבה",
+   "found": [
+    [
+     0,
+     0
+    ]
+   ],
+   "types": [
+    "iban"
+   ]
+  },
+  {
+   "text": "החשבון {iban[28]:dddd dddd dddd dddd dddd ddd} 12.3.2020 נפתח",
+   "found": [
+    [
+     0,
+     0
+    ]
+   ],
+   "types": [
+    "iban"
+   ]
+  },
+  {
+   "text": "IBAN {iban[29]} 2 עותקים",
+   "found": [
+    [
+     0,
+     0
+    ]
+   ],
+   "types": [
+    "iban"
+   ]
   }
  ],
  "negatives": [

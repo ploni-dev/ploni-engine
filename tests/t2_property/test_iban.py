@@ -14,12 +14,13 @@ left, and has a bank word inside it or a bank label in the twenty characters bef
 two detections share a character. PIECES mix an IBAN, a near miss, IL, a grouped triple, an
 account number, digits, separators and the bank words, so that runs of digits join and split.
 
-Invariant 2, every one is found: each of the 40 invented IBANs in each of IBAN_FORMS (6) after
-each of IBAN_LEFT (6) before each of RIGHT (4), 5,760 texts; each of the 40 invented triples in
+Invariant 2, every one is found: each of the 40 invented IBANs in each of IBAN_FORMS (8, two
+spaces between groups and an RLM after IL among them, finding 5 of the review of #34 at
+28b6032) after each of IBAN_LEFT (6) before each of RIGHT (4), 7,680 texts; each of the 40 invented triples in
 each of WORDED (4) after each of WORDED_LEFT (3) before each of RIGHT, 1,920, in each of
 GROUPED (4) after each of LABELLED (6, the possessives among them) before each of RIGHT, 3,840,
 and in each of BY_NAME (2, the bank named by its name) after nothing or ו before each of RIGHT,
-640: 12,160 in all, all in the full suite, every 24th in the fast one (507). Each gives exactly one detection, the item's place
+640: 14,080 in all, all in the full suite, every 28th in the fast one (503). Each gives exactly one detection, the item's place
 and type.
 
 Not applicable: the proclitic and ordinary-word axes of names.
@@ -39,7 +40,8 @@ from tests.sizes import INVARIANT_FULL, full
 
 # CLAUDE.md, Tests: an invariant is held over 500 generated cases, 5,000 at phase close.
 FAST = 500
-SEPARATORS = re.compile("[-./ \\u00a0\\u05be\\u2013\\u2010\\u2011\\u2012\\u2014\\u2212]")
+# The separators, and the marks of direction an IBAN may carry between its characters (finding 5).
+SEPARATORS = re.compile("[-./ \\u00a0\\u05be\\u2013\\u2010\\u2011\\u2012\\u2014\\u2212\\u200e\\u200f]")
 BANK_WORDS = re.compile("חשבון|ח[-\\u05be\\u2013]ן|ח(?:[\"\\u05f4]|'')ן|בנק|סניף")
 CTX = DetectContext()
 
@@ -51,6 +53,8 @@ IBAN_FORMS = (
     lambda n: "-".join(n[i : i + 4] for i in range(0, 23, 4)),
     lambda n: f"{n[:2]} {n[2:]}",
     lambda n: "il" + n[2:],
+    lambda n: "  ".join(n[i : i + 4] for i in range(0, 23, 4)),
+    lambda n: n[:2] + "\u200f" + " ".join(n[i : i + 4] for i in range(0, 23, 4))[2:],
 )
 IBAN_LEFT = ("", "IBAN: ", "חשבון ", "ב", "(", "לחשבון מס' ")
 RIGHT = ("", ".", ")", " בבנק")
