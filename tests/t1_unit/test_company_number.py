@@ -15,7 +15,9 @@ number_type (the decision alone; label as label_before gives it, beside as NUMBE
   N3  a company number written 2-6-1 (dd-dddddd-d) and 3-3-3    COMPANY_NUMBER
   N4  the company number's eight digits, another check digit    None
   N5  a valid ID, which does not start with 5                   None
-  N6  eight digits, a short form of the ID detector              None
+  N6  eight digits, a short form of the ID detector              None; eight digits that start
+      with 5 and pass the check padded with a zero (added after the code, for a mutant of
+      Cosmic Ray that survived: the length check made `> 9`)    None
   N7  under the label of another number                          None
   N8  another number after it by a plain space, no company label    None; under a company
       label                                                      COMPANY_NUMBER
@@ -72,7 +74,7 @@ from ploni.detect.deterministic import company_number, israeli_id
 from ploni.detect.deterministic.company_number import CompanyNumber, number_type
 from ploni.types import Span
 from tests.detector_contract import projection
-from tests.invented_numbers import ISRAELI_IDS, read_cases
+from tests.invented_numbers import ISRAELI_IDS, complete, read_cases
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "detect" / "company_number.json"
 # Invented numbers, made when the tests run (tests/invented_numbers.py).
@@ -81,6 +83,8 @@ OTHER_COMPANY = ISRAELI_IDS.company[1]
 NONPROFIT = ISRAELI_IDS.nonprofit[0]
 ID = ISRAELI_IDS.valid[0]
 NEAR = COMPANY[:8] + str((int(COMPANY[8]) + 1) % 10)
+# Eight digits from 5 that pass the check once padded with a zero, as the plan's check pads them.
+EIGHT_FROM_5 = complete("05" + COMPANY[2:8], israeli_id.israeli_id_checksum_ok)[1:]
 CTX = DetectContext()
 TYPE = {"company": "COMPANY_NUMBER", "nonprofit": "NONPROFIT_NUMBER"}
 
@@ -104,6 +108,7 @@ DECISIONS = {
     "n4 near miss": (NEAR, None, False, None),
     "n5 an id": (ID, None, False, None),
     "n6 eight digits": (COMPANY[1:], None, False, None),
+    "n6 eight digits from five": (EIGHT_FROM_5, "company", False, None),
     "n7 another number's label": (COMPANY, "other", False, None),
     "n8 beside, no company label": (COMPANY, None, True, None),
     "n8 beside, a company label": (COMPANY, "company", True, "COMPANY_NUMBER"),
@@ -120,6 +125,7 @@ def test_n_the_decision(case: str) -> None:
 
 def test_n10_nine_fives_fail_the_checksum() -> None:
     assert not israeli_id.israeli_id_checksum_ok("555555555")
+    assert len(EIGHT_FROM_5) == 8 and EIGHT_FROM_5[0] == "5" and israeli_id.israeli_id_checksum_ok(EIGHT_FROM_5)
 
 
 def label(before: str) -> str | None:
