@@ -34,7 +34,8 @@ currency (CURRENCY: ₪, ש"ח, ש.ח, NIS, שקל) after spaces: so an amount's
 refuses it. `is_bank_account` accepts it when a word stands
 between two of its numbers, or, with none, when a bank label stands before it
 (`bank_label_before`: חשבון, ח-ן, ח"ן, בנק or סניף, with no label of another number beside
-it; or right after an accepted triple and a comma, as in a list after one label), its bank has BANK_DIGITS digits and its branch BRANCH_DIGITS, and it is not written in a
+it; or right after an accepted triple and LIST_GAP, a comma, a semicolon, ו-, וכן or a slash, as
+in a list after one label), its bank has BANK_DIGITS digits and its branch BRANCH_DIGITS, and it is not written in a
 landline's shape (`israeli_id.is_other_shape`). Its span runs from the bank's first digit to the
 account's last, the separators and the words between them included; a label before it is read,
 never put in it. Confidence CONFIDENCE_PATTERN, band "medium", needs_review True with
@@ -68,7 +69,10 @@ found after this detector, by his answer of 2026-11-27 on issue #316, "Yes, all 
 another number right after it by a separator but the plain space; an IBAN with a run of four
 separators or marks or more inside it. A valid IBAN is found whatever stands around it; a run of
 three numbers with סניף or חשבון between them is found as a triple whatever it is ("פרק 3 סניף 4
-חשבון 2020" is one). Measured on invented texts, 3,000 per form, by a scratch script that is not
+חשבון 2020" is one); so is any grouped triple's shape right after an accepted triple and
+LIST_GAP, as numbers XX XXX XXXX after "<account>, ", " ו-", " וכן ", "; " or " / " (1.000 of
+3,000 per gap; the other forms of the reviewer's pass3.py after each gap 0.000; pass 3 of the
+review of #34, at a65350e). Measured on invented texts, 3,000 per form, by a scratch script that is not
 in the repository (its table is in the text of this detector's PR, issue #34), at 4b2f0b4: IL
 and 21 random digits give an IBAN 0.007 to 0.012 of the time in each of six written forms (the
 check passes one in 97); and 0.000, IBAN and BANK_ACCOUNT alike, for each of: an ID after ת.ז.,
@@ -161,8 +165,11 @@ BY_NAME = re.compile(
     rf"(?<![א-ת])[ובלהשמכ]{{0,2}}בנק[\s,:]+{_NAME}{_BRANCH_WORD}(?P<branch>[0-9]{{1,{BRANCH_LONGEST}}})"
     rf"{_ACCOUNT_WORD}(?P<account>{_ACCOUNT}){_ACCOUNT_END}"
 )
-# A comma, and a space or none, between two accounts of a list after one label (item 8).
-LIST_GAP = re.compile(r", ?")
+# What stands between two accounts of a list after one label: a comma or a semicolon, a space,
+# and the joining word ו ("and", with a hyphen or not) or וכן ("and also"), each optional; or a
+# slash with a space on either side or none (item 8; pass 3 of the review of #34, at a65350e,
+# finding 11: the account after ו-, וכן, ; or / was found 0.000). Claude's reading, no source.
+LIST_GAP = re.compile(r"[,;]? ?(?:ו-?|וכן )?|\s?/\s?")
 # The labels of a bank account in forms and court papers: the words of the account, בנק and סניף.
 BANK_LABELS = (*ACCOUNT_WORDS, r"בנק", *BRANCH_WORDS)
 # A bank label first, so that חשבון, בנק and סניף are read as one where the ID detector reads
