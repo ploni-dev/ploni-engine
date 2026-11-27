@@ -10,12 +10,14 @@ Matrix:
   M1  every fixture text through detect_all: the places found are the fixture's, each typed
       CREDIT_CARD; no other detector finds anything in them (no IL_ID inside a card), but the
       bank account triple one negative writes, a slot filled from BANK_NUMBERS after חשבון, which
-      the IBAN and bank account detector finds, typed BANK_ACCOUNT, one in all (issue #34)
+      the IBAN and bank account detector finds, typed BANK_ACCOUNT, one in all (issue #34), and
+      the phone detector's, whose detections the fixture's phone line holds (issue #36);
+      tests/t4_integration/test_phone.py, M5, pins those
   M2  every fixture text keeps the Detector contract (tests/detector_contract.py), as a header
       part too
   M3  the detector is registered in eval.detectors.DETECTORS after the Israeli ID and the company
       number detectors (issues #32 and #33) and before the IBAN and bank account detector (issue
-      #34), and requires no morphology
+      #34) and the phone detector (issue #36), and requires no morphology
   M4  every text of the Israeli ID and the company number detectors' fixtures gives no CREDIT_CARD
 """
 
@@ -28,6 +30,7 @@ from ploni.detect.deterministic.company_number import CompanyNumber
 from ploni.detect.deterministic.credit_card import CreditCard
 from ploni.detect.deterministic.iban import Iban
 from ploni.detect.deterministic.israeli_id import IsraeliId
+from ploni.detect.deterministic.phone import Phone
 from tests.detector_contract import breaks, projection
 from tests.invented_numbers import BANK_NUMBERS, CARDS, ISRAELI_IDS, combined, read_cases, typed_slots
 
@@ -48,7 +51,8 @@ def test_m1_through_detect_all() -> None:
     triples = 0
     for template, (text, spans) in zip(templates, texts(), strict=True):
         triple = typed_slots(template, NUMBERS, {"account": "BANK_ACCOUNT"})
-        assert detectors.detect_all(text) == [(start, end, "CREDIT_CARD") for start, end in spans] + triple
+        found = [each for each in detectors.detect_all(text) if each[2] != "PHONE"]
+        assert found == [(start, end, "CREDIT_CARD") for start, end in spans] + triple
         triples += len(triple)
     assert triples == 1
 
@@ -60,7 +64,7 @@ def test_m2_the_contract_over_the_fixture() -> None:
 
 
 def test_m3_registered_and_needs_no_morphology() -> None:
-    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, CreditCard, Iban]
+    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, CreditCard, Iban, Phone]
     assert CreditCard.requires_morph is False and CreditCard.produces == frozenset({"CREDIT_CARD"})
 
 

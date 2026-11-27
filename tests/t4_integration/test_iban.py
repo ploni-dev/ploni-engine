@@ -11,8 +11,8 @@ Matrix:
       fixture's, with the fixture's types, in the order of the text
   M2  every fixture text keeps the Detector contract (tests/detector_contract.py), as a header
       part too
-  M3  the detector is registered in eval.detectors.DETECTORS, last, after the credit card
-      detector (issue #35), and requires no morphology
+  M3  the detector is registered in eval.detectors.DETECTORS after the credit card detector (issue
+      #35) and before the phone detector (issue #36), and requires no morphology
   M4  over the four fixtures (il_id.json, company_number.json, credit_card.json, iban.json),
       no detection of this detector shares a character with one of another detector
   M5  the overlap of Known limits (issue #315): nine digits that pass the ID check right after
@@ -29,6 +29,7 @@ from ploni.detect.deterministic.company_number import CompanyNumber
 from ploni.detect.deterministic.credit_card import CreditCard
 from ploni.detect.deterministic.iban import Iban
 from ploni.detect.deterministic.israeli_id import IsraeliId
+from ploni.detect.deterministic.phone import Phone
 from tests.detector_contract import breaks, projection
 from tests.invented_numbers import BANK_NUMBERS, CARDS, ISRAELI_IDS, combined, fill, read_cases
 
@@ -62,7 +63,7 @@ def test_m2_the_contract_over_the_fixture() -> None:
 
 
 def test_m3_registered_and_needs_no_morphology() -> None:
-    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, CreditCard, Iban]
+    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, CreditCard, Iban, Phone]
     assert Iban.requires_morph is False and Iban.produces == OURS
 
 
