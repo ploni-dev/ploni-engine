@@ -27,7 +27,9 @@ the repository, and none was downloaded to check them.
 Known limits: a card followed by another number after one separator that is no expiry (a security
 code after a single space, "... 123"), or by an expiry after a separator other than one plain
 space, is read as one longer number and not found; after a comma or a word it is found. An expiry
-before the card, one plain space from it, is not an edge: the card is not found. What the expiry
+before the card, one plain space from it, is not an edge: the card is not found. Nor is an expiry
+written with spaces around its slash (" 12 / 26") or with a hyphen (" 12-26"): EXPIRY does not
+read them, and the card is not found (the review of 2ee56e9 measured 0 of 20 found for each). What the expiry
 stop costs, measured by the review of ec7d0d4 on invented texts: random sixteen digits and " 12/26"
 give a card 0.023 of the time (the plain Luhn-and-prefix rate), a row of numbers and then a date
 0.010 to 0.017, twenty digits in fours and an IBAN-like number 0.000, with the stop and without.
