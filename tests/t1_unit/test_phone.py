@@ -32,7 +32,9 @@ refused (the decision of the label; the review of b2f3790, findings 1 and 2):
   RF3 an ID label: a landline-shaped number that passes the ID check, written 0X-XXX-XXXX and
       plain (the ID detector takes it)                       True; the same written 0X-XXXXXXX
       (the ID detector refuses that shape under its label, #302), one that fails the check, a
-      mobile                                                 False
+      mobile, and the first one with "/8" after it, which the ID detector's own candidate does
+      not take (its edge refuses a slash and a digit; pass 2 of the review of #36, finding 10)
+                                                             False
 
 review_reason (the decision of needs_review):
   R1  a bare run of digits (no separator, no plus, no bracket, no star) with no label    the
@@ -71,11 +73,14 @@ The detector (`Phone`):
       asked nothing here: it now asks more)
   EC13 from abroad with the 0 kept, "0" or "(0)" right before the area code (Achia, 2026-11-27,
       #36, "Yes, find them (Recommended)"): +972-0X-XXXXXXX, +972 (0)X XXXXXXX, +972-05X-XXXXXXX,
-      +972 (0)5X-XXX-XXXX, +9720X..., 00972-0..., 972 (0)..., a VoIP number, with a phone label and
-      with none                                              found, the span from the + (or the
+      +972 (0)5X-XXX-XXXX, +9720X..., 00972-0..., 972 (0)..., 972-0X-..., 9720X..., a VoIP
+      number, with a phone label and with none                found, the span from the + (or the
       first 9 or 0) to the last digit (until that answer, A9 asked nothing of these: it now asks
       more)
-  B1the number alone, at the start and at the end of the text    found
+  EC14 the number 972 one plain space before a phone from 0, with no plus: "עמוד 972 0X-XXXXXXX",
+      "סעיף 972 05X-XXXXXXX", "עמוד 972 0XXXXXXXX"            the phone alone, 972 in no span (pass 2
+      of the review of #36, finding 9: a bare 972 keeps a 0 only with a tight separator or none)
+  B1  the number alone, at the start and at the end of the text    found
   B2  the empty text; a text with no digit                    nothing
   A1  an area code the plan does not name: 01X and 06X (ten digits), 01, 05, 06, 07 (nine), each
       plain and with a separator after the area code          nothing
@@ -106,7 +111,9 @@ The detector (`Phone`):
       0X-XXX-XXXX                                            nothing from this detector, IL_ID
       through detect_all; the same written 0X-XXXXXXX, a landline that fails the check, a mobile
       found, flagged with ID_LABEL_REASON, and no IL_ID on its span (the review of b2f3790,
-      finding 2: "ת.ז. 0X-XXXXXXX" was found by no detector)
+      finding 2: "ת.ז. 0X-XXXXXXX" was found by no detector); a number that passes the ID check,
+      0X-XXX-XXXX and "/8" after it    found, flagged, the span the number without "/8", no IL_ID
+      (pass 2 of that review, finding 10: found by no detector before, on main too)
   A13 CANDIDATE itself: each prefix of the plan matches whole; 01X, 06X and a mobile a digit
       long do not
 
@@ -252,13 +259,20 @@ def failing_landline() -> str:
     return number[:-1] + str((int(number[-1]) + 1) % 10)
 
 
+def is_refused(text: str, label: str | None) -> bool:
+    """Return what `refused` says of the first candidate in a text, under the label given."""
+    match = CANDIDATE.search(text)
+    assert match is not None
+    return refused(text, match, label)
+
+
 ANY_NUMBER = {"landline": groups(LANDLINE, (2, 7)), "mobile": groups(MOBILE, (3, 7)), "bare landline": LANDLINE}
 
 
 @pytest.mark.parametrize("label", [None, "phone"], ids=["no label", "phone label"])
 @pytest.mark.parametrize("which", ANY_NUMBER)
 def test_rf1_no_label_or_a_phone_label(label: str | None, which: str) -> None:
-    assert not refused(ANY_NUMBER[which], label)
+    assert not is_refused(ANY_NUMBER[which], label)
 
 
 UNDER_ANOTHER = {
@@ -274,7 +288,7 @@ UNDER_ANOTHER = {
 @pytest.mark.parametrize("which", UNDER_ANOTHER)
 def test_rf2_another_numbers_label(which: str) -> None:
     raw, expected = UNDER_ANOTHER[which]
-    assert refused(raw, "other") is expected
+    assert is_refused(raw, "other") is expected
 
 
 def under_an_id_label() -> dict[str, tuple[str, bool]]:
@@ -286,13 +300,14 @@ def under_an_id_label() -> dict[str, tuple[str, bool]]:
         "passes, 0X-XXXXXXX": (groups(passing, (2, 7)), False),
         "fails the check": (groups(failing, (2, 3, 4)), False),
         "mobile": (groups(MOBILE, (3, 7)), False),
+        "passes, 0X-XXX-XXXX and /8": (groups(passing, (2, 3, 4)) + "/8", False),
     }
 
 
 @pytest.mark.parametrize("which", list(under_an_id_label()))
 def test_rf3_an_id_label(which: str) -> None:
-    raw, expected = under_an_id_label()[which]
-    assert refused(raw, "id") is expected
+    text, expected = under_an_id_label()[which]
+    assert is_refused(text, "id") is expected
 
 
 MOBILE_FORMS = {
@@ -573,6 +588,8 @@ def kept_zero_forms() -> dict[str, str]:
         "plain": land,
         "00972-0X-XXXXXXX": groups("00" + land[1:], (5, 2, 7)),
         "972 (0)X XXXXXXX": f"{land[1:4]} ({land[4]}){land[5]} {land[6:]}",
+        "972-0X-XXXXXXX": groups(land[1:], (3, 2, 7)),
+        "9720X plain": land[1:],
         "voip": groups(voip, (4, 3, 7)),
     }
 
@@ -583,6 +600,22 @@ def test_ec13_from_abroad_with_the_zero_kept(form: str, before: str) -> None:
     written = kept_zero_forms()[form]
     text = f"{before}{written}, עד כאן"
     assert found(text) == only(text, written)
+
+
+def after_the_number_972() -> dict[str, tuple[str, str]]:
+    """Return texts where the number 972 stands one plain space before a phone from 0, by name, each with its phone."""
+    landline, mobile = groups(LANDLINE, (2, 7)), groups(MOBILE, (3, 7))
+    return {
+        "page, landline": (f"עמוד 972 {landline} של המבקש", landline),
+        "section, mobile": (f"סעיף 972 {mobile} בלבד", mobile),
+        "bare landline": (f"עמוד 972 {LANDLINE} של המבקש", LANDLINE),
+    }
+
+
+@pytest.mark.parametrize("case", list(after_the_number_972()))
+def test_ec14_the_number_972_before_a_phone_by_a_space(case: str) -> None:
+    text, phone_number = after_the_number_972()[case]
+    assert found(text) == only(text, phone_number)
 
 
 def test_a9_a_separator_after_the_kept_zero() -> None:
@@ -663,6 +696,16 @@ def test_a14_an_id_the_id_detector_takes(label: str) -> None:
 def test_a14_a_phone_shape_the_id_detector_leaves(label: str, which: str) -> None:
     written = under_an_id_label()[which][0]
     text = label + written
+    [detection] = Phone().detect(projection(text), CTX)
+    assert (detection.span.start, detection.span.end) == only(text, written)[0]
+    assert (detection.needs_review, detection.review_reason) == (True, ID_LABEL_REASON)
+    assert [kind for _, _, kind in detectors.detect_all(text)] == ["PHONE"]
+
+
+@pytest.mark.parametrize("label", ID_LABELS)
+def test_a14_an_id_with_a_slash_and_a_digit_after_it(label: str) -> None:
+    written = groups(id_landline(), (2, 3, 4))
+    text = f"{label}{written}/8"
     [detection] = Phone().detect(projection(text), CTX)
     assert (detection.span.start, detection.span.end) == only(text, written)[0]
     assert (detection.needs_review, detection.review_reason) == (True, ID_LABEL_REASON)
