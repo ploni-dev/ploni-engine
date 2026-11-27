@@ -13,36 +13,42 @@ Matrix:
   M2  every fixture text keeps the Detector contract (tests/detector_contract.py), as a header
       part too
   M3  the detector is registered in eval.detectors.DETECTORS, first, before the company number
-      detector of issue #33, the credit card detector of issue #35 and the phone detector of
-      issue #36, and requires no morphology
+      detector of issue #33, the credit card detector of issue #35, the IBAN and bank account
+      detector of issue #34 and the phone detector of issue #36, and requires no morphology
   M4  the other detections detect_all gives on the fixture, but PHONE, are exactly its company
       and non-profit slots, each typed as its list says, seven in all (the review of #33 at
-      4d6e477, finding 4), so that M1's filter leaves nothing unjudged; since issue #36
-      detect_all runs the phone detector too, whose detections the fixture's phone lines hold;
-      tests/t4_integration/test_phone.py, M5, pins those
+      4d6e477, finding 4), and, since issue #34, the IBAN one negative writes, a slot filled from
+      BANK_NUMBERS in the paper format, one in all, typed IBAN, so that M1's filter leaves
+      nothing unjudged; since issue #36 detect_all runs the phone detector too, whose
+      detections the fixture's phone lines hold; tests/t4_integration/test_phone.py, M5, pins
+      those
 """
 
 import json
-import string
 from pathlib import Path
 
 from eval import detectors
 from ploni.detect.base import DetectContext
 from ploni.detect.deterministic.company_number import CompanyNumber
 from ploni.detect.deterministic.credit_card import CreditCard
+from ploni.detect.deterministic.iban import Iban
 from ploni.detect.deterministic.israeli_id import IsraeliId
 from ploni.detect.deterministic.phone import Phone
 from tests.detector_contract import breaks, projection
-from tests.invented_numbers import ISRAELI_IDS, fill, read_cases
+from tests.invented_numbers import BANK_NUMBERS, ISRAELI_IDS, combined, fill, read_cases, typed_slots
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "detect" / "il_id.json"
 # The slots of the fixture that hold a company's or a non-profit's number, by their list's name.
 REGISTRY = {"company": "COMPANY_NUMBER", "nonprofit": "NONPROFIT_NUMBER"}
+# The slot of the IBAN one negative writes (issue #34).
+BANK = {"iban": "IBAN"}
+# The IDs and the IBAN, filled when the tests run.
+NUMBERS = combined(ISRAELI_IDS, BANK_NUMBERS)
 
 
 def texts() -> list[tuple[str, list[tuple[int, int]]]]:
     """Read every fixture text, its numbers filled in, with its expected places."""
-    positives, negatives = read_cases(FIXTURE, ISRAELI_IDS)
+    positives, negatives = read_cases(FIXTURE, NUMBERS)
     return positives + negatives
 
 
@@ -59,24 +65,18 @@ def test_m2_the_contract_over_the_fixture() -> None:
 
 
 def test_m3_registered_and_needs_no_morphology() -> None:
-    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, CreditCard, Phone]
+    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, CreditCard, Iban, Phone]
     assert IsraeliId.requires_morph is False and IsraeliId.produces == frozenset({"IL_ID"})
-
-
-def registry_slots(template: str) -> list[tuple[int, int, str]]:
-    """Return the places of a template's company and non-profit slots, filled, with their types."""
-    names = [name for _, name, _, _ in string.Formatter().parse(template) if name is not None]
-    _, spans = fill(template, ISRAELI_IDS)
-    return [(start, end, REGISTRY[name.split("[")[0]]) for name, (start, end) in zip(names, spans, strict=True) if name.split("[")[0] in REGISTRY]
 
 
 def test_m4_the_other_detections_are_the_registry_slots() -> None:
     data = json.loads(FIXTURE.read_text(encoding="utf-8"))
     templates = [case["text"] for case in data["positives"] + data["negatives"]]
-    seen = 0
+    seen = ibans = 0
     for template in templates:
-        text, _ = fill(template, ISRAELI_IDS)
+        text, _ = fill(template, NUMBERS)
         others = [each for each in detectors.detect_all(text) if each[2] not in ("IL_ID", "PHONE")]
-        assert others == registry_slots(template)
-        seen += len(others)
-    assert seen == 7
+        assert others == typed_slots(template, NUMBERS, REGISTRY) + typed_slots(template, NUMBERS, BANK)
+        seen += len(typed_slots(template, NUMBERS, REGISTRY))
+        ibans += len(typed_slots(template, NUMBERS, BANK))
+    assert seen == 7 and ibans == 1

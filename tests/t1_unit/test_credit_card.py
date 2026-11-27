@@ -106,7 +106,7 @@ from ploni.detect.deterministic.credit_card import CANDIDATE, CreditCard, brand,
 from ploni.types import Span
 from tests import invented_numbers as inv
 from tests.detector_contract import projection
-from tests.invented_numbers import CARDS, ISRAELI_IDS, read_cases
+from tests.invented_numbers import BANK_NUMBERS, CARDS, ISRAELI_IDS, combined, read_cases
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "detect" / "credit_card.json"
 CTX = DetectContext()
@@ -407,7 +407,7 @@ def test_a9_the_candidate_pattern() -> None:
 
 def cases() -> tuple[list[tuple[str, set[tuple[int, int]]]], int, int]:
     """Read the fixture, its numbers filled in: each text with its expected places, and the counts of positive and negative texts."""
-    positives, negatives = read_cases(FIXTURE, CARDS)
+    positives, negatives = read_cases(FIXTURE, combined(CARDS, BANK_NUMBERS))
     read = [(text, set(spans)) for text, spans in positives + negatives]
     return read, len(positives), len(negatives)
 

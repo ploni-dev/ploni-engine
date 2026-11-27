@@ -4,16 +4,19 @@ Why: the scorer takes "a callable from a document's text to a list of (start, en
 (the scorer's contract, PR #288). The score check of issue 170 scores main and the PR with the
 same function, so the function must exist on main before the workflow that calls it. Its list
 holds the detectors of ploni/, the Israeli ID detector first (issue #32), then the credit card
-detector (issue #35), then the phone detector (issue #36).
+detector (issue #35), then the IBAN and bank account detector (issue #34), then the phone
+detector (issue #36).
 
 Test matrix:
 
 Equivalence classes:
   EC1  the detectors of DETECTORS: the Israeli ID detector, then the company number detector
-       (issue #33), then the credit card detector (issue #35), then the phone detector (issue #36)
+       (issue #33), then the credit card detector (issue #35), then the IBAN and
+       bank account detector (issue #34), then the phone detector (issue #36)
                                                      their detections, by default, in that order;
                                                      the placeholder number 123456782 is not one;
                                                      an ID and a card, each typed by its detector;
+                                                     an IBAN, an ID and a company number;
                                                      an ID, a card and a phone, each so
   EC2  one detector given                            its detections as (start, end, type), in its order
   EC3  two detectors given                           the first one's, then the second one's
@@ -38,7 +41,7 @@ from eval import detectors
 from ploni.detect.base import DetectContext, Detector
 from ploni.types import Anchor, Detection, Span, TextProjection
 from tests.detector_contract import Digits
-from tests.invented_numbers import CARDS, ISRAELI_IDS, PHONES
+from tests.invented_numbers import BANK_NUMBERS, CARDS, ISRAELI_IDS, PHONES
 
 
 class Seen:
@@ -76,7 +79,7 @@ TEXT = "שָׁלוֹם, ת.ז. 123456782 ו-‏55‎"
 
 
 def test_ec1_the_detectors_of_ploni() -> None:
-    assert [type(each).__name__ for each in detectors.DETECTORS] == ["IsraeliId", "CompanyNumber", "CreditCard", "Phone"]
+    assert [type(each).__name__ for each in detectors.DETECTORS] == ["IsraeliId", "CompanyNumber", "CreditCard", "Iban", "Phone"]
     assert detectors.detect_all(TEXT) == []
     text = "ת.ז. " + ISRAELI_IDS.valid[0]
     assert detectors.detect_all(text) == [(5, 14, "IL_ID")]
@@ -84,6 +87,8 @@ def test_ec1_the_detectors_of_ploni() -> None:
     assert detectors.detect_all(text) == [(21, 30, "IL_ID"), (5, 14, "COMPANY_NUMBER")]
     both = f"ת.ז. {ISRAELI_IDS.valid[0]}, כרטיס {CARDS.visa[0]}"
     assert detectors.detect_all(both) == [(5, 14, "IL_ID"), (22, 38, "CREDIT_CARD")]
+    text = f"IBAN {BANK_NUMBERS.iban[0]}, ת.ז. {ISRAELI_IDS.valid[0]}, ח.פ. {ISRAELI_IDS.company[0]}"
+    assert detectors.detect_all(text) == [(35, 44, "IL_ID"), (51, 60, "COMPANY_NUMBER"), (5, 28, "IBAN")]
     mobile = f"{PHONES.mobile[0][:3]}-{PHONES.mobile[0][3:]}"
     three = f"{both}, טלפון {mobile}"
     assert detectors.detect_all(three) == [(5, 14, "IL_ID"), (22, 38, "CREDIT_CARD"), (46, 57, "PHONE")]

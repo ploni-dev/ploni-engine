@@ -22,11 +22,22 @@ Contract:
   ploni/detect/deterministic/credit_card.py, as `israeli_id_checksum_ok` is.
 - `cards(seed)`: a `Cards` (its fields say what each list holds), each list from its own stream
   of the same seed. CARDS is `cards(SEED)`.
+- `iban_ok(iban)`: the check of ISO 13616, ISO 7064 MOD 97-10 (issue #34), a copy apart from
+  ploni/detect/deterministic/iban.py, as `israeli_id_checksum_ok` is. `with_check(country,
+  bban)`: the country, the two check digits that make it pass, and the bban.
+- `bank_numbers(seed)`: a `BankNumbers` (its fields say what each list holds), each list from its
+  own stream of the same seed. BANK_NUMBERS is `bank_numbers(SEED)`. `iban_remainder(chars)`: the
+  remainder of ISO 7064 MOD 97-10 reduced one digit at a time, the second way to it that the
+  tests share.
 - `phones(seed)`: a `Phones` (its fields say what each list holds), Israeli phone numbers of the
   prefixes and lengths of build-plan.md Phase 1, "Israeli phone" (issue #36). A phone has no check
   digit: these are made here too, so that no file holds a phone number (Achia, 2026-11-27, #32).
   PHONES is `phones(SEED)`. A number from abroad holds its "+" or "00" as written, so that a
   slot's span takes it in; the shape's "d" writes it as it is.
+- `combined(*numbers)`: one namespace with the fields of each, for a fixture that holds two kinds
+  of numbers. Raises ValueError when a field name is in two, naming it.
+- `typed_slots(template, numbers, kinds)`: (start, end, type) of each slot of `template` whose
+  list is a key of `kinds`, typed by it, in the order of the slots.
 - `fill(template, numbers)`: (text, spans). A slot is written as a field of str.format: `{name}`
   or `{name[i]}`, a field of `numbers` (a dataclass), optionally `{name[i]:shape}`. The shape
   writes the number: "d" writes its next digit, "x" skips one, "+" writes the next digit plus one,
@@ -50,6 +61,7 @@ import dataclasses
 import hashlib
 import json
 import string
+import types
 from collections.abc import Callable, Iterator, Sequence
 from itertools import count, islice
 from pathlib import Path
@@ -284,6 +296,105 @@ def cards(seed: int) -> Cards:
 
 CARDS = cards(SEED)
 
+# ISO 13616, Israel's IBAN: IL, two check digits, then a bank of three digits, a branch of three
+# and an account of thirteen, 23 characters (ploni/detect/deterministic/iban.py names the source).
+IBAN_BBAN = 19
+# ISO 7064 MOD 97-10: an IBAN passes when the number it reads as leaves 1 divided by 97; the
+# check digits are 98 less the remainder of the number with "00" in their place.
+MOD = 97
+# Germany's IBAN: DE, two check digits and eighteen digits, 22 characters (ISO 13616's registry,
+# from Claude's knowledge): a valid IBAN of another country.
+FOREIGN, FOREIGN_BBAN = "DE", 18
+# A domestic triple, written apart: a bank of two digits, a branch of three, an account of nine.
+ACCOUNT_LENGTH = 14
+
+
+def as_number(text: str) -> int:
+    """Read an IBAN's characters as ISO 7064 does: a digit as itself, a letter A to Z as 10 to 35."""
+    return int("".join(str(int(ch, 36)) for ch in text))
+
+
+def iban_ok(iban: str) -> bool:
+    """Say whether an IBAN passes ISO 7064 MOD 97-10: its first four characters moved to the end, the number leaves 1."""
+    if len(iban) < 5 or not (iban.isascii() and iban.isalnum()):
+        return False
+    return as_number(iban[4:] + iban[:4]) % MOD == 1
+
+
+def with_check(country: str, bban: str) -> str:
+    """Return the country, the two check digits that make the IBAN pass, and the bban."""
+    return f"{country}{MOD + 1 - as_number(bban + country + '00') % MOD:02d}{bban}"
+
+
+def iban_remainder(chars: str) -> int:
+    """Return the ISO 7064 MOD 97-10 remainder of an IBAN's characters, reduced one digit at a time, apart from iban_ok."""
+    value = 0
+    for ch in (chars[4:] + chars[:4]).upper():
+        for digit in str(ord(ch) - ord("A") + 10) if ch.isalpha() else ch:
+            value = (value * 10 + int(digit)) % MOD
+    return value
+
+
+def invent_ibans(stream: Iterator[str], how_many: int, country: str, length: int) -> tuple[str, ...]:
+    """Make distinct IBANs of one country: digits of the stream as the bban, `length` of them, and the check digits."""
+    made: list[str] = []
+    while len(made) < how_many:
+        iban = with_check(country, take(stream, length))
+        if iban not in made:
+            made.append(iban)
+    return tuple(made)
+
+
+def invent_accounts(stream: Iterator[str], how_many: int) -> tuple[str, ...]:
+    """Make distinct runs of ACCOUNT_LENGTH digits that do not start with 0: a bank, a branch and an account."""
+    made: list[str] = []
+    while len(made) < how_many:
+        number = pick(stream, DECIMAL[1:]) + take(stream, ACCOUNT_LENGTH - 1)
+        if number not in made:
+            made.append(number)
+    return tuple(made)
+
+
+@dataclasses.dataclass(frozen=True)
+class BankNumbers:
+    """Invented IBANs that pass ISO 7064 MOD 97-10, but `iban_near`, which none does, and invented bank account triples.
+
+    Why: the cases of the IBAN and bank account detector (issue #34), each kind a list a
+    fixture's slot can name; the field names differ from those of `IsraeliIds`, so that a test
+    can hand both to `fill` as one.
+
+    Contract: iban: 40 distinct, IL and 21 ASCII digits. iban_near: 20, iban_near[i] the first
+    22 characters of iban[i] and another last digit. iban_lengths: IL with 20 digits, and IL
+    with 22, passing the check. iban_foreign: 3, DE and 20 digits, passing it. account: 40
+    distinct runs of 14 ASCII digits, the first not 0: a bank of two, a branch of three and an
+    account of nine, which a slot's shape writes as it needs; no check digit is made (none is
+    known for them, ploni/detect/deterministic/iban.py).
+
+    Known limits: the numbers are invented, not checked against any bank.
+    """
+
+    iban: tuple[str, ...]
+    iban_near: tuple[str, ...]
+    iban_lengths: tuple[str, ...]
+    iban_foreign: tuple[str, ...]
+    account: tuple[str, ...]
+
+
+def bank_numbers(seed: int) -> BankNumbers:
+    """Make the invented bank numbers of one seed, each list from its own stream."""
+    iban = invent_ibans(digits(seed, "iban"), 40, "IL", IBAN_BBAN)
+    lengths = digits(seed, "iban_lengths")
+    return BankNumbers(
+        iban=iban,
+        iban_near=near_misses(digits(seed, "iban_near"), iban[:20]),
+        iban_lengths=tuple(invent_ibans(lengths, 1, "IL", IBAN_BBAN + step)[0] for step in (-1, 1)),
+        iban_foreign=invent_ibans(digits(seed, "iban_foreign"), 3, FOREIGN, FOREIGN_BBAN),
+        account=invent_accounts(digits(seed, "account"), 40),
+    )
+
+
+BANK_NUMBERS = bank_numbers(SEED)
+
 # The prefixes of the Israeli numbering plan of the Ministry of Communications, as build-plan.md
 # Phase 1, "Israeli phone", names them: "Landline `0[23489]`, mobile `05\d`, VoIP `07[2-9]`, `+972`
 # forms, `*NNNN` service numbers"; after the 0 and its area code, SUBSCRIBER digits. The 1-800 and
@@ -434,3 +545,21 @@ def read_cases(path: Path, numbers: object) -> tuple[list[Case], list[Case]]:
         positives.append((text, [spans[k] for k in case["found"]]))
     negatives: list[Case] = [(fill(case["text"], numbers)[0], []) for case in data["negatives"]]
     return positives, negatives
+
+
+def combined(*numbers: object) -> types.SimpleNamespace:
+    """Return one namespace with the fields of each set of numbers, for a fixture that holds two kinds."""
+    fields: dict[str, object] = {}
+    for each in numbers:
+        for name, value in vars(each).items():
+            if name in fields:
+                raise ValueError(f"the field {name} is in two sets of numbers")
+            fields[name] = value
+    return types.SimpleNamespace(**fields)
+
+
+def typed_slots(template: str, numbers: object, kinds: dict[str, str]) -> list[tuple[int, int, str]]:
+    """Return the places of a template's slots whose list is a key of `kinds`, filled, typed by it."""
+    names = [name.split("[")[0] for _, name, _, _ in string.Formatter().parse(template) if name is not None]
+    _, spans = fill(template, numbers)
+    return [(start, end, kinds[name]) for name, (start, end) in zip(names, spans, strict=True) if name in kinds]
