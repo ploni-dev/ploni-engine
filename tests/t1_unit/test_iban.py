@@ -83,6 +83,7 @@ The detector, BANK_ACCOUNT:
       followed by a comma and three digits or more (no decimal part: a decimal part is one or
       two digits that end there; pass 2 of the review, at 0f6f0e7, item 8: "ח-ן
       12-345-123456,12-345-654321" gave nothing)                each account found
+      A list of three (added after the code, for two mutants of Cosmic Ray)    each found
   NA4 words between, a bank of four digits; a branch of four digits    nothing (added after the
       code, for the mutants that survived on BANK_LONGEST and BRANCH_LONGEST, 3 made 4)
   EA6 the bank named by its name and no number, then the branch and the account with their
@@ -460,6 +461,16 @@ def test_ea7_a_list_after_one_label() -> None:
     text = f"ח-ן {GROUPED},{SECOND_GROUPED}"
     first, second = text.index(GROUPED), text.rindex(SECOND_GROUPED)
     assert found(text) == [(first, first + len(GROUPED), "BANK_ACCOUNT"), (second, second + len(SECOND_GROUPED), "BANK_ACCOUNT")]
+
+
+def test_ea7_a_list_of_three() -> None:
+    # Added after the code, for two mutants of Cosmic Ray that survived: the last accepted triple,
+    # places[-1], made the first, places[0] (by `not 1` and by `- 0`).
+    third = BANK_NUMBERS.account[2]
+    items = [GROUPED, SECOND_GROUPED, f"{third[:2]}-{third[2:5]}-{third[5:11]}"]
+    text = "ח-ן " + ",".join(items)
+    starts = [text.index(item) for item in items]
+    assert found(text) == [(start, start + len(item), "BANK_ACCOUNT") for start, item in zip(starts, items, strict=True)]
 
 
 def test_ea7_a_comma_and_three_digits_after() -> None:
