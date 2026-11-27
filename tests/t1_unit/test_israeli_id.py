@@ -63,6 +63,13 @@ The detector (`IsraeliId`):
   A8  CANDIDATE itself: nine digits match it whole; ten, plain and with a hyphen, do not
       (added after the code, for seven mutants that survived Cosmic Ray: the checksum refuses
       more than nine digits too, so the detector's output alone cannot tell them apart)
+  EC8 a nine-digit ID beside another number by a plain space (U+0020), after it (a date, a
+      count) or before it (a section number), or both; plain, three-three-three with hyphens
+      and with spaces, eight and one: found, the span the ID only (issue #299, finding 3)
+  EC9 two nine-digit IDs side by side, one plain space between   two detections
+  A9  a separator other than the plain space keeps a nine-digit number's edge: a dot, a slash
+      or a no-break space and then a digit after it, a digit and one of them before it; a
+      hyphen and then a space and a digit after it         nothing
 
 label_before (the labels before a number, on its line, within LABEL_WINDOW characters, after
 the last digit there; build-plan.md Phase 1: company and non-profit numbers are their own type,
@@ -103,6 +110,8 @@ with zeros, `digits.zfill(9)`, so a number of fewer digits is an ID read with th
   SH7 seven zeros after an ID label (trivial once padded)  nothing
   SH8 eight digits followed by two separators and a digit, after an ID label: part of a longer
       number                                               nothing
+  SH9 eight digits followed by a plain space and a digit, after an ID label: the short forms
+      keep the separator-run edge (issue #299, finding 3)  nothing
 
 The fixture (tests/fixtures/detect/il_id.json; its numbers are filled in when the tests run, by
 tests/invented_numbers.py):
@@ -293,6 +302,36 @@ def test_a8_a_candidate_is_at_most_nine_digits(number: str) -> None:
     assert israeli_id.CANDIDATE.fullmatch(number) is None
 
 
+BESIDE = {
+    "date after": ("ת.ז. ", VALID, " 1.1.2020"),
+    "count after": ("ת.ז. ", VALID, " 3 ילדים"),
+    "section before": ("סעיף 3 ", VALID, ""),
+    "both sides": ("3 ", VALID, " 4"),
+    "threes hyphen": ("ת.ז. ", f"{VALID[:3]}-{VALID[3:6]}-{VALID[6:]}", " 3 ילדים"),
+    "threes space": ("ת.ז. ", f"{VALID[:3]} {VALID[3:6]} {VALID[6:]}", " 3 ילדים"),
+    "eight and one": ("סעיף 3 ", f"{VALID[:8]}-{VALID[8]}", ""),
+}
+
+
+@pytest.mark.parametrize("case", BESIDE)
+def test_ec8_beside_another_number_by_a_plain_space(case: str) -> None:
+    before, number, after = BESIDE[case]
+    assert found(before + number + after) == [(len(before), len(before) + len(number))]
+
+
+def test_ec9_two_ids_side_by_side() -> None:
+    assert found(f"{VALID} {OTHER}") == [(0, 9), (10, 19)]
+
+
+@pytest.mark.parametrize(
+    "text",
+    [f"{VALID}.5", f"{VALID}/5", f"{VALID} 5", f"7.{VALID}", f"7/{VALID}", f"7 {VALID}", f"{VALID}- 5"],
+    ids=["dot after", "slash after", "no-break space after", "dot before", "slash before", "no-break space before", "hyphen and space after"],
+)
+def test_a9_other_separators_keep_the_edge(text: str) -> None:
+    assert found(text) == []
+
+
 def label(before: str) -> str | None:
     """Return the kind of label the detector reads before a number that follows `before`."""
     text = before + VALID
@@ -445,6 +484,11 @@ def test_sh7_seven_zeros() -> None:
 def test_sh8_a_short_form_inside_a_longer_number(tail: str) -> None:
     assert israeli_id_checksum_ok(EIGHT)
     assert found("ת.ז. " + EIGHT + tail) == []
+
+
+def test_sh9_a_short_form_beside_another_number_by_a_plain_space() -> None:
+    assert israeli_id_checksum_ok(EIGHT)
+    assert found("ת.ז. " + EIGHT + " 12 שנים") == []
 
 
 def cases() -> tuple[list[tuple[str, set[tuple[int, int]]]], int, int]:
