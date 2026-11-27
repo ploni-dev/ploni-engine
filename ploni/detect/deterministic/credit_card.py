@@ -7,7 +7,10 @@ precision from the Luhn check and the issuer ranges, which are never weakened (i
 Contract: `CreditCard` is a Detector (`ploni/detect/base.py`) of type CREDIT_CARD. A detection is
 a run of SHORTEST to LONGEST ASCII digits with at most one separator (SEPARATORS of
 ploni/detect/deterministic/israeli_id.py) between any two digits; on its left it touches no
-digit, nor a digit and one separator, and on its right likewise. Its digits pass `luhn_ok` and
+digit, nor a digit and one separator, and on its right likewise, but that one plain space and an
+expiry (EXPIRY: one or two digits, a slash, two to four digits, no digit after) end the number,
+at its right edge and at every step inside it, so that an expiry is never read as more digits of
+the card (the review of ec7d0d4, finding 1). Its digits pass `luhn_ok` and
 `brand` names a brand whose issuer range holds their prefix and which issues their length. Its
 span is the number only, first digit to last, separators included, in code points of the
 projection's text (the held-out batch's span rule for CREDIT_CARD); a label before it is read,
@@ -16,16 +19,21 @@ otherwise CONFIDENCE.
 
 The issuer ranges and lengths (BRANDS) are those of ISO/IEC 7812-1 issuer identification numbers
 as the card networks publish them for their brands: Visa 4 (13, 16, 19 digits); Mastercard 51-55
-and 2221-2720 (16); American Express 34, 37 (15); Diners Club International 300-305, 36, 38-39
-(14 to 19); Discover 6011, 644-649, 65 (16 to 19); JCB 3528-3589 (16 to 19); UnionPay 62 (16 to
+and 2221-2720 (16); American Express 34, 37 (15); Diners Club International 300-305, 3095, 36,
+38-39 (14 to 19; 3095 added by the review of ec7d0d4, finding 2); Discover 6011, 644-649, 65 (16 to 19); JCB 3528-3589 (16 to 19); UnionPay 62 (16 to
 19). They are written from Claude's knowledge of those published tables; no copy of them is in
 the repository, and none was downloaded to check them.
 
-Known limits: a card followed by another number after one separator (an expiry or a code after a
-single space, "... 12/26") is read as one longer number and not found; after a comma or a word it
-is found. A brand not listed (Maestro, RuPay, Mir, Elo, Verve and others) is not found, nor is a
+Known limits: a card followed by another number after one separator that is no expiry (a security
+code after a single space, "... 123"), or by an expiry after a separator other than one plain
+space, is read as one longer number and not found; after a comma or a word it is found. An expiry
+before the card, one plain space from it, is not an edge: the card is not found. What the expiry
+stop costs, measured by the review of ec7d0d4 on invented texts: random sixteen digits and " 12/26"
+give a card 0.023 of the time (the plain Luhn-and-prefix rate), a row of numbers and then a date
+0.010 to 0.017, twenty digits in fours and an IBAN-like number 0.000, with the stop and without.
+A brand not listed (Maestro, RuPay, Mir, Elo, Verve and others) is not found, nor is a
 number outside the listed ranges, also a new range a network opens later. Israeli domestic
-Isracard numbers of eight or nine digits are out of scope: they are an ID's length, and the
+Isracard numbers of eight or nine digits are out of scope (#309): they are an ID's length, and the
 Israeli ID detector refuses a number under a card's label (its OTHER_LABELS). A number that passes
 the check with a brand's prefix is found whatever it is (a reference number). No placeholder
 sequence is refused but by the ranges (sixteen zeros has no brand's prefix). A label is read only
@@ -50,7 +58,7 @@ BRANDS = (
     ("visa", ((4, 4),), (13, 16, 19)),
     ("mastercard", ((51, 55), (2221, 2720)), (16,)),
     ("amex", ((34, 34), (37, 37)), (15,)),
-    ("diners", ((300, 305), (36, 36), (38, 39)), (14, 15, 16, 17, 18, 19)),
+    ("diners", ((300, 305), (3095, 3095), (36, 36), (38, 39)), (14, 15, 16, 17, 18, 19)),
     ("discover", ((6011, 6011), (644, 649), (65, 65)), (16, 17, 18, 19)),
     ("jcb", ((3528, 3589),), (16, 17, 18, 19)),
     ("unionpay", ((62, 62),), (16, 17, 18, 19)),
@@ -58,7 +66,13 @@ BRANDS = (
 SHORTEST = min(length for _, _, lengths in BRANDS for length in lengths)
 LONGEST = max(length for _, _, lengths in BRANDS for length in lengths)
 _SEP = "[" + re.escape(SEPARATORS) + "]"
-CANDIDATE = re.compile(rf"(?<![0-9])(?<![0-9]{_SEP})[0-9](?:{_SEP}?[0-9]){{{SHORTEST - 1},{LONGEST - 1}}}(?![0-9])(?!{_SEP}[0-9])")
+# A card's expiry after one plain space, MM/YY or MM/YYYY, M/YY: it ends the card (the review of
+# ec7d0d4, finding 1, measured 0.000 found before and 1.000 after on 3,000 invented cards per form).
+EXPIRY = r" [0-9]{1,2}/[0-9]{2,4}(?![0-9])"
+CANDIDATE = re.compile(
+    rf"(?<![0-9])(?<![0-9]{_SEP})[0-9](?:(?!{EXPIRY}){_SEP}?[0-9]){{{SHORTEST - 1},{LONGEST - 1}}}"
+    rf"(?![0-9])(?!(?!{EXPIRY}){_SEP}[0-9])"
+)
 # shortcut: one fixed confidence for every match until calibration (build-plan.md section 4.7,
 # detect/calibration.py) gives a measured one; a random run of digits passes the check one time in
 # ten and few carry a brand's prefix; a card's label before it is more evidence.
