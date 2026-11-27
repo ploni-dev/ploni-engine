@@ -24,7 +24,8 @@ Known limits: the type is read from the digits, not the label: ע.ר. before a n
 with 51 gives COMPANY_NUMBER. Only the plan's two prefixes are told apart: any other number that
 starts with 5 and passes the check is a company's. Nine digits that start with 5 and pass the
 check under no label of another number are found, whatever they are. Measured on 3,000 invented
-texts each (company_fp.py of issue #33): an unlabelled nine-digit number from 5 is found 0.108
+texts each, by a scratch script that is not in the repository (its table is in the text of this
+detector's PR, issue #33): an unlabelled nine-digit number from 5 is found 0.108
 of the time; an amount of nine digits written in threes with spaces ("סך 5XX XXX XXX ש"ח")
 0.096 (an amount of ten digits, 5 XXX XXX XXX, 0.000); a mobile written without its 0
 (5X-XXXXXXX) 0.000 (0.114 before the two-and-seven refusal), and its usual forms (05X-XXXXXXX,
