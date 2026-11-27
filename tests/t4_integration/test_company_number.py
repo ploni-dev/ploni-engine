@@ -12,7 +12,8 @@ Matrix:
   M2  every fixture text keeps the Detector contract (tests/detector_contract.py), as a header
       part too
   M3  the detector is registered in eval.detectors.DETECTORS, after the Israeli ID detector and
-      before the IBAN and bank account detector (issue #34), and requires no morphology
+      before the credit card detector of issue #35 and the IBAN and bank account detector of
+      issue #34, and requires no morphology
   M4  the two detectors never claim the same span: over both fixtures, no span is typed both
       IL_ID and a company's or a non-profit's (the ID detector refuses a number that starts
       with 5; this one finds only those)
@@ -24,6 +25,7 @@ from pathlib import Path
 from eval import detectors
 from ploni.detect.base import DetectContext
 from ploni.detect.deterministic.company_number import CompanyNumber
+from ploni.detect.deterministic.credit_card import CreditCard
 from ploni.detect.deterministic.iban import Iban
 from ploni.detect.deterministic.israeli_id import IsraeliId
 from tests.detector_contract import breaks, projection
@@ -58,7 +60,7 @@ def test_m2_the_contract_over_the_fixture() -> None:
 
 
 def test_m3_registered_and_needs_no_morphology() -> None:
-    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, Iban]
+    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, CreditCard, Iban]
     assert CompanyNumber.requires_morph is False and CompanyNumber.produces == OURS
 
 

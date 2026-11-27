@@ -18,6 +18,10 @@ Contract:
   code under test.
 - `israeli_ids(seed)`: an `IsraeliIds` (its fields say what each list holds). ISRAELI_IDS is
   `israeli_ids(SEED)`, made once when this module is imported.
+- `luhn_ok(digits)`: the Luhn check of a card number (issue #35), a copy apart from
+  ploni/detect/deterministic/credit_card.py, as `israeli_id_checksum_ok` is.
+- `cards(seed)`: a `Cards` (its fields say what each list holds), each list from its own stream
+  of the same seed. CARDS is `cards(SEED)`.
 - `iban_ok(iban)`: the check of ISO 13616, ISO 7064 MOD 97-10 (issue #34), a copy apart from
   ploni/detect/deterministic/iban.py, as `israeli_id_checksum_ok` is. `with_check(country,
   bban)`: the country, the two check digits that make it pass, and the bban.
@@ -188,6 +192,97 @@ def israeli_ids(seed: int) -> IsraeliIds:
 
 
 ISRAELI_IDS = israeli_ids(SEED)
+
+# The issuer ranges of the card brands, as (low, high) prefixes, written apart from the detector
+# (ploni/detect/deterministic/credit_card.py names their source); NO_BRAND starts with no brand's.
+VISA = ((4, 4),)
+MASTERCARD = ((51, 55), (2221, 2720))
+AMEX = ((34, 34), (37, 37))
+DINERS = ((36, 36),)
+DISCOVER = ((6011, 6011), (644, 649), (65, 65))
+JCB = ((3528, 3589),)
+UNIONPAY = ((62, 62),)
+NO_BRAND = ((1, 1), (7, 9))
+# The usual length of a card number; Visa also issues 13 and 19, American Express 15, Diners 14.
+CARD_LENGTH = 16
+
+
+def luhn_ok(digits: str) -> bool:
+    """Say whether ASCII digits pass the Luhn check: from the right, every second digit doubled, digits summed, a multiple of 10."""
+    if not (digits.isascii() and digits.isdigit()):
+        return False
+    doubled = [int(ch) * (2 if i % 2 else 1) for i, ch in enumerate(reversed(digits))]
+    return sum(n - 9 if n > 9 else n for n in doubled) % 10 == 0
+
+
+def invent_cards(stream: Iterator[str], how_many: int, ranges: tuple[tuple[int, int], ...], length: int) -> tuple[str, ...]:
+    """Make distinct card numbers of `length` digits: a prefix of one of `ranges`, digits of the stream, the Luhn check digit."""
+    made: list[str] = []
+    while len(made) < how_many:
+        low, high = ranges[int(take(stream, 2)) % len(ranges)]
+        prefix = str(low + int(take(stream, len(str(high)))) % (high - low + 1))
+        number = complete(prefix + take(stream, length - 1 - len(prefix)), luhn_ok)
+        if number not in made:
+            made.append(number)
+    return tuple(made)
+
+
+@dataclasses.dataclass(frozen=True)
+class Cards:
+    """Invented card numbers that pass the Luhn check, but `near`, which none does.
+
+    Why: the cases of the credit card detector (issue #35), each kind a list a fixture's slot can name.
+
+    Contract: every number is ASCII digits, distinct within its list. visa: 16, of 16 digits,
+    starting with 4; visa13: 2 of 13; visa19: 2 of 19. mastercard: 12 of 16, 51-55 or 2221-2720.
+    amex: 8 of 15, 34 or 37. diners: 4 of 14, 36. discover: 4 of 16, 6011, 644-649 or 65. jcb: 3
+    of 16, 3528-3589. unionpay: 3 of 16, 62. near: 20 of 16, near[i] the first fifteen digits of
+    visa[i] (i < 10) or of mastercard[i - 10], and another check digit. nobrand: 6 of 16, starting
+    with 1, 7, 8 or 9. wrong_length: a Visa prefix at 15, 14, 17, 18, 12 and 20 digits, an
+    American Express prefix at 16, a Mastercard prefix at 15.
+
+    Known limits: the numbers are invented, not checked against any issuer.
+    """
+
+    visa: tuple[str, ...]
+    visa13: tuple[str, ...]
+    visa19: tuple[str, ...]
+    mastercard: tuple[str, ...]
+    amex: tuple[str, ...]
+    diners: tuple[str, ...]
+    discover: tuple[str, ...]
+    jcb: tuple[str, ...]
+    unionpay: tuple[str, ...]
+    near: tuple[str, ...]
+    nobrand: tuple[str, ...]
+    wrong_length: tuple[str, ...]
+
+
+def cards(seed: int) -> Cards:
+    """Make the invented card numbers of one seed, each list from its own stream."""
+    visa = invent_cards(digits(seed, "card_visa"), 16, VISA, CARD_LENGTH)
+    mastercard = invent_cards(digits(seed, "card_mastercard"), 12, MASTERCARD, CARD_LENGTH)
+    wrong = digits(seed, "card_wrong_length")
+    return Cards(
+        visa=visa,
+        visa13=invent_cards(digits(seed, "card_visa13"), 2, VISA, 13),
+        visa19=invent_cards(digits(seed, "card_visa19"), 2, VISA, 19),
+        mastercard=mastercard,
+        amex=invent_cards(digits(seed, "card_amex"), 8, AMEX, 15),
+        diners=invent_cards(digits(seed, "card_diners"), 4, DINERS, 14),
+        discover=invent_cards(digits(seed, "card_discover"), 4, DISCOVER, CARD_LENGTH),
+        jcb=invent_cards(digits(seed, "card_jcb"), 3, JCB, CARD_LENGTH),
+        unionpay=invent_cards(digits(seed, "card_unionpay"), 3, UNIONPAY, CARD_LENGTH),
+        near=near_misses(digits(seed, "card_near"), visa[:10] + mastercard[:10]),
+        nobrand=invent_cards(digits(seed, "card_nobrand"), 6, NO_BRAND, CARD_LENGTH),
+        wrong_length=tuple(
+            invent_cards(wrong, 1, ranges, length)[0]
+            for ranges, length in ((VISA, 15), (VISA, 14), (VISA, 17), (VISA, 18), (VISA, 12), (VISA, 20), (AMEX, 16), (MASTERCARD, 15))
+        ),
+    )
+
+
+CARDS = cards(SEED)
 
 # ISO 13616, Israel's IBAN: IL, two check digits, then a bank of three digits, a branch of three
 # and an account of thirteen, 23 characters (ploni/detect/deterministic/iban.py names the source).
