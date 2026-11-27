@@ -50,32 +50,39 @@ the branch's (Claude's reading). The same confidence, band and review flag.
 Known limits: no check digit is applied to a triple: the banks' own check-digit rules are not
 cited here, so none is invented (the brief of issue #34); a triple is found by its words and
 labels only. The fewest digits of an account (ACCOUNT_SHORTEST, 4), the two digits of a bank and
-the three of a branch with no word between are Claude's reading of how Israeli papers write them,
-with no source. Not found: an account with no bank before it, by number or by name (a branch and an account,
-or an account alone, under any label: an account alone is no triple, and the Israeli ID detector
-drops nine digits under חשבון); a triple in another order (the account first); a triple grouped
-by separators with no bank label before it, with a bank of one or three digits, or a branch of
-one or two; a word between the numbers other than those listed (the bank's name between the
-branch and the account), or written with niqqud; a grouped triple in a landline's shape
-(0X-XXX-XXXX) under a bank label, though a bank 04 or 09 is written so; an IBAN of another
-country (only Israel's is in the plan); an IBAN with another number right after it by a
-separator but the plain space; an IBAN with a run of four separators or marks or more inside it. A valid IBAN is found
-whatever stands around it; a run of three numbers with סניף or חשבון between them is found as a
-triple whatever it is. Measured on invented texts, 3,000 per form, by a scratch script that is
-not in the repository (its table is in the text of this detector's PR, issue #34): IL and 21
-random digits give an IBAN 0.012 of the time (0.007 in the paper format; the check passes one
-in 97); and 0.000, IBAN and BANK_ACCOUNT alike, for each of: an ID after ת.ז., after חשבון, and
-written 3-3-3 after חשבון; a company number after ח.פ., and 2-6-1 after חשבון; a card in fours
-after כרטיס and after חשבון; a landline 0X-XXX-XXXX with no label, after חשבון and after
-"טלפון סניף הבנק", 0X XXX XXXX and 0X-XXXXXXX after חשבון; a mobile 05X-XXX-XXXX and
-+972-5X-XXX-XXXX after חשבון; an amount XX XXX XXX, XX,XXX,XXX, XX.XXX.XXX and X XXX XXX XXX
-after בחשבון, and XX XXX XXX with no label; a case number NNNNN-MM-YY, with and without חשבון
-before it, and NNNN/YY; a date DD.MM.YYYY and D/M/YY after "חשבון מיום". A triple's account of
-nine digits after ח-ן or ח"ן, with words between, is also found by the Israeli ID or the company
-number detector when it passes their check (0.095 to 0.098 of 3,000 invented triples per word;
-0.000 after חשבון, and grouped): their labels of other numbers do not hold ח-ן and ח"ן. The
-detection carries no id (detection_id is ""): ids are made just after detection, with the
-matter's key, never inside a detector (Achia, 2026-11-26, issue #169, "Use the secret key
+the three of a branch with no word between, the three words of a bank's name and the run of
+three separators in an IBAN are Claude's reading of how Israeli papers write them, with no
+source. Not found: an account with no bank before it, by number or by name (a branch and an
+account, or an account alone, under any label: to be found after this detector, by Achia's
+answer of 2026-11-27 on issue #315, "Yes, with the word (Recommended)"); a triple in another order (the account first); a triple grouped by
+separators with no bank label before it, with a bank of one or three digits, or a branch of one
+or two; a word between the numbers other than those listed (קוד בנק, a bar, the bank's name
+between the branch and the account), or the words written with niqqud; a grouped triple in a
+landline's shape (0X-XXX-XXXX) under a bank label, though a bank 04 or 09 is written so (a bank
+01 to 09 with an account of four digits, grouped after חשבון, is found 0.442 of the time); an
+account followed by an amount's decimal part or currency; an IBAN of another country (to be
+found after this detector, by his answer of 2026-11-27 on issue #316, "Yes, all countries
+(Recommended)"); an IBAN with
+another number right after it by a separator but the plain space; an IBAN with a run of four
+separators or marks or more inside it. A valid IBAN is found whatever stands around it; a run of
+three numbers with סניף or חשבון between them is found as a triple whatever it is ("פרק 3 סניף 4
+חשבון 2020" is one). Measured on invented texts, 3,000 per form, by a scratch script that is not
+in the repository (its table is in the text of this detector's PR, issue #34), at 4b2f0b4: IL
+and 21 random digits give an IBAN 0.007 to 0.012 of the time in each of six written forms (the
+check passes one in 97); and 0.000, IBAN and BANK_ACCOUNT alike, for each of: an ID after ת.ז.,
+after חשבון, and written 3-3-3 after חשבון; a company number after ח.פ., and 2-6-1 after חשבון; a
+card in fours after כרטיס and after חשבון; a landline 0X-XXX-XXXX with no label, after חשבון and
+after "טלפון סניף הבנק", 0X XXX XXXX and 0X-XXXXXXX after חשבון; a mobile 05X-XXX-XXXX and
++972-5X-XXX-XXXX after חשבון; an amount XX XXX XXX, XX,XXX,XXX, XX.XXX.XXX, X XXX XXX XXX, XX XXX
+XXX.XX and XX XXX XXXX ש"ח after בחשבון, and XX XXX XXX with no label; a case number
+NNNNN-MM-YY, with and without חשבון before it, and NNNN/YY; a date DD.MM.YYYY and D/M/YY after
+"חשבון מיום"; a bank by its name and a branch, then a balance after החשבון, or a date. A triple's
+account of nine digits after ח-ן or ח"ן, with words between, is also found by the Israeli ID or
+the company number detector when it passes their check (by the reviewer's script of the review
+of #34 at 28b6032, 3,000 invented triples per form: 0.104 after ח-ן, 0.088 after ח"ן, 0.104 after
+ח״ן; 0.000 after חשבון, and grouped after ח-ן): their labels of other numbers do not hold ח-ן and
+ח"ן. The detection carries no id (detection_id is ""): ids are made just after detection, with
+the matter's key, never inside a detector (Achia, 2026-11-26, issue #169, "Use the secret key
 (Recommended)").
 """
 
