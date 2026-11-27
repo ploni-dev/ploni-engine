@@ -92,18 +92,22 @@ LABEL_WINDOW = 20
 # before those, and none right after the label, so that its letters inside a longer word do not count.
 _BEFORE = r"(?<![א-ת])[ובלהשמכ]{0,2}"
 _AFTER = r"(?![א-ת])"
-# The labels of an ID in forms and court papers: ת.ז. with or without its dots, ת"ז with either
+# Gershayim: the ASCII quotation mark, the Hebrew sign (U+05F4), or two ASCII apostrophes, as Word
+# and typists write them when no gershayim key is at hand (issue #299, finding 7).
+_GERSHAYIM = r"(?:[\"״]|'')"
+# The labels of an ID in forms and court papers: ת.ז. with or without its dots, ת"ז with any
 # gershayim, תעודת זהות, מס' זהות and מספר זהות with either geresh, and the Latin ID.
 ID_LABELS = (
-    r"ת\.\s?ז\.?", r"ת[\"״]ז", r"תעודת\s+(?:ה)?זהות", r"מס(?:['׳]|פר)\s*(?:(?:ה)?תעודת\s+)?(?:ה)?זהות",
+    r"ת\.\s?ז\.?", rf"ת{_GERSHAYIM}ז", r"תעודת\s+(?:ה)?זהות", r"מס(?:['׳]|פר)\s*(?:(?:ה)?תעודת\s+)?(?:ה)?זהות",
 )  # fmt: skip
 # The labels of the numbers that are not an ID and are written the same way: company and
 # non-profit (build-plan.md Phase 1), passport, bank account, phone, health fund, military,
 # licence and card numbers.
 OTHER_LABELS = (
-    r"ח\.\s?פ\.?", r"ח[\"״]פ", r"ע\.\s?ר\.?", r"ע[\"״]ר", r"דרכון", r"חשבון", r"סניף", r"בנק", r"טלפון", r"טל['׳.]",
-    r"פקס", r"נייד", r"פלאפון", r"קופת\s+חולים", r"קופ[\"״]ח", r"מס(?:['׳]|פר)\s*(?:חבר|אישי|רישוי|רכב|לקוח|תיק)",
-    r"מ\.\s?א\.?", r"מ[\"״]א", r"רישיון", r"רישוי", r"כרטיס", r"אשראי",
+    r"ח\.\s?פ\.?", rf"ח{_GERSHAYIM}פ", r"ע\.\s?ר\.?", rf"ע{_GERSHAYIM}ר", r"דרכון", r"חשבון", r"סניף", r"בנק", r"טלפון",
+    r"טל['׳.]", r"פקס", r"נייד", r"פלאפון", r"קופת\s+חולים", rf"קופ{_GERSHAYIM}ח",
+    r"מס(?:['׳]|פר)\s*(?:חבר|אישי|רישוי|רכב|לקוח|תיק)", r"מ\.\s?א\.?", rf"מ{_GERSHAYIM}א", r"רישיון", r"רישוי", r"כרטיס",
+    r"אשראי",
 )  # fmt: skip
 LABEL = re.compile(
     rf"(?P<id>{_BEFORE}(?:{'|'.join(ID_LABELS)}){_AFTER}|(?<![A-Za-z])I\.?D\.?(?![A-Za-z]))"
