@@ -9,10 +9,11 @@ and labels only, and every one is flagged for review.
 Contract: `Iban` is a Detector (`ploni/detect/base.py`) of the types IBAN and BANK_ACCOUNT, the
 names of the held-out batch's span rules.
 
-An IBAN is a match of IBAN_CANDIDATE: IL, in either case, then 21 ASCII digits, with at most one
-separator (SEPARATORS of `israeli_id.py`) between any two characters but the two letters; no
-Latin letter or digit on its left, and no digit, nor a separator and a digit, on its right. Its
-characters, the separators taken out, pass `iban_ok`. Its span runs from I to the last digit,
+An IBAN is a match of IBAN_CANDIDATE: IL, in either case, then 21 ASCII digits, with a run of at
+most IBAN_GAP_LONGEST separators (SEPARATORS of `israeli_id.py`) and marks of direction (LRM,
+RLM) between any two characters but the two letters; no Latin letter or digit on its left, and
+no digit, nor a separator but the plain space and a digit, on its right (a plain space and a
+date after it end it). Its characters, the separators and marks taken out, pass `iban_ok`. Its span runs from I to the last digit,
 the separators inside it included. The check is ISO 13616-1's: the IBAN's first four characters
 moved to its end, each letter read as two digits (A = 10 to Z = 35), the number so made leaves 1
 when divided by 97 (ISO 7064, MOD 97-10). Israel's IBAN is 23 characters: IL, two check digits,
@@ -57,7 +58,7 @@ one or two; a word between the numbers other than those listed (the bank's name 
 branch and the account), or written with niqqud; a grouped triple in a landline's shape
 (0X-XXX-XXXX) under a bank label, though a bank 04 or 09 is written so; an IBAN of another
 country (only Israel's is in the plan); an IBAN with another number right after it by a
-separator; an IBAN with a mark of direction (U+200E, U+200F) inside it. A valid IBAN is found
+separator but the plain space; an IBAN with a run of four separators or marks or more inside it. A valid IBAN is found
 whatever stands around it; a run of three numbers with סניף or חשבון between them is found as a
 triple whatever it is. Measured on invented texts, 3,000 per form, by a scratch script that is
 not in the repository (its table is in the text of this detector's PR, issue #34): IL and 21
@@ -84,7 +85,7 @@ from typing import ClassVar
 
 from ploni.detect.base import DetectContext
 from ploni.detect.deterministic import israeli_id
-from ploni.detect.deterministic.israeli_id import _AFTER, _BEFORE, _GERSHAYIM, _SEP, _TIGHT
+from ploni.detect.deterministic.israeli_id import _AFTER, _BEFORE, _GERSHAYIM, _SEP, _TIGHT, SEPARATORS
 from ploni.types import Detection, Span, TextProjection
 
 IBAN = "IBAN"
@@ -98,7 +99,17 @@ MOD = 97
 # With no word between the numbers: a bank of two digits and a branch of three; an account of
 # four digits at least. Claude's reading, no source (Known limits).
 BANK_DIGITS, BRANCH_DIGITS, ACCOUNT_SHORTEST = 2, 3, 4
-IBAN_CANDIDATE = re.compile(rf"(?<![A-Za-z0-9])(?i:IL)(?:{_SEP}?[0-9]){{{IBAN_DIGITS}}}(?![0-9])(?!{_SEP}[0-9])")
+# The marks of direction, LRM and RLM, that word processors put around Latin text in a Hebrew line.
+DIRECTION_MARKS = "\u200e\u200f"
+# Between two characters of an IBAN, a short run of separators and marks: two or three spaces, a
+# space and a mark (the review of #34 at 28b6032, finding 5). Claude's reading, no source.
+IBAN_GAP_LONGEST = 3
+_IBAN_GAP_CHAR = "[" + re.escape(SEPARATORS + DIRECTION_MARKS) + "]"
+# On its right no digit, nor a separator but the plain space and a digit: a plain space and a
+# number after it end it.
+IBAN_CANDIDATE = re.compile(
+    rf"(?<![A-Za-z0-9])(?i:IL)(?:{_IBAN_GAP_CHAR}{{0,{IBAN_GAP_LONGEST}}}[0-9]){{{IBAN_DIGITS}}}(?![0-9])(?!{_TIGHT}[0-9])"
+)
 # Spaces and the punctuation that stands between a number and the word after it.
 _GLUE = r"[\s,:;.()\-־–]*"
 # מס' or מספר, "number", before or after a word, with either geresh or a dot.
@@ -236,14 +247,14 @@ class Iban:
         Why: the checksum-backed half of `detect`.
 
         Contract: one Detection per match of IBAN_CANDIDATE whose characters, the separators
-        taken out, pass `iban_ok`; type IBAN, CONFIDENCE, band "high".
+        and the marks of direction taken out, pass `iban_ok`; type IBAN, CONFIDENCE, band "high".
 
         Known limits: those of the module.
         """
         return [
             Detection("", proj.part, Span(match.start(), match.end()), match.group(), IBAN, CONFIDENCE, "high", self.name, None)
             for match in IBAN_CANDIDATE.finditer(proj.text)
-            if iban_ok(re.sub(_SEP, "", match.group()))
+            if iban_ok(re.sub(_IBAN_GAP_CHAR, "", match.group()))
         ]
 
     def accounts(self, proj: TextProjection) -> list[Detection]:
