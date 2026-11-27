@@ -33,20 +33,19 @@ The trade, measured on invented texts (3,000 per form): a landline in groups of 
 four with no label is found 0.000 of the time (0.095 and 0.096 before #302), and an ID in those
 groups under an ID label 1.000 (0.949 when the groups counted under any label); an ID written
 0X-XXXXXXX under an ID label 0.949 (0.484 of IDs that start with 0), the same as before #302.
-After an ID label, a
-longer number grouped by plain spaces gives up its first nine digits, found as an ID when they
-pass the checksum (one in ten). With no ID label, an ID with another number after it by a plain
-space ("<id> 3 ילדים") is not found; nor is one right after another number and a plain space
-("סעיף 3 <id>", the second of two IDs one space apart), under a label or not, since that
-number's digits cut the label off. An ID written without its leading zeros is not found with no
-ID label before it, nor with a plain space and a digit after it, and never found when six
-digits or fewer are left (three leading zeros or more). A valid
-number under the label of another number (OTHER_LABELS: a health fund member's, a client's, a
-card's, ...) is dropped, not flagged as that number: no other detector on main finds it yet. A
-valid number in another context whose label is not one of OTHER_LABELS (a reference number) is
-found as an ID. The detection carries no id (detection_id is ""): ids are made just after
-detection, with the matter's key, never inside a detector (Achia, 2026-11-26, issue #169, "Use
-the secret key (Recommended)").
+After an ID label, a longer number grouped by plain spaces gives up its first nine digits, found
+as an ID when they pass the checksum (one in ten). With no ID label, an ID with another number
+after it by a plain space ("<id> 3 ילדים") is not found; nor is one right after another number
+and a plain space ("סעיף 3 <id>", the second of two IDs one space apart), under a label or not,
+since that number's digits cut the label off. An ID written without its leading zeros is not
+found with no ID label before it, nor with a plain space and a digit after it, and never found
+when six digits or fewer are left (three leading zeros or more). A valid number under the label
+of another number (OTHER_LABELS: a health fund member's, a client's, a card's, ...) is dropped,
+not flagged as that number: no other detector on main finds it yet. A valid number in another
+context whose label is not one of OTHER_LABELS (a reference number) is found as an ID. The
+detection carries no id (detection_id is ""): ids are made just after detection, with the
+matter's key, never inside a detector (Achia, 2026-11-26, issue #169, "Use the secret key
+(Recommended)").
 """
 
 from __future__ import annotations
