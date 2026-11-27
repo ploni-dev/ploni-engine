@@ -63,30 +63,54 @@ The detector (`IsraeliId`):
   A8  CANDIDATE itself: nine digits match it whole; ten, plain and with a hyphen, do not
       (added after the code, for seven mutants that survived Cosmic Ray: the checksum refuses
       more than nine digits too, so the detector's output alone cannot tell them apart)
+  EC8 a nine-digit ID after an ID label, another number after it by a plain space (U+0020): a
+      date, a count, an age; plain, three-three-three with hyphens and with spaces, eight and
+      one: found, the span the ID only (issue #299, finding 3, narrowed after the review of
+      e2bcb86 to an ID label before the number)
+  EC9 two nine-digit IDs one plain space apart, after an ID label: the first is found; the
+      second is not, the first's digits cutting its label off (Known limits)
+  A10 with no ID label, a nine-digit number beside another number by a plain space: a section
+      number before it, numbers on both sides, a count after it, a section number before eight
+      and one; and the false IDs the review of e2bcb86 measured, each with a nine-digit piece
+      that passes the checksum: an amount with spaces between its thousands (1 and three
+      threes, ש"ח), twelve digits in threes, a row of short numbers, years and counts    nothing
+  A9  a separator other than the plain space keeps a nine-digit number's edge: a dot, a slash
+      or a no-break space and then a digit after it, a digit and one of them before it; a
+      hyphen and then a space and a digit after it         nothing
 
-label_before (the label nearest before a number, on its line, within LABEL_WINDOW characters,
-with no digit between; build-plan.md Phase 1: company and non-profit numbers are their own
-type, and forms write the label of a number before it):
+label_before (the labels before a number, on its line, within LABEL_WINDOW characters, after
+the last digit there; build-plan.md Phase 1: company and non-profit numbers are their own type,
+and forms write the label of a number before it):
   L1 each ID label: ת.ז., ת.ז, ת"ז, ת״ז, תעודת זהות, תעודת הזהות, מס' זהות, מס׳ זהות, מספר
-     זהות, מספר תעודת זהות, ID, I.D.                       "id"
+     זהות, מספר תעודת זהות, ID, I.D.; ת''ז, gershayim written as two ASCII apostrophes, as
+     Word writes them (issue #299, finding 7)              "id"
   L2 each label of another number: ח.פ., ח"פ, ע.ר., ע״ר, דרכון, חשבון, טלפון, טל', טל׳, פקס,
-     נייד, קופת חולים, מס' חבר, מספר אישי, מ.א., רישיון    "other"
+     נייד, קופת חולים, מס' חבר, מספר אישי, מ.א., רישיון; ח''פ, ע''ר, קופ''ח, מ''א (two
+     apostrophes, issue #299, finding 7)                   "other"
   L3 no label                                              None
-  L4 two labels: the nearer one counts, either way round
+  L4 an ID label and the label of another number: the ID label counts, either way round (issue
+     #299, finding 1: until then the nearer one counted, and "ת.ז. או דרכון" was "other")
   L5 a label further than LABEL_WINDOW before the number  None
   L5b the window's edge: a label that starts exactly LABEL_WINDOW characters before the number
       counts, one that starts a character earlier does not; far into a text as at its start
       (added after the code, for three mutants that survived Cosmic Ray)
   L6 a label on the line before                            None
   L7 a digit between the label and the number              None
-  L8 a proclitic glued to a label (ות.ז., לת"ז, ובדרכון)   its kind
+  L8 a proclitic glued to a label (ות.ז., לת"ז, ובדרכון, ולת''ז)   its kind
   L9 a label's letters inside a longer word (מתזמן, טלפונית)    not a label
+  L10 a combined form label, an ID's and another number's, with a slash or "או": ת.ז./דרכון,
+      ת"ז/דרכון, ת״ז/ח.פ., מספר זהות/דרכון, מס' זהות/דרכון, ת.ז./ח.פ., תעודת זהות/דרכון,
+      ת.ז. או דרכון; ת''ז/דרכון (finding 7)                  "id" (issue #299, finding 1)
+  L11 an ID label, a digit, then the label of another number: only the labels after the last
+      digit count                                          "other"
 The detector, with labels:
   EC5 a valid number after a label of another number      nothing (the fixture has each kind)
   EC6 after an ID label: CONFIDENCE_LABELLED; with no label: CONFIDENCE
+  EC7 a valid number after a combined form label (L10)    found, CONFIDENCE_LABELLED; a company
+      number after ת.ז./ח.פ.                                nothing (it starts with 5)
 The detector, an ID written without its leading zeros (build-plan.md Phase 1's checksum pads
 with zeros, `digits.zfill(9)`, so a number of fewer digits is an ID read with them):
-  SH1 eight digits after an ID label                       found, the span the digits as written
+  SH1 eight digits after an ID label, ת''ז among them      found, the span the digits as written
   SH2 seven digits after an ID label                       found
   SH3 eight digits with a separator after an ID label (7-1, 4-4)    found
   SH4 eight digits with no label, and after a label of another number    nothing
@@ -95,6 +119,18 @@ with zeros, `digits.zfill(9)`, so a number of fewer digits is an ID read with th
   SH7 seven zeros after an ID label (trivial once padded)  nothing
   SH8 eight digits followed by two separators and a digit, after an ID label: part of a longer
       number                                               nothing
+  SH9 eight digits followed by a plain space and a digit, after an ID label: the short forms
+      keep the separator-run edge (issue #299, finding 3)  nothing
+
+is_israeli_id (the decision alone, one row per rule; added after the code, by the review of
+79c192f, item 5: a public function gets its own test):
+  I1 under another number's label                          False
+  I2 no label, another number beside it                    False
+  I3 no label, a short form                                False
+  I4 an ID label, another number beside it                 True
+  I5 an ID label, a short form                             True
+  I6 no label, nine valid digits, nothing beside           True
+  I7 no label, nine digits that fail the checksum          False
 
 The fixture (tests/fixtures/detect/il_id.json; its numbers are filled in when the tests run, by
 tests/invented_numbers.py):
@@ -118,7 +154,7 @@ import pytest
 
 from ploni.detect.base import DetectContext
 from ploni.detect.deterministic import israeli_id
-from ploni.detect.deterministic.israeli_id import IsraeliId, is_other_shape, is_trivial, israeli_id_checksum_ok
+from ploni.detect.deterministic.israeli_id import IsraeliId, is_israeli_id, is_other_shape, is_trivial, israeli_id_checksum_ok
 from ploni.types import Span
 from tests.detector_contract import projection
 from tests.invented_numbers import ISRAELI_IDS, read_cases
@@ -285,6 +321,53 @@ def test_a8_a_candidate_is_at_most_nine_digits(number: str) -> None:
     assert israeli_id.CANDIDATE.fullmatch(number) is None
 
 
+BESIDE = {
+    "date after": ("ת.ז. ", VALID, " 1.1.2020"),
+    "count after": ("ת.ז. ", VALID, " 3 ילדים"),
+    "age after": ("המבקש, ת.ז. ", VALID, " 12 שנים"),
+    "threes hyphen": ("ת.ז. ", f"{VALID[:3]}-{VALID[3:6]}-{VALID[6:]}", " 3 ילדים"),
+    "threes space": ("ת.ז. ", f"{VALID[:3]} {VALID[3:6]} {VALID[6:]}", " 3 ילדים"),
+    "eight and one": ("ת.ז. ", f"{VALID[:8]}-{VALID[8]}", " 12 שנים"),
+}
+
+
+@pytest.mark.parametrize("case", BESIDE)
+def test_ec8_beside_another_number_by_a_plain_space(case: str) -> None:
+    before, number, after = BESIDE[case]
+    assert found(before + number + after) == [(len(before), len(before) + len(number))]
+
+
+def test_ec9_two_ids_one_space_apart() -> None:
+    assert found(f"ת.ז. {VALID} {OTHER}") == [(5, 14)]
+
+
+THREES = f"{VALID[:3]} {VALID[3:6]} {VALID[6:]}"
+UNLABELLED_BESIDE = {
+    "section before": f"סעיף 3 {VALID}",
+    "both sides": f"3 {VALID} 4",
+    "count after": f"{VALID} 3 ילדים",
+    "section before eight and one": f"סעיף 3 {VALID[:8]}-{VALID[8]}",
+    "amount": f"סכום של 1 {THREES} ש\"ח",
+    "twelve in threes": f"מספר {THREES} 123",
+    "row of short numbers": f"7 {THREES} 45 3",
+    "years and counts": f"בשנים 2019 {VALID[:4]} {VALID[4:6]} {VALID[6:]}",
+}
+
+
+@pytest.mark.parametrize("case", UNLABELLED_BESIDE)
+def test_a10_beside_another_number_with_no_id_label(case: str) -> None:
+    assert found(UNLABELLED_BESIDE[case]) == []
+
+
+@pytest.mark.parametrize(
+    "text",
+    [f"{VALID}.5", f"{VALID}/5", f"{VALID} 5", f"7.{VALID}", f"7/{VALID}", f"7 {VALID}", f"{VALID}- 5"],
+    ids=["dot after", "slash after", "no-break space after", "dot before", "slash before", "no-break space before", "hyphen and space after"],
+)
+def test_a9_other_separators_keep_the_edge(text: str) -> None:
+    assert found(text) == []
+
+
 def label(before: str) -> str | None:
     """Return the kind of label the detector reads before a number that follows `before`."""
     text = before + VALID
@@ -292,10 +375,10 @@ def label(before: str) -> str | None:
     return result
 
 
-ID_LABELS = ["ת.ז. ", "ת.ז ", "ת\"ז ", "ת״ז ", "תעודת זהות ", "תעודת הזהות ", "מס' זהות ", "מס׳ זהות ", "מספר זהות: ", "מספר תעודת זהות ", "ID ", "I.D. "]
+ID_LABELS = ["ת.ז. ", "ת.ז ", "ת\"ז ", "ת״ז ", "תעודת זהות ", "תעודת הזהות ", "מס' זהות ", "מס׳ זהות ", "מספר זהות: ", "מספר תעודת זהות ", "ID ", "I.D. ", "ת''ז "]
 OTHER_LABELS = [
     "ח.פ. ", "ח\"פ ", "ע.ר. ", "ע״ר ", "דרכון ", "חשבון ", "טלפון ", "טל' ", "טל׳ ", "פקס ", "נייד ", "קופת חולים ", "מס' חבר ",
-    "מספר אישי ", "מ.א. ", "רישיון ",
+    "מספר אישי ", "מ.א. ", "רישיון ", "ח''פ ", "ע''ר ", "קופ''ח ", "מ''א ",
 ]  # fmt: skip
 
 
@@ -314,9 +397,9 @@ def test_l3_no_label(before: str) -> None:
     assert label(before) is None
 
 
-@pytest.mark.parametrize(("before", "kind"), [("דרכון ות.ז. ", "id"), ("ת.ז. או דרכון ", "other")], ids=["id nearer", "other nearer"])
-def test_l4_the_nearer_label_counts(before: str, kind: str) -> None:
-    assert label(before) == kind
+@pytest.mark.parametrize("before", ["דרכון ות.ז. ", "ת.ז. או דרכון "], ids=["id nearer", "other nearer"])
+def test_l4_the_id_label_counts_either_way_round(before: str) -> None:
+    assert label(before) == "id"
 
 
 def test_l5_a_label_too_far_before() -> None:
@@ -342,7 +425,7 @@ def test_l7_a_digit_between() -> None:
     assert label("ת.ז. 3 ו") is None
 
 
-@pytest.mark.parametrize(("before", "kind"), [("ות.ז. ", "id"), ("לת\"ז ", "id"), ("ובדרכון ", "other")])
+@pytest.mark.parametrize(("before", "kind"), [("ות.ז. ", "id"), ("לת\"ז ", "id"), ("ובדרכון ", "other"), ("ולת''ז ", "id")])
 def test_l8_a_proclitic_on_the_label(before: str, kind: str) -> None:
     assert label(before) == kind
 
@@ -350,6 +433,21 @@ def test_l8_a_proclitic_on_the_label(before: str, kind: str) -> None:
 @pytest.mark.parametrize("before", ["מתזמן ", "טלפונית "])
 def test_l9_letters_inside_a_longer_word(before: str) -> None:
     assert label(before) is None
+
+
+COMBINED_LABELS = [
+    "ת.ז./דרכון ", "ת\"ז/דרכון ", "ת״ז/ח.פ. ", "מספר זהות/דרכון: ", "מס' זהות/דרכון ", "ת.ז./ח.פ. ", "תעודת זהות/דרכון ",
+    "ת.ז. או דרכון ", "ת''ז/דרכון ",
+]  # fmt: skip
+
+
+@pytest.mark.parametrize("before", COMBINED_LABELS)
+def test_l10_a_combined_form_label(before: str) -> None:
+    assert label(before) == "id"
+
+
+def test_l11_only_the_labels_after_the_last_digit_count() -> None:
+    assert label("ת.ז. 3 דרכון ") == "other"
 
 
 @pytest.mark.parametrize("before", OTHER_LABELS)
@@ -364,12 +462,23 @@ def test_ec6_the_confidence(before: str, confidence: str) -> None:
     assert israeli_id.CONFIDENCE < israeli_id.CONFIDENCE_LABELLED <= 1.0
 
 
+@pytest.mark.parametrize("before", COMBINED_LABELS)
+def test_ec7_a_valid_number_after_a_combined_form_label(before: str) -> None:
+    detections = IsraeliId().detect(projection(before + VALID), CTX)
+    assert [(each.span.start, each.span.end, each.confidence) for each in detections] == [(len(before), len(before) + 9, israeli_id.CONFIDENCE_LABELLED)]
+
+
+def test_ec7_a_company_number_after_a_combined_form_label() -> None:
+    assert israeli_id_checksum_ok(COMPANY)
+    assert found("ת.ז./ח.פ. " + COMPANY) == []
+
+
 # ZERO without its leading zero (eight digits), and an invented valid number with two (seven).
 EIGHT = ZERO[1:]
 SEVEN = ISRAELI_IDS.two_zeros[0][2:]
 
 
-@pytest.mark.parametrize("before", ["ת.ז. ", "ת\"ז ", "מס' זהות ", "תעודת זהות "])
+@pytest.mark.parametrize("before", ["ת.ז. ", "ת\"ז ", "מס' זהות ", "תעודת זהות ", "ת''ז "])
 def test_sh1_eight_digits_after_an_id_label(before: str) -> None:
     assert israeli_id_checksum_ok(EIGHT)
     assert found(before + EIGHT) == [(len(before), len(before) + 8)]
@@ -411,6 +520,23 @@ def test_sh7_seven_zeros() -> None:
 def test_sh8_a_short_form_inside_a_longer_number(tail: str) -> None:
     assert israeli_id_checksum_ok(EIGHT)
     assert found("ת.ז. " + EIGHT + tail) == []
+
+
+def test_sh9_a_short_form_beside_another_number_by_a_plain_space() -> None:
+    assert israeli_id_checksum_ok(EIGHT)
+    assert found("ת.ז. " + EIGHT + " 12 שנים") == []
+
+
+@pytest.mark.parametrize(
+    ("raw", "kind", "beside", "expected"),
+    [
+        (VALID, "other", False, False), (VALID, None, True, False), (EIGHT, None, False, False), (VALID, "id", True, True),
+        (EIGHT, "id", False, True), (VALID, None, False, True), (NEAR, None, False, False),
+    ],
+    ids=["i1 other label", "i2 no label beside", "i3 no label short", "i4 id label beside", "i5 id label short", "i6 plain valid", "i7 plain invalid"],
+)  # fmt: skip
+def test_i_the_decision(raw: str, kind: str | None, beside: bool, expected: bool) -> None:
+    assert is_israeli_id(raw, kind, beside) is expected
 
 
 def cases() -> tuple[list[tuple[str, set[tuple[int, int]]]], int, int]:

@@ -10,19 +10,32 @@ Contract: `IsraeliId` is a Detector (`ploni/detect/base.py`) of type IL_ID. A de
 of nine ASCII digits, or of SHORT_LENGTH to eight right after an ID label (an ID written without
 its leading zeros; "right after" as `label_before` reads it: the label within LABEL_WINDOW, 20,
 characters before the number, on its line, with no digit between), with at most one separator
-(SEPARATORS) between any two digits. On its left it touches no digit, nor a digit and one
-separator; on its right no run of separators, of any length, and then a digit follows (since
-change 3 of issue #32). Its digits, padded with zeros to nine, pass `israeli_id_checksum_ok`, do
-not start with COMPANY_PREFIX and are not trivial (`is_trivial`); its written shape is not that
-of another number (`is_other_shape`); no label of another number stands before it
-(`label_before`). Its span is the number only, first digit to last, separators included, in code
-points of the projection's text (the held-out batch's span rule for IL_ID); the label before it
-is read, never put in the span. Under an ID label its confidence is CONFIDENCE_LABELLED,
-otherwise CONFIDENCE.
+(SEPARATORS) between any two digits. Its edges: on its left it touches no digit, nor a digit and
+one separator; on its right no run of separators, of any length, and then a digit follows (since
+change 3 of issue #32), but for nine digits after an ID label (`label_before` "id"), where a
+plain space (U+0020) and then another number may follow: the space ends the ID, as in "ת.ז.
+<id> 1.1.2020" (issue #299, narrowed after the independent review of e2bcb86, whose measured
+false IDs, an amount or a row of numbers grouped by plain spaces, carry no ID label). The other
+separators keep the edges, and so do the short forms. Its digits, padded with zeros to nine,
+pass `israeli_id_checksum_ok`, do not start with COMPANY_PREFIX and are not trivial
+(`is_trivial`); its written shape is not that of another number (`is_other_shape`); no label of
+another number stands before it, unless an ID label stands there too, as in a combined form
+label, "ת.ז./דרכון" (`label_before`; issue #299). Its span is the number only, first digit to
+last, separators included, in code points of the projection's text (the held-out batch's span
+rule for IL_ID); the label before it is read, never put in the span. Under an ID label its
+confidence is CONFIDENCE_LABELLED, otherwise CONFIDENCE.
 
 Known limits: a landline written as nine digits with no separator (0X1234567) and no phone label
-is found as an ID. An ID written without its leading zeros is not found with no ID label before
-it, and never found when six digits or fewer are left (three leading zeros or more). A valid
+is found as an ID, and so is one written 0X-XXX-XXXX or 0X XXX XXXX, about one time in ten
+(the independent review of issue #299 measured 0.095 and 0.096 of 3,000 invented texts, the same
+on main): `is_other_shape` refuses only the grouping of two and seven. After an ID label, a
+longer number grouped by plain spaces gives up its first nine digits, found as an ID when they
+pass the checksum (one in ten). With no ID label, an ID with another number after it by a plain
+space ("<id> 3 ילדים") is not found; nor is one right after another number and a plain space
+("סעיף 3 <id>", the second of two IDs one space apart), under a label or not, since that
+number's digits cut the label off. An ID written without its leading zeros is not found with no
+ID label before it, nor with a plain space and a digit after it, and never found when six
+digits or fewer are left (three leading zeros or more). A valid
 number under the label of another number (OTHER_LABELS: a health fund member's, a client's, a
 card's, ...) is dropped, not flagged as that number: no other detector on main finds it yet. A
 valid number in another context whose label is not one of OTHER_LABELS (a reference number) is
@@ -61,8 +74,18 @@ CASE_NUMBER_GROUPS = [5, 2, 2]
 # Word inserts (U+2011), the figure dash (U+2012), the em dash (U+2014), the minus sign (U+2212).
 SEPARATORS = "-./  ־–‐‑‒—−"
 _SEP = "[" + re.escape(SEPARATORS) + "]"
+# The separators but the plain space: after an ID label, a plain space after nine digits ends the
+# number, as Hebrew text writes a date, a count or an age after an ID (issue #299, finding 3).
+_TIGHT = "[" + re.escape(SEPARATORS.replace(" ", "")) + "]"
 # A number is not followed by a run of separators and a digit: it would be part of a longer one.
-CANDIDATE = re.compile(rf"(?<![0-9])(?<![0-9]{_SEP})[0-9](?:{_SEP}?[0-9]){{{SHORT_LENGTH - 1},{ID_LENGTH - 1}}}(?!{_SEP}*[0-9])")
+# For nine digits, a run that starts with a plain space may be another number's edge; whether it
+# is, `is_israeli_id` decides by the label (NUMBER_AFTER). The short forms keep the whole run.
+CANDIDATE = re.compile(
+    rf"(?<![0-9])(?<![0-9]{_SEP})[0-9](?:{_SEP}?[0-9]){{{ID_LENGTH - 1}}}(?![0-9])(?!{_TIGHT}{_SEP}*[0-9])"
+    rf"|(?<![0-9])(?<![0-9]{_SEP})[0-9](?:{_SEP}?[0-9]){{{SHORT_LENGTH - 1},{ID_LENGTH - 2}}}(?!{_SEP}*[0-9])"
+)
+# Another number right after a candidate: a run of separators and a digit.
+NUMBER_AFTER = re.compile(rf"{_SEP}*[0-9]")
 # shortcut: one fixed confidence for every checksum match until calibration (build-plan.md
 # section 4.7, detect/calibration.py) gives a measured one; a random nine-digit number passes the
 # check one time in ten, and an ID label before it is more evidence.
@@ -76,18 +99,22 @@ LABEL_WINDOW = 20
 # before those, and none right after the label, so that its letters inside a longer word do not count.
 _BEFORE = r"(?<![א-ת])[ובלהשמכ]{0,2}"
 _AFTER = r"(?![א-ת])"
-# The labels of an ID in forms and court papers: ת.ז. with or without its dots, ת"ז with either
+# Gershayim: the ASCII quotation mark, the Hebrew sign (U+05F4), or two ASCII apostrophes, as Word
+# and typists write them when no gershayim key is at hand (issue #299, finding 7).
+_GERSHAYIM = r"(?:[\"״]|'')"
+# The labels of an ID in forms and court papers: ת.ז. with or without its dots, ת"ז with any
 # gershayim, תעודת זהות, מס' זהות and מספר זהות with either geresh, and the Latin ID.
 ID_LABELS = (
-    r"ת\.\s?ז\.?", r"ת[\"״]ז", r"תעודת\s+(?:ה)?זהות", r"מס(?:['׳]|פר)\s*(?:(?:ה)?תעודת\s+)?(?:ה)?זהות",
+    r"ת\.\s?ז\.?", rf"ת{_GERSHAYIM}ז", r"תעודת\s+(?:ה)?זהות", r"מס(?:['׳]|פר)\s*(?:(?:ה)?תעודת\s+)?(?:ה)?זהות",
 )  # fmt: skip
 # The labels of the numbers that are not an ID and are written the same way: company and
 # non-profit (build-plan.md Phase 1), passport, bank account, phone, health fund, military,
 # licence and card numbers.
 OTHER_LABELS = (
-    r"ח\.\s?פ\.?", r"ח[\"״]פ", r"ע\.\s?ר\.?", r"ע[\"״]ר", r"דרכון", r"חשבון", r"סניף", r"בנק", r"טלפון", r"טל['׳.]",
-    r"פקס", r"נייד", r"פלאפון", r"קופת\s+חולים", r"קופ[\"״]ח", r"מס(?:['׳]|פר)\s*(?:חבר|אישי|רישוי|רכב|לקוח|תיק)",
-    r"מ\.\s?א\.?", r"מ[\"״]א", r"רישיון", r"רישוי", r"כרטיס", r"אשראי",
+    r"ח\.\s?פ\.?", rf"ח{_GERSHAYIM}פ", r"ע\.\s?ר\.?", rf"ע{_GERSHAYIM}ר", r"דרכון", r"חשבון", r"סניף", r"בנק", r"טלפון",
+    r"טל['׳.]", r"פקס", r"נייד", r"פלאפון", r"קופת\s+חולים", rf"קופ{_GERSHAYIM}ח",
+    r"מס(?:['׳]|פר)\s*(?:חבר|אישי|רישוי|רכב|לקוח|תיק)", r"מ\.\s?א\.?", rf"מ{_GERSHAYIM}א", r"רישיון", r"רישוי", r"כרטיס",
+    r"אשראי",
 )  # fmt: skip
 LABEL = re.compile(
     rf"(?P<id>{_BEFORE}(?:{'|'.join(ID_LABELS)}){_AFTER}|(?<![A-Za-z])I\.?D\.?(?![A-Za-z]))"
@@ -159,34 +186,37 @@ def label_before(text: str, start: int) -> str | None:
     phone's label is that number, and one under ת.ז. is an ID with more evidence than its checksum.
 
     Contract: `start` is the number's first character in `text`. Looks at the LABEL_WINDOW
-    characters before it, on its line; the last label there counts, when no digit stands between
-    it and the number. "id" for one of ID_LABELS or the Latin ID, "other" for one of OTHER_LABELS.
+    characters before it, on its line, after the last digit there (str.isdigit). "id" when a
+    label there is one of ID_LABELS or the Latin ID, wherever it stands (a combined form label,
+    "ת.ז./דרכון", asks for an ID; issue #299); else "other" when one is of OTHER_LABELS; else None.
 
     Known limits: a label further away, on the line before, or not in the two lists is not seen.
+    An ID label beside another number's in the window wins over it, also when the form meant the
+    other number ("ת.ז. של בעל חשבון").
     """
     line = text.rfind("\n", 0, start) + 1
     window = text[max(line, start - LABEL_WINDOW) : start]
-    labels = list(LABEL.finditer(window))
-    last = labels[-1] if labels else None  # the nearest label is the last one found
-    if last is None or any(ch.isdigit() for ch in window[last.end() :]):
-        return None
-    return "id" if last.group("id") else "other"
+    last_digit = max((i for i, ch in enumerate(window) if ch.isdigit()), default=-1)
+    kinds = {match.lastgroup for match in LABEL.finditer(window[last_digit + 1 :])}
+    return "id" if "id" in kinds else "other" if kinds else None
 
 
-def is_israeli_id(raw: str, label: str | None) -> bool:
-    """Say whether a candidate, as written and under its label, is an Israeli ID.
+def is_israeli_id(raw: str, label: str | None, beside: bool) -> bool:
+    """Say whether a candidate, as written, under its label and beside what follows, is an Israeli ID.
 
     Why: the decision of the detector, apart from the search, so each rule is tested by itself.
 
-    Contract: `raw`, a match of CANDIDATE; `label`, what `label_before` gives for it. True when no
-    label of another number stands before it, it has nine digits or, under an ID label, at least
-    SHORT_LENGTH, and its digits, padded with zeros to nine, pass the checksum, do not start with
-    COMPANY_PREFIX, are not trivial, and its shape is not another number's.
+    Contract: `raw`, a match of CANDIDATE; `label`, what `label_before` gives for it; `beside`,
+    whether another number follows it (NUMBER_AFTER matches right after it). True when no label
+    of another number stands before it; under no ID label, it has nine digits and no number
+    beside it, under an ID label at least SHORT_LENGTH digits; and its digits, padded with zeros
+    to nine, pass the checksum, do not start with COMPANY_PREFIX, are not trivial, and its shape
+    is not another number's.
 
     Known limits: those of the module.
     """
     written = re.sub(_SEP, "", raw)
-    if label == "other" or (len(written) < ID_LENGTH and label != "id"):
+    if label == "other" or (label != "id" and (beside or len(written) < ID_LENGTH)):
         return False
     digits = written.zfill(ID_LENGTH)
     if not israeli_id_checksum_ok(digits) or digits.startswith(COMPANY_PREFIX):
@@ -224,7 +254,8 @@ class IsraeliId:
         found = []
         for match in CANDIDATE.finditer(proj.text):
             label = label_before(proj.text, match.start())
-            if is_israeli_id(match.group(), label):
+            beside = NUMBER_AFTER.match(proj.text, match.end()) is not None
+            if is_israeli_id(match.group(), label, beside):
                 confidence = CONFIDENCE_LABELLED if label == "id" else CONFIDENCE
                 span = Span(match.start(), match.end())
                 found.append(Detection("", proj.part, span, match.group(), ENTITY_TYPE, confidence, BAND, self.name, None))

@@ -357,6 +357,114 @@
    "found": [
     0
    ]
+  },
+  {
+   "text": "המבקש, ת.ז./דרכון {valid[46]}, הגיש בקשה.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מספר זהות/דרכון: {valid[47]:ddd-ddd-ddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת\"ז/דרכון {valid[48]:dddddddd-d}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת.ז./ח.פ. {valid[49]}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מס' זהות/דרכון {valid[50]:ddd.ddd.ddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת״ז או דרכון {valid[0]:ddd ddd ddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת.ז. {valid[46]:ddd-ddd-ddd} 1.1.2020",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "האם, ת.ז. {valid[47]} 3 ילדים, ביקשה מזונות.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "המבקש, ת.ז. {valid[48]} 12 שנים, הגיש תצהיר.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "המבקש (ת\"ז {valid[49]:dddddddd-d} 12.5.2019) הגיש תצהיר.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מספר זהות {valid[50]} 2019",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת״ז {valid[4]:ddd ddd ddd} 2 ילדים",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת''ז {valid[5]}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "המצהיר, ת''ז {valid[6]:ddd-ddd-ddd}, חתם בפניי.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ולת''ז {valid[7]:dddddddd-d} של המצהיר",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת''ז/דרכון {valid[8]:ddd.ddd.ddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת''ז {zeros[1]:xdddddddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "המצהיר, ת''ז {zeros[2]:xddddddd-d}, חתם בפניי.",
+   "found": [
+    0
+   ]
   }
  ],
  "negatives": [
@@ -551,6 +659,57 @@
   },
   {
    "text": "ת.ז. {nested[0]:dddddddd‑‑d}"
+  },
+  {
+   "text": "ת.ז./דרכון {near[20]}"
+  },
+  {
+   "text": "מספר זהות/דרכון: {near[21]:ddd-ddd-ddd}"
+  },
+  {
+   "text": "ת.ז./ח.פ. {company[3]}"
+  },
+  {
+   "text": "ע.ר./ח.פ. {valid[47]}"
+  },
+  {
+   "text": "ת.ז. {near[22]} 1.1.2020"
+  },
+  {
+   "text": "סעיף 3 {near[23]:ddd-ddd-ddd}"
+  },
+  {
+   "text": "ת.ז. {valid[52]}.5"
+  },
+  {
+   "text": "7/{valid[53]} בטבלה"
+  },
+  {
+   "text": "ת.ז. {zeros[0]:xdddddddd} 12 שנים"
+  },
+  {
+   "text": "ת''ז {near[24]}"
+  },
+  {
+   "text": "ח''פ {valid[9]}"
+  },
+  {
+   "text": "ע''ר {valid[10]:ddd-ddd-ddd}"
+  },
+  {
+   "text": "מ''א {valid[11]}"
+  },
+  {
+   "text": "סכום של 1 {valid[12]:ddd ddd ddd} ש\"ח"
+  },
+  {
+   "text": "מספר {valid[13]:ddd ddd ddd} 123"
+  },
+  {
+   "text": "7 {valid[14]:ddd ddd ddd} 45 3"
+  },
+  {
+   "text": "בשנים 2019 {valid[15]:dddd dd ddd}"
   }
  ]
 }
