@@ -19,7 +19,7 @@ Matrix:
       and non-profit slots, each typed as its list says, seven in all (the review of #33 at
       4d6e477, finding 4), so that M1's filter leaves nothing unjudged; since issue #36
       detect_all runs the phone detector too, whose detections the fixture's phone lines hold;
-      tests/t4_integration/test_phone.py, M4, judges those
+      tests/t4_integration/test_phone.py, M5, pins those
 """
 
 import json

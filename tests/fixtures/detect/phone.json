@@ -44,7 +44,12 @@
   {"text": "המבקשת, ילידת 1980, נייד {mobile[2]:ddd-ddddddd}", "found": [0]},
   {"text": "הודעה נשלחה מהמספר {mobile[3]:ddd-ddddddd} ביום 3.5.2024", "found": [0]},
   {"text": "טלפון המשרד מחו\"ל: {abroad_landline[2]:xddd d ddddddd}", "found": [0]},
-  {"text": "לשאלות: {voip[2]:ddd–ddddddd} (שלוחה 3)", "found": [0]}
+  {"text": "לשאלות: {voip[2]:ddd–ddddddd} (שלוחה 3)", "found": [0]},
+  {"text": "כרטיס ביקור: {mobile[4]:ddd-ddddddd}", "found": [0]},
+  {"text": "סניף הבנק: {voip[3]:ddd-ddddddd}", "found": [0]},
+  {"text": "טלפונים: {mobile[6]:ddd-ddddddd} {mobile[7]:ddd-ddddddd}", "found": [0, 1]},
+  {"text": "המשרד: {mobile[8]:ddd-ddddddd}/{mobile[9]:ddd-ddddddd}", "found": [0, 1]},
+  {"text": "טל' {landline[8]:dd-ddddddd}/{landline[9]:d}", "found": [0]}
  ],
  "negatives": [
   {"text": "טלפון {wrong_area[0]:ddd-ddddddd}"},

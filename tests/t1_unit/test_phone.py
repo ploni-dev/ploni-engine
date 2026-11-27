@@ -18,15 +18,28 @@ characters, after the last digit there, as israeli_id.window_before reads it):
   L1  each phone label: טלפון, טל', טל׳, טל., נייד, נייד:, פלאפון, פקס, מס' טלפון, מס׳ טלפון,
       מספר טלפון                                             "phone"
   L2  a proclitic glued to it: בטלפון, ובטלפון, לפקס, הנייד, מהפלאפון    "phone"
-  L3  another number's label: ת.ז., ת"ז, ח.פ., ע"ר, חשבון, כרטיס, דרכון, ID    "other"
+  L3  an ID label: ת.ז., ת"ז, מספר זהות, ID                  "id"; another number's label:
+      ח.פ., ע"ר, חשבון, כרטיס, דרכון, בנק, סניף               "other" (since the review of
+      b2f3790, findings 1 and 2, the two kinds are told apart: the first form asked "other" of both)
   L4  no label; a label's letters inside a longer word: טלפוני, פקסים, ניידת    None
-  L5  a combined label: טלפון/ת.ז., ת.ז. וטלפון               "phone"
+  L5  a combined label: טלפון/ת.ז., ת.ז. וטלפון               "phone"; ת.ז./ח.פ.    "id"
   L6  a digit between the label and the number; the label on the line before    None
+
+refused (the decision of the label; the review of b2f3790, findings 1 and 2):
+  RF1 no label, a phone label                                 False, whatever the number
+  RF2 another number's label: a landline of nine digits       True; a mobile and a VoIP number
+      (ten), a landline from abroad (eleven), a 1-800 number, a star number    False
+  RF3 an ID label: a landline-shaped number that passes the ID check, written 0X-XXX-XXXX and
+      plain (the ID detector takes it)                       True; the same written 0X-XXXXXXX
+      (the ID detector refuses that shape under its label, #302), one that fails the check, a
+      mobile                                                 False
 
 review_reason (the decision of needs_review):
   R1  a bare run of digits (no separator, no plus, no bracket, no star) with no label    the
       reason REVIEW_REASON
-  R2  the same under a phone label; written with a separator; with a plus; a star    None
+  R2  the same under a phone label; written with a separator; with a plus; a star; under
+      another number's label                                 None
+  R3  under an ID label, bare or with separators               ID_LABEL_REASON
 
 The detector (`Phone`):
   EC1 each written form of a mobile: plain; 3-7 with a hyphen, a space, a no-break space, a dot,
@@ -51,13 +64,18 @@ The detector (`Phone`):
       and a 1-800 number so; with a separator, or under a label, False
   EC11 the label glued to the number (טלפון:), a proclitic on the label, a letter glued to the
       number (ב...), the number in brackets as a whole ((03-...)): found, the span the number only
-  B1  the number alone, at the start and at the end of the text    found
+  EC12 two phones joined by a plain space, by a slash, by " / " (the review of b2f3790, finding
+      3)                                                     both found; a landline and "/8" (its
+      second line's last digit)                              the landline's span; a phone and a
+      digit after one plain space ("<phone> 3 ילדים")         the phone (until that review, A3
+      asked nothing here: it now asks more)
+  B1 the number alone, at the start and at the end of the text    found
   B2  the empty text; a text with no digit                    nothing
   A1  an area code the plan does not name: 01X and 06X (ten digits), 01, 05, 06, 07 (nine), each
       plain and with a separator after the area code          nothing
   A2  a mobile or a landline a digit short or a digit long, plain and with a separator    nothing
-  A3  a phone inside a longer number: a digit after it; "-5" after it; "7-" before it; a digit
-      after one plain space (a known limit)                   nothing
+  A3  a phone inside a longer number: a digit after it; "-5" after it; "7-" before it; "-8" after
+      a landline; a digit and a dot before it                 nothing
   A4  two separators in a row, inside the number or after the area code    nothing
   A5  other numbers with no label: an Israeli ID that does not start with 0, a company and a
       non-profit number, plain and 5X-XXXXXXX, a card, a near miss of an ID    nothing
@@ -70,11 +88,17 @@ The detector (`Phone`):
   A10 a mobile without its 0 (5X-XXXXXXX) with no label or a phone label: a known limit, the
       question of docs/DEBT.md row 16                         nothing
   A11 a star and three digits; a star and five               nothing
-  A12 under another number's label: an ID label before a landline 2-3-4 and 2-7, a company
-      label, a bank account's, a card's                      nothing; with a phone label too
-      (a combined label)                                     found; a phone after a refused
-      number, in the same text                               found (added after the code, for
+  A12 under another number's label (ח.פ., חשבון, סניף הבנק, בנק, כרטיס ביקור, דרכון): a
+      landline 2-7                                           nothing; a mobile 3-7, a VoIP
+      number, a number from abroad, a 1-800 number           found, not flagged (the review of
+      b2f3790, finding 1: the first form refused all); with a phone label too (a combined label)
+      found; a phone after a refused number, in the same text    found (added after the code, for
       a mutant of Cosmic Ray that survived: the refusal's `continue` made `break`)
+  A14 under an ID label (ת.ז., ת"ז, מספר זהות): a number that passes the ID check written
+      0X-XXX-XXXX                                            nothing from this detector, IL_ID
+      through detect_all; the same written 0X-XXXXXXX, a landline that fails the check, a mobile
+      found, flagged with ID_LABEL_REASON, and no IL_ID on its span (the review of b2f3790,
+      finding 2: "ת.ז. 0X-XXXXXXX" was found by no detector)
   A13 CANDIDATE itself: each prefix of the plan matches whole; 01X, 06X and a mobile a digit
       long do not
 
@@ -92,16 +116,17 @@ that are ordinary words do not apply but one: טל, a name, is no label without 
 of טלפוני, the fixture of טל). Document axes: a number on a line of its own, in a table row;
 the part is the projection's.
 
-Known limits: those of the module, among them A3's digit after a plain space, A9 and A10.
+Known limits: those of the module, among them A3's "-8", A9 and A10.
 """
 
 from pathlib import Path
 
 import pytest
 
+from eval import detectors
 from ploni.detect.base import DetectContext
 from ploni.detect.deterministic import phone
-from ploni.detect.deterministic.phone import CANDIDATE, REVIEW_REASON, Phone, label_before, review_reason
+from ploni.detect.deterministic.phone import CANDIDATE, ID_LABEL_REASON, REVIEW_REASON, Phone, label_before, refused, review_reason
 from ploni.types import Span
 from tests.detector_contract import projection
 from tests.invented_numbers import CARDS, ISRAELI_IDS, PHONES, read_cases
@@ -154,7 +179,13 @@ def test_l2_a_proclitic_on_the_label(label: str) -> None:
     assert label_before(text, text.index(MOBILE)) == "phone"
 
 
-@pytest.mark.parametrize("label", ["ת.ז.", 'ת"ז', "ח.פ.", 'ע"ר', "חשבון", "כרטיס", "דרכון", "ID"])
+@pytest.mark.parametrize("label", ["ת.ז.", 'ת"ז', "מספר זהות", "ID"])
+def test_l3_an_id_label(label: str) -> None:
+    text = f"{label} {LANDLINE}"
+    assert label_before(text, text.index(LANDLINE)) == "id"
+
+
+@pytest.mark.parametrize("label", ["ח.פ.", 'ע"ר', "חשבון", "כרטיס", "דרכון", "בנק", "סניף"])
 def test_l3_another_numbers_label(label: str) -> None:
     text = f"{label} {LANDLINE}"
     assert label_before(text, text.index(LANDLINE)) == "other"
@@ -172,6 +203,11 @@ def test_l5_a_combined_label(label: str) -> None:
     assert label_before(text, text.index(MOBILE)) == "phone"
 
 
+def test_l5_an_id_and_a_company_label() -> None:
+    text = f"ת.ז./ח.פ.: {MOBILE}"
+    assert label_before(text, text.index(MOBILE)) == "id"
+
+
 @pytest.mark.parametrize("before", ["טלפון 3 ", "טלפון\n"], ids=["digit between", "line before"])
 def test_l6_a_label_not_read(before: str) -> None:
     text = before + MOBILE
@@ -185,11 +221,70 @@ def test_r1_a_bare_run_with_no_label(number: str) -> None:
 
 @pytest.mark.parametrize(
     ("raw", "label"),
-    [(MOBILE, "phone"), (groups(MOBILE, (3, 7)), None), (ABROAD, None), (PHONES.short[0], None)],
-    ids=["phone label", "separator", "plus", "star"],
+    [(MOBILE, "phone"), (groups(MOBILE, (3, 7)), None), (ABROAD, None), (PHONES.short[0], None), (MOBILE, "other")],
+    ids=["phone label", "separator", "plus", "star", "other label"],
 )
 def test_r2_no_review(raw: str, label: str | None) -> None:
     assert review_reason(raw, label) is None
+
+
+@pytest.mark.parametrize("raw", [LANDLINE, groups(LANDLINE, (2, 7))], ids=["bare", "separator"])
+def test_r3_under_an_id_label(raw: str) -> None:
+    assert review_reason(raw, "id") == ID_LABEL_REASON
+
+
+def id_landline() -> str:
+    """Return an invented number that passes the ID check and has a landline's prefix (0[23489])."""
+    return ISRAELI_IDS.landline[0]
+
+
+def failing_landline() -> str:
+    """Return that number with another last digit, so that the ID check fails it."""
+    number = id_landline()
+    return number[:-1] + str((int(number[-1]) + 1) % 10)
+
+
+ANY_NUMBER = {"landline": groups(LANDLINE, (2, 7)), "mobile": groups(MOBILE, (3, 7)), "bare landline": LANDLINE}
+
+
+@pytest.mark.parametrize("label", [None, "phone"], ids=["no label", "phone label"])
+@pytest.mark.parametrize("which", ANY_NUMBER)
+def test_rf1_no_label_or_a_phone_label(label: str | None, which: str) -> None:
+    assert not refused(ANY_NUMBER[which], label, False)
+
+
+UNDER_ANOTHER = {
+    "landline": (groups(LANDLINE, (2, 7)), True),
+    "mobile": (groups(MOBILE, (3, 7)), False),
+    "voip": (groups(PHONES.voip[0], (3, 7)), False),
+    "landline from abroad": (groups(PHONES.abroad_landline[0], (4, 1, 7)), False),
+    "1-800": (groups(SERVICE, (1, 3, 3, 3)), False),
+    "star": (PHONES.short[0], False),
+}
+
+
+@pytest.mark.parametrize("which", UNDER_ANOTHER)
+def test_rf2_another_numbers_label(which: str) -> None:
+    raw, expected = UNDER_ANOTHER[which]
+    assert refused(raw, "other", False) is expected
+
+
+def under_an_id_label() -> dict[str, tuple[str, bool]]:
+    """Return candidates under an ID label, by name, each with whether it is refused."""
+    passing, failing = id_landline(), failing_landline()
+    return {
+        "passes, 0X-XXX-XXXX": (groups(passing, (2, 3, 4)), True),
+        "passes, plain": (passing, True),
+        "passes, 0X-XXXXXXX": (groups(passing, (2, 7)), False),
+        "fails the check": (groups(failing, (2, 3, 4)), False),
+        "mobile": (groups(MOBILE, (3, 7)), False),
+    }
+
+
+@pytest.mark.parametrize("which", list(under_an_id_label()))
+def test_rf3_an_id_label(which: str) -> None:
+    raw, expected = under_an_id_label()[which]
+    assert refused(raw, "id", False) is expected
 
 
 MOBILE_FORMS = {
@@ -332,6 +427,22 @@ def test_ec11_the_label_or_a_letter_glued(case: str) -> None:
     assert found(text) == only(text, written)
 
 
+@pytest.mark.parametrize("between", [" ", "/", " / "], ids=["space", "slash", "spaced slash"])
+def test_ec12_two_phones_joined(between: str) -> None:
+    first, second = groups(MOBILE, (3, 7)), groups(PHONES.mobile[1], (3, 7))
+    text = f"טלפונים: {first}{between}{second} בלבד"
+    a = text.index(first)
+    b = a + len(first) + len(between)
+    assert found(text) == [(a, a + len(first)), (b, b + len(second))]
+
+
+@pytest.mark.parametrize("after", ["/8", " 3 ילדים"], ids=["slash and a digit", "space and a digit"])
+def test_ec12_a_digit_after_a_slash_or_a_space(after: str) -> None:
+    landline = groups(LANDLINE, (2, 7))
+    text = f"טל' {landline}{after}"
+    assert found(text) == only(text, landline)
+
+
 @pytest.mark.parametrize("where", ["alone", "start", "end"])
 def test_b1_at_either_end(where: str) -> None:
     written = groups(MOBILE, (3, 7))
@@ -360,10 +471,16 @@ def test_a2_a_digit_short_or_long(index: int) -> None:
         assert found(f"טלפון {written}") == []
 
 
-@pytest.mark.parametrize("which", ["a digit after", "-5 after", "7- before", "a digit after a space"])
+@pytest.mark.parametrize("which", ["a digit after", "-5 after", "7- before", "-8 after a landline", "a digit and a dot before"])
 def test_a3_inside_a_longer_number(which: str) -> None:
-    written = groups(MOBILE, (3, 7))
-    text = {"a digit after": f"{written}7", "-5 after": f"{written}-5", "7- before": f"7-{written}", "a digit after a space": f"{written} 3 ילדים"}[which]
+    written, landline = groups(MOBILE, (3, 7)), groups(LANDLINE, (2, 7))
+    text = {
+        "a digit after": f"{written}7",
+        "-5 after": f"{written}-5",
+        "7- before": f"7-{written}",
+        "-8 after a landline": f"טל' {landline}-8",
+        "a digit and a dot before": f"מספר 7.{written}",
+    }[which]
     assert found(text) == []
 
 
@@ -451,19 +568,34 @@ def test_a11_a_star_and_too_few_or_too_many(which: str) -> None:
     assert found(f"חייגו {written} מכל טלפון") == []
 
 
-UNDER_OTHER = {
-    "id label, 2-3-4": ("ת.ז. ", groups(LANDLINE, (2, 3, 4))),
-    "id label, 2-7": ("ת.ז. ", groups(LANDLINE, (2, 7))),
-    "company label": ("ח.פ. ", groups(MOBILE, (3, 7))),
-    "bank account": ("חשבון ", groups(LANDLINE, (2, 7))),
-    "card": ("כרטיס ", groups(MOBILE, (3, 7))),
+OTHER_LABELS = {
+    "company": "ח.פ. ",
+    "account": "על חשבון הנתבע, ",
+    "branch": "סניף הבנק: ",
+    "bank": "בנק ",
+    "business card": "כרטיס ביקור: ",
+    "passport": "דרכון ",
+}
+LONGER = {
+    "mobile": groups(MOBILE, (3, 7)),
+    "voip": groups(PHONES.voip[0], (3, 7)),
+    "from abroad": groups(ABROAD, (4, 2, 7)),
+    "1-800": groups(SERVICE, (1, 3, 3, 3)),
 }
 
 
-@pytest.mark.parametrize("case", UNDER_OTHER)
-def test_a12_under_another_numbers_label(case: str) -> None:
-    before, written = UNDER_OTHER[case]
-    assert found(before + written) == []
+@pytest.mark.parametrize("label", OTHER_LABELS)
+def test_a12_a_landline_under_another_numbers_label(label: str) -> None:
+    assert found(OTHER_LABELS[label] + groups(LANDLINE, (2, 7))) == []
+
+
+@pytest.mark.parametrize("label", OTHER_LABELS)
+@pytest.mark.parametrize("which", LONGER)
+def test_a12_a_longer_phone_under_another_numbers_label(label: str, which: str) -> None:
+    text = OTHER_LABELS[label] + LONGER[which]
+    [detection] = Phone().detect(projection(text), CTX)
+    assert (detection.span.start, detection.span.end) == only(text, LONGER[which])[0]
+    assert (detection.needs_review, detection.confidence) == (False, phone.CONFIDENCE)
 
 
 def test_a12_with_a_phone_label_too() -> None:
@@ -472,9 +604,31 @@ def test_a12_with_a_phone_label_too() -> None:
 
 
 def test_a12_a_phone_after_a_refused_number() -> None:
-    refused, phone_number = groups(LANDLINE, (2, 7)), groups(MOBILE, (3, 7))
-    text = f"ת.ז. {refused}, נייד {phone_number}"
+    landline, phone_number = groups(LANDLINE, (2, 7)), groups(MOBILE, (3, 7))
+    text = f"חשבון {landline}, נייד {phone_number}"
     assert found(text) == only(text, phone_number)
+
+
+ID_LABELS = ("ת.ז. ", 'ת"ז: ', "מספר זהות ")
+
+
+@pytest.mark.parametrize("label", ID_LABELS)
+def test_a14_an_id_the_id_detector_takes(label: str) -> None:
+    written = groups(id_landline(), (2, 3, 4))
+    text = label + written
+    assert found(text) == []
+    assert detectors.detect_all(text) == [(*only(text, written)[0], "IL_ID")]
+
+
+@pytest.mark.parametrize("label", ID_LABELS)
+@pytest.mark.parametrize("which", ["passes, 0X-XXXXXXX", "fails the check", "mobile"])
+def test_a14_a_phone_shape_the_id_detector_leaves(label: str, which: str) -> None:
+    written = under_an_id_label()[which][0]
+    text = label + written
+    [detection] = Phone().detect(projection(text), CTX)
+    assert (detection.span.start, detection.span.end) == only(text, written)[0]
+    assert (detection.needs_review, detection.review_reason) == (True, ID_LABEL_REASON)
+    assert [kind for _, _, kind in detectors.detect_all(text)] == ["PHONE"]
 
 
 def test_a13_the_candidate_pattern() -> None:

@@ -14,13 +14,17 @@ Matrix:
       number and the credit card detectors (issues #32, #33 and #35), and requires no morphology
   M4  over the four fixtures, no PHONE span shares a character with a COMPANY_NUMBER,
       NONPROFIT_NUMBER or CREDIT_CARD one; a PHONE span that shares one with an IL_ID is the
-      same span, a bare run of digits with no label, flagged for review (the ID detector's
-      known limit: a landline written as nine digits with no separator and no phone label);
-      and the other three fixtures give exactly PHONES_IN of them, each read when this was
-      written (the ID fixture's nine: phones under a phone label, or landlines in groups of two,
-      three and four with no label; the company fixture's three: two under a phone label and an
-      ID written as nine bare digits from 0[23489], flagged; the card fixture's two, under
-      phone labels), so that nothing is left unjudged, as the ID suite's M4 asks of its fixture
+      same span, a bare run of digits with no label, flagged with REVIEW_REASON (the ID
+      detector's known limit: a landline written as nine digits with no separator and no phone
+      label)
+  M5  the PHONE detections on the other three fixtures are exactly PLACES, by fixture, case
+      (its place in the fixture, positives first), start, end and needs_review, offsets only,
+      each read when it was pinned (the review of b2f3790, finding 4, in place of a count):
+      the ID fixture's phones under a phone label, landlines in groups with no label, and two
+      under an ID label that the ID detector does not take, flagged; the company fixture's two
+      under a phone label and an ID written as nine bare digits from 0[23489], flagged; the
+      card fixture's two under phone labels. So the ID suite's M4 and the card suite's M1, which
+      leave PHONE out, leave nothing unjudged
 """
 
 from pathlib import Path
@@ -37,8 +41,25 @@ from tests.invented_numbers import CARDS, ISRAELI_IDS, PHONES, read_cases
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "detect"
 OTHERS = {"il_id.json": ISRAELI_IDS, "company_number.json": ISRAELI_IDS, "credit_card.json": CARDS}
 NEVER_SHARED = frozenset({"COMPANY_NUMBER", "NONPROFIT_NUMBER", "CREDIT_CARD"})
-# The PHONE detections of the other fixtures, each read (M4 of the module docstring).
-PHONES_IN = {"il_id.json": 9, "company_number.json": 3, "credit_card.json": 2}
+# The PHONE detections of the other fixtures, each read (M5 of the module docstring).
+PLACES = [
+    ("il_id.json", 47, 6, 16, False),
+    ("il_id.json", 112, 4, 14, False),
+    ("il_id.json", 113, 7, 17, False),
+    ("il_id.json", 114, 4, 14, False),
+    ("il_id.json", 115, 5, 16, False),
+    ("il_id.json", 154, 5, 14, True),
+    ("il_id.json", 162, 10, 21, False),
+    ("il_id.json", 163, 16, 27, False),
+    ("il_id.json", 164, 7, 18, False),
+    ("il_id.json", 165, 10, 21, False),
+    ("il_id.json", 166, 5, 15, True),
+    ("company_number.json", 64, 0, 9, True),
+    ("company_number.json", 66, 4, 14, False),
+    ("company_number.json", 67, 5, 16, False),
+    ("credit_card.json", 103, 6, 16, False),
+    ("credit_card.json", 103, 22, 32, False),
+]
 
 
 def texts() -> list[tuple[str, list[tuple[int, int]]]]:
@@ -73,17 +94,23 @@ def test_m3_registered_and_needs_no_morphology() -> None:
 
 
 def test_m4_no_span_claimed_by_a_phone_and_another_number() -> None:
-    phones_in = {}
-    for name, fixture_texts in every_text().items():
-        phones_in[name] = 0
+    for fixture_texts in every_text().values():
         for text in fixture_texts:
-            phones = Phone().detect(projection(text), DetectContext())
-            phones_in[name] += len(phones)
             others = [each for each in detectors.detect_all(text) if each[2] != "PHONE"]
-            for found in phones:
+            for found in Phone().detect(projection(text), DetectContext()):
                 start, end = found.span.start, found.span.end
                 shared = [(s, e, kind) for s, e, kind in others if s < end and start < e]
                 assert not [kind for _, _, kind in shared if kind in NEVER_SHARED]
                 if shared:
                     assert [(s, e) for s, e, _ in shared] == [(start, end)] and found.review_reason == REVIEW_REASON
-    assert {name: phones_in[name] for name in OTHERS} == PHONES_IN
+
+
+def test_m5_the_phones_on_the_other_fixtures() -> None:
+    texts_of = every_text()
+    got = [
+        (name, case, found.span.start, found.span.end, found.needs_review)
+        for name in OTHERS
+        for case, text in enumerate(texts_of[name])
+        for found in Phone().detect(projection(text), DetectContext())
+    ]
+    assert got == PLACES

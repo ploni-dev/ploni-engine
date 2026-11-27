@@ -10,7 +10,7 @@ Matrix:
   M1  every fixture text through detect_all: the places found are the fixture's, each typed
       CREDIT_CARD; no other detector but the phone detector finds anything in them (no IL_ID
       inside a card); since issue #36 detect_all runs the phone detector too, whose detections
-      the fixture's phone line holds; tests/t4_integration/test_phone.py, M4, judges those
+      the fixture's phone line holds; tests/t4_integration/test_phone.py, M5, pins those
   M2  every fixture text keeps the Detector contract (tests/detector_contract.py), as a header
       part too
   M3  the detector is registered in eval.detectors.DETECTORS after the Israeli ID and the company
