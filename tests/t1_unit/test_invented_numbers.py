@@ -65,6 +65,13 @@ bank_numbers, BANK_NUMBERS (issue #34):
   BN3 account: 40, distinct, 14 ASCII digits (bank 2, branch 3, account 9), the first not 0
   BN4 the same seed twice                           equal; another seed: other numbers
   BN5 fill writes an IBAN into a slot of the paper format's groups of four    the groups, its span
+iban_remainder (the remainder reduced one digit at a time, the one copy the tests share; the review of #34 at 28b6032):
+  RM1 four characters, IL62, in either case          the remainder of 182162, computed in the test
+  RM2 an IBAN, and its check digits one less         1, and 0
+combined, typed_slots (the review of #34 at 28b6032, finding 1: a fixture that holds IDs and an IBAN):
+  CB1 two kinds of numbers                          one namespace with the fields of both, which fill reads
+  CB2 a field name in both                          ValueError, naming the field
+  TS1 a template's slots of the listed kinds        their places, typed; a template with no slot: []
 
 Not applicable: Hebrew axes beyond a Hebrew template (the helper writes digits).
 """
@@ -289,14 +296,40 @@ def test_cd6_a_card_in_a_slot() -> None:
     assert text == f"כרטיס {card[:4]} {card[4:10]} {card[10:]}." and spans == [(6, 23)]
 
 
-def remainder_digit_by_digit(iban: str) -> int:
-    """Return the ISO 7064 MOD 97-10 remainder of an IBAN, reduced one digit at a time, apart from iban_ok."""
-    moved = iban[4:] + iban[:4]
-    remainder = 0
-    for ch in moved:
-        for digit in str(ord(ch) - ord("A") + 10) if ch.isalpha() else ch:
-            remainder = (remainder * 10 + int(digit)) % 97
-    return remainder
+remainder_digit_by_digit = inv.iban_remainder
+
+
+def test_rm1_the_remainder_of_four_characters() -> None:
+    # IL62 moved is IL62 itself: I = 18, L = 21, so the number 182162, whose remainder is computed here.
+    assert inv.iban_remainder("IL62") == 182162 % 97
+    assert inv.iban_remainder("il62") == 182162 % 97
+
+
+def test_rm2_one_less_in_the_check_digits_leaves_zero() -> None:
+    iban = BANK_NUMBERS.iban[3]
+    assert inv.iban_remainder(iban) == 1
+    assert inv.iban_remainder(f"{iban[:2]}{int(iban[2:4]) - 1:02d}{iban[4:]}") == 0
+
+
+def test_cb1_combined_holds_the_fields_of_each() -> None:
+    both = inv.combined(ISRAELI_IDS, BANK_NUMBERS)
+    assert both.valid == ISRAELI_IDS.valid and both.iban == BANK_NUMBERS.iban and both.account == BANK_NUMBERS.account
+    assert inv.fill("{valid[0]} {iban[0]}", both)[0] == f"{ISRAELI_IDS.valid[0]} {BANK_NUMBERS.iban[0]}"
+
+
+def test_cb2_a_field_in_two_is_refused() -> None:
+    with pytest.raises(ValueError, match="near"):
+        inv.combined(ISRAELI_IDS, CARDS)
+
+
+def test_ts1_typed_slots() -> None:
+    template = "ח.פ. {company[0]}, ת.ז. {valid[0]}, חשבון {iban[0]:dddd dddd dddd dddd dddd ddd}"
+    numbers = inv.combined(ISRAELI_IDS, BANK_NUMBERS)
+    text, spans = inv.fill(template, numbers)
+    assert inv.typed_slots(template, numbers, {"company": "COMPANY_NUMBER", "iban": "IBAN"}) == [
+        (*spans[0], "COMPANY_NUMBER"), (*spans[2], "IBAN"),
+    ]  # fmt: skip
+    assert inv.typed_slots("אין כאן מספר", numbers, {"iban": "IBAN"}) == []
 
 
 def test_ib1_an_iban_and_one_digit_changed() -> None:
