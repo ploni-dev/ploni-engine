@@ -25,10 +25,12 @@ rule for IL_ID); the label before it is read, never put in the span. Under an ID
 confidence is CONFIDENCE_LABELLED, otherwise CONFIDENCE.
 
 Known limits: a landline written as nine digits with no separator (0X1234567) and no phone label
-is found as an ID. A longer number grouped by plain spaces gives up a piece of nine digits that
-stands whole between its spaces, and one in ten such pieces passes the checksum and is found as
-an ID: an amount with spaces between its thousands ("1 234 567 891"), twelve digits in groups of
-three, a mobile number written "+972 50 123 4567" (its last nine digits). An ID written without
+is found as an ID, and so is one written 0X-XXX-XXXX or 0X XXX XXXX, about one time in ten
+(the independent review of issue #299 measured 0.095 and 0.096 of 3,000 invented texts, the same
+on main): `is_other_shape` refuses only the grouping of two and seven. A longer number grouped by
+plain spaces gives up a piece of nine digits that stands whole between its spaces, and one in
+ten such pieces passes the checksum and is found as an ID: an amount with spaces between its
+thousands ("1 234 567 891"), twelve digits in groups of three. An ID written without
 its leading zeros is not found with no ID label before it, nor with a plain space and a digit
 after it, and never found when six digits or fewer are left (three leading zeros or more). A valid
 number under the label of another number (OTHER_LABELS: a health fund member's, a client's, a
