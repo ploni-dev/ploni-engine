@@ -19,7 +19,8 @@ Test matrix:
       tests fail, run in a child pytest at -vv; their output holds no planted text of 4 code
       points or more (but a run of underscores, which is how pytest draws its own rules), of the
       clean batch or of the broken one, built here broken the same way (review 2, finding 24),
-      and pytest's failure lines are in it (the positive control)
+      and pytest's failure lines are in it (the positive control); the child runs without
+      GITHUB_ACTIONS, so on GitHub too it prints its full detail, not tests/conftest.py's one line
   D5  the check that the checker works: a write made inside the guard of D1 is caught
 
 Known limits: a write made by another process, or through a C extension that does not call
@@ -63,6 +64,8 @@ break_generator(generator, setattr)
 # The child pytest is given this long; it took about five seconds on the laptop.
 CHILD_TIMEOUT_SECONDS = 300
 SHORTEST_LEAK = 4
+# Left out of the child's environment: under it tests/conftest.py hides the output D4 reads.
+ON_GITHUB = "GITHUB_ACTIONS"
 
 
 class WriteAttempt(AssertionError):
@@ -136,7 +139,7 @@ def break_generator(module: ModuleType, set_value: Callable[[object, str, object
 
 def test_d4_a_failing_test_prints_no_planted_text(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (tmp_path / "broken_batch.py").write_text(BROKEN, encoding="utf-8")
-    env = {key: value for key, value in os.environ.items() if not key.startswith("PYTEST_")}
+    env = {key: value for key, value in os.environ.items() if not key.startswith("PYTEST_") and key != ON_GITHUB}
     env |= {"PYTHONPATH": os.pathsep.join((str(tmp_path), str(ROOT))), "PYTHONIOENCODING": "utf-8", "PYTHONDONTWRITEBYTECODE": "1"}
     command = [sys.executable, "-m", "pytest", "-vv", "-p", "no:cacheprovider", "-p", "broken_batch", *GENERATOR_TESTS]
     done = subprocess.run(command, cwd=ROOT, env=env, capture_output=True, timeout=CHILD_TIMEOUT_SECONDS, check=False)  # noqa: S603 fixed argv, no shell
