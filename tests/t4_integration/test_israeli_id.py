@@ -13,13 +13,15 @@ Matrix:
   M2  every fixture text keeps the Detector contract (tests/detector_contract.py), as a header
       part too
   M3  the detector is registered in eval.detectors.DETECTORS, first, before the company number
-      detector of issue #33, the credit card detector of issue #35 and the IBAN and bank account
-      detector of issue #34, and requires no morphology
-  M4  the other detections detect_all gives on the fixture are exactly its company and
-      non-profit slots, each typed as its list says, seven in all (the review of #33 at
+      detector of issue #33, the credit card detector of issue #35, the IBAN and bank account
+      detector of issue #34 and the phone detector of issue #36, and requires no morphology
+  M4  the other detections detect_all gives on the fixture, but PHONE, are exactly its company
+      and non-profit slots, each typed as its list says, seven in all (the review of #33 at
       4d6e477, finding 4), and, since issue #34, the IBAN one negative writes, a slot filled from
       BANK_NUMBERS in the paper format, one in all, typed IBAN, so that M1's filter leaves
-      nothing unjudged
+      nothing unjudged; since issue #36 detect_all runs the phone detector too, whose
+      detections the fixture's phone lines hold; tests/t4_integration/test_phone.py, M5, pins
+      those
 """
 
 import json
@@ -31,6 +33,7 @@ from ploni.detect.deterministic.company_number import CompanyNumber
 from ploni.detect.deterministic.credit_card import CreditCard
 from ploni.detect.deterministic.iban import Iban
 from ploni.detect.deterministic.israeli_id import IsraeliId
+from ploni.detect.deterministic.phone import Phone
 from tests.detector_contract import breaks, projection
 from tests.invented_numbers import BANK_NUMBERS, ISRAELI_IDS, combined, fill, read_cases, typed_slots
 
@@ -62,7 +65,7 @@ def test_m2_the_contract_over_the_fixture() -> None:
 
 
 def test_m3_registered_and_needs_no_morphology() -> None:
-    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, CreditCard, Iban]
+    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, CreditCard, Iban, Phone]
     assert IsraeliId.requires_morph is False and IsraeliId.produces == frozenset({"IL_ID"})
 
 
@@ -72,7 +75,7 @@ def test_m4_the_other_detections_are_the_registry_slots() -> None:
     seen = ibans = 0
     for template in templates:
         text, _ = fill(template, NUMBERS)
-        others = [each for each in detectors.detect_all(text) if each[2] != "IL_ID"]
+        others = [each for each in detectors.detect_all(text) if each[2] not in ("IL_ID", "PHONE")]
         assert others == typed_slots(template, NUMBERS, REGISTRY) + typed_slots(template, NUMBERS, BANK)
         seen += len(typed_slots(template, NUMBERS, REGISTRY))
         ibans += len(typed_slots(template, NUMBERS, BANK))

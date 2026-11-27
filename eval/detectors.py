@@ -11,7 +11,7 @@ context, and returns each detection as (start, end, entity_type), offsets in cod
 text, in the order the detectors return them. DETECTORS holds the detectors of ploni/, each added
 as it is written: the Israeli ID detector first (issue #32), then the company and non-profit
 number detector (issue #33), then the credit card detector (issue #35), then the IBAN and bank
-account detector (issue #34).
+account detector (issue #34), then the phone detector (issue #36).
 
 Known limits: a document is one part here, so a detector that reads block breaks or table cells
 gets none. A detection outside the text is passed on as it is; the scorer refuses it.
@@ -24,9 +24,10 @@ from ploni.detect.deterministic.company_number import CompanyNumber
 from ploni.detect.deterministic.credit_card import CreditCard
 from ploni.detect.deterministic.iban import Iban
 from ploni.detect.deterministic.israeli_id import IsraeliId
+from ploni.detect.deterministic.phone import Phone
 from ploni.types import Anchor, TextProjection
 
-DETECTORS: tuple[Detector, ...] = (IsraeliId(), CompanyNumber(), CreditCard(), Iban())
+DETECTORS: tuple[Detector, ...] = (IsraeliId(), CompanyNumber(), CreditCard(), Iban(), Phone())
 
 
 def detect_all(text: str, detectors: Sequence[Detector] = DETECTORS) -> list[tuple[int, int, str]]:

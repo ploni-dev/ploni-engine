@@ -72,6 +72,17 @@ combined, typed_slots (the review of #34 at 28b6032, finding 1: a fixture that h
   CB1 two kinds of numbers                          one namespace with the fields of both, which fill reads
   CB2 a field name in both                          ValueError, naming the field
   TS1 a template's slots of the listed kinds        their places, typed; a template with no slot: []
+phones, PHONES (issue #36; the plan's prefixes, build-plan.md Phase 1, "Israeli phone"):
+  PH1 each list: its length, its numbers' lengths, distinct; ASCII digits but the "+" and "00"
+      lead of a number from abroad and the star of a short number
+  PH2 the prefixes: mobile 05X; landline 0[23489], two of each; voip 07[2-9]; service 1800 and
+      1700, both; short a star; abroad "+972" with a mobile, a landline of each area code and a
+      VoIP number after it, double_zero "00972" and a mobile; kept_zero "+972" and two landlines,
+      a mobile and a VoIP number with their 0 (#36); wrong_area 01X or 06X (ten digits)
+      and 01, 05, 06 or 07 (nine), both kinds; short_line and long_line a mobile's or a
+      landline's prefix, a digit short or long
+  PH3 the same seed twice                           equal; another seed: other numbers
+  PH4 fill writes a number from abroad into a slot, its "+" in the span, or skipped by "x"
 
 Not applicable: Hebrew axes beyond a Hebrew template (the helper writes digits).
 """
@@ -83,7 +94,7 @@ from pathlib import Path
 import pytest
 
 from tests import invented_numbers as inv
-from tests.invented_numbers import BANK_NUMBERS, CARDS, ISRAELI_IDS, iban_ok, israeli_id_checksum_ok, luhn_ok
+from tests.invented_numbers import BANK_NUMBERS, CARDS, ISRAELI_IDS, PHONES, iban_ok, israeli_id_checksum_ok, luhn_ok
 
 FIELDS = ("valid", "near", "zeros", "two_zeros", "cut", "nested", "company", "nonprofit", "landline")
 LENGTHS = {"valid": 60, "near": 30, "zeros": 3, "two_zeros": 1, "cut": 1, "nested": 1, "company": 30, "nonprofit": 30, "landline": 6}
@@ -393,3 +404,54 @@ def test_bn5_an_iban_in_a_slot() -> None:
     text, spans = inv.fill("חשבון {iban[2]:dddd dddd dddd dddd dddd ddd}.", BANK_NUMBERS)
     paper = " ".join(iban[i : i + 4] for i in range(0, 23, 4))
     assert text == f"חשבון {paper}." and spans == [(6, 6 + len(paper))]
+
+
+PHONE_COUNTS = {
+    "mobile": (12, {10}), "landline": (10, {9}), "voip": (6, {10}), "service": (4, {10}), "short": (4, {5}),
+    "abroad_mobile": (8, {13}), "abroad_landline": (5, {12}), "abroad_voip": (2, {13}), "double_zero": (4, {14}),
+    "kept_zero": (4, {13, 14}),
+    "wrong_area": (12, {9, 10}), "short_line": (4, {8, 9}), "long_line": (4, {10, 11}),
+}  # fmt: skip
+LANDLINE_PREFIXES = ("02", "03", "04", "08", "09")
+LEADS = {"short": "*", "abroad_mobile": "+", "abroad_landline": "+", "abroad_voip": "+", "kept_zero": "+"}
+
+
+@pytest.mark.parametrize("field", PHONE_COUNTS)
+def test_ph1_each_list_of_phones(field: str) -> None:
+    numbers = getattr(PHONES, field)
+    how_many, lengths = PHONE_COUNTS[field]
+    assert len(numbers) == how_many and len(set(numbers)) == how_many
+    assert {len(n) for n in numbers} == lengths
+    lead = LEADS.get(field, "")
+    assert all(n.startswith(lead) and n[len(lead) :].isascii() and n[len(lead) :].isdigit() for n in numbers)
+
+
+def test_ph2_the_prefixes_of_the_plan() -> None:
+    assert all(n[:2] == "05" for n in PHONES.mobile)
+    assert sorted(n[:2] for n in PHONES.landline) == sorted(["02", "03", "04", "08", "09"] * 2)
+    assert all(n[:2] == "07" and n[2] in "23456789" for n in PHONES.voip)
+    assert {n[:4] for n in PHONES.service} == {"1800", "1700"}
+    assert all(n.startswith("+9725") for n in PHONES.abroad_mobile)
+    assert sorted(n[4] for n in PHONES.abroad_landline) == ["2", "3", "4", "8", "9"]
+    assert all(n.startswith("+9727") and n[5] in "23456789" for n in PHONES.abroad_voip)
+    assert all(n.startswith("009725") for n in PHONES.double_zero)
+    assert [n[4:6] in LANDLINE_PREFIXES for n in PHONES.kept_zero] == [True, True, False, False]
+    assert PHONES.kept_zero[2][4:6] == "05" and PHONES.kept_zero[3][4:6] == "07" and all(n[:4] == "+972" for n in PHONES.kept_zero)
+    assert all(n[:2] in ("01", "06") for n in PHONES.wrong_area if len(n) == 10)
+    assert all(n[:2] in ("01", "05", "06", "07") for n in PHONES.wrong_area if len(n) == 9)
+    assert {len(n) for n in PHONES.wrong_area} == {9, 10}
+    lines = PHONES.short_line + PHONES.long_line
+    assert [n[:2] == "05" for n in lines] == [True, True, False, False] * 2
+    assert all(n[:2] in ("02", "03", "04", "08", "09") for n in lines if n[:2] != "05")
+
+
+def test_ph3_the_seed() -> None:
+    assert inv.phones(inv.SEED) == PHONES
+    assert set(inv.phones(inv.SEED + 1).mobile).isdisjoint(PHONES.mobile)
+
+
+def test_ph4_a_number_from_abroad_in_a_slot() -> None:
+    number = PHONES.abroad_mobile[0]
+    text, spans = inv.fill("נייד {abroad_mobile[0]:dddd-dd-ddddddd}.", PHONES)
+    assert text == f"נייד {number[:4]}-{number[4:6]}-{number[6:]}." and spans == [(5, 20)]
+    assert inv.fill("{abroad_mobile[0]:xddd ddddddddd}", PHONES)[0] == f"{number[1:4]} {number[4:]}"
