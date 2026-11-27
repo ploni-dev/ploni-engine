@@ -10,7 +10,8 @@ Contract: `CompanyNumber` is a Detector (`ploni/detect/base.py`) of the types CO
 NONPROFIT_NUMBER, the names of the held-out batch's span rules. A detection is a match of
 `israeli_id.CANDIDATE` of nine digits, with its edges, that `number_type` gives a type: its
 digits pass `israeli_id_checksum_ok` and start with COMPANY_PREFIX; its written shape is not a
-case number's (`is_other_shape`); no label of another number stands before it (`label_before`:
+case number's (`is_other_shape`), nor, with no company label, a mobile's written without its 0
+(two digits and seven, MOBILE_GROUPS); no label of another number stands before it (`label_before`:
 a company label, ח.פ. or ע.ר. with any gershayim, wins over one); another number after it by a
 plain space (`israeli_id.NUMBER_AFTER`) only under a company label. NONPROFIT_NUMBER when the
 digits start with NONPROFIT_PREFIX, else COMPANY_NUMBER. Its span is the number only, first
@@ -22,12 +23,18 @@ needs_review is False: "detect and flag, not replace" is what policy does with t
 Known limits: the type is read from the digits, not the label: ע.ר. before a number that starts
 with 51 gives COMPANY_NUMBER. Only the plan's two prefixes are told apart: any other number that
 starts with 5 and passes the check is a company's. Nine digits that start with 5 and pass the
-check under no label of another number are found, whatever they are: measured on 3,000 invented
-texts each, an unlabelled nine-digit number from 5 is found 0.108 of the time, and a mobile
-written without its 0 (5X-XXXXXXX) 0.114, where its usual forms (05X-XXXXXXX, 05X XXX XXXX,
-+972 5X ...) give 0.000. An ID label counts as no label here. The
-label limits of `israeli_id.label_before`, and its edges, hold here too. The detection carries
-no id (detection_id is ""), as the ID detector's (Achia, 2026-11-26, issue #169).
+check under no label of another number are found, whatever they are. Measured on 3,000 invented
+texts each (company_fp.py of issue #33): an unlabelled nine-digit number from 5 is found 0.108
+of the time; an amount of nine digits written in threes with spaces ("סך 5XX XXX XXX ש"ח")
+0.096 (an amount of ten digits, 5 XXX XXX XXX, 0.000); a mobile written without its 0
+(5X-XXXXXXX) 0.000 (0.114 before the two-and-seven refusal), and its usual forms (05X-XXXXXXX,
+05X XXX XXXX, +972 5X ...) 0.000. The cost of that refusal: a company number written
+5X-XXXXXXX with no company label is not found (0.000, 1.000 before); under a company label it
+is. Telling a phone from a company number by more than the grouping is fusion's (PHONE over
+COMPANY on 5X-XXXXXXX) once the phone detector exists (docs/DEBT.md). An ID label counts as no
+label here. The label limits of `israeli_id.label_before`, and its edges, hold here too. The
+detection carries no id (detection_id is ""), as the ID detector's (Achia, 2026-11-26, issue
+#169).
 """
 
 from __future__ import annotations
@@ -45,6 +52,10 @@ NONPROFIT = "NONPROFIT_NUMBER"
 # build-plan.md Phase 1: "companies (ח.פ.) start with `5`, non-profits (ע.ר.) with `58`".
 COMPANY_PREFIX = israeli_id.COMPANY_PREFIX
 NONPROFIT_PREFIX = "58"
+# A mobile written without its 0 (build-plan.md Phase 1, "Israeli phone": mobile `05\d`), as two
+# digits and seven, has a company number's digits: with no company label that grouping is no
+# company's (the review of #33 at 4d6e477, finding 2).
+MOBILE_GROUPS = [2, 7]
 BAND = "high"
 # A company label first, so that ח.פ. is read as one where the ID detector reads another number's.
 LABEL = re.compile(rf"(?P<company>{_BEFORE}(?:{'|'.join(COMPANY_LABELS)}){_AFTER})|{israeli_id.LABEL.pattern}")
@@ -76,7 +87,8 @@ def number_type(raw: str, label: str | None, beside: bool) -> str | None:
     it; `beside`, whether another number follows it (NUMBER_AFTER matches right after it). None
     under another number's label, or beside another number with no company label; None unless
     its digits are nine, start with COMPANY_PREFIX and pass the check digit, and its shape is
-    not a case number's. Else NONPROFIT_NUMBER for NONPROFIT_PREFIX, COMPANY_NUMBER otherwise.
+    not a case number's, nor, with no company label, a mobile's without its 0 (MOBILE_GROUPS,
+    two digits and seven). Else NONPROFIT_NUMBER for NONPROFIT_PREFIX, COMPANY_NUMBER otherwise.
 
     Known limits: the check of trivial sequences is not asked: no nine digits that start with 5
     are trivial in `israeli_id.is_trivial`'s sense (eight running up or down by one cannot start
@@ -87,7 +99,8 @@ def number_type(raw: str, label: str | None, beside: bool) -> str | None:
     digits = re.sub(_SEP, "", raw)
     if len(digits) != ID_LENGTH or not digits.startswith(COMPANY_PREFIX) or not israeli_id.israeli_id_checksum_ok(digits):
         return None
-    if israeli_id.is_other_shape(raw):
+    groups = [len(group) for group in re.split(_SEP, raw)]
+    if israeli_id.is_other_shape(raw) or (groups == MOBILE_GROUPS and label != "company"):
         return None
     return NONPROFIT if digits.startswith(NONPROFIT_PREFIX) else COMPANY
 
