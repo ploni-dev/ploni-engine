@@ -49,10 +49,13 @@ LANDLINE_REST = 7
 # build-plan.md Phase 1, "Court case numbers": Net HaMishpat style `NNNNN-MM-YY`.
 CASE_NUMBER_GROUPS = [5, 2, 2]
 # Hyphen, dot, slash, space, no-break space, maqaf (U+05BE) and en dash: the separators the held-out
-# batch's span rules name ("hyphen, space, dot, slash"), and the forms of them Hebrew text uses.
-SEPARATORS = "-./  ־–"
+# batch's span rules name ("hyphen, space, dot, slash"), and the forms of them Hebrew text uses; and
+# the hyphens of word processors and PDF text: the Unicode hyphen (U+2010), the non-breaking hyphen
+# Word inserts (U+2011), the figure dash (U+2012), the em dash (U+2014), the minus sign (U+2212).
+SEPARATORS = "-./  ־–‐‑‒—−"
 _SEP = "[" + re.escape(SEPARATORS) + "]"
-CANDIDATE = re.compile(rf"(?<![0-9])(?<![0-9]{_SEP})[0-9](?:{_SEP}?[0-9]){{{SHORT_LENGTH - 1},{ID_LENGTH - 1}}}(?!{_SEP}?[0-9])")
+# A number is not followed by a run of separators and a digit: it would be part of a longer one.
+CANDIDATE = re.compile(rf"(?<![0-9])(?<![0-9]{_SEP})[0-9](?:{_SEP}?[0-9]){{{SHORT_LENGTH - 1},{ID_LENGTH - 1}}}(?!{_SEP}*[0-9])")
 # shortcut: one fixed confidence for every checksum match until calibration (build-plan.md
 # section 4.7, detect/calibration.py) gives a measured one; a random nine-digit number passes the
 # check one time in ten, and an ID label before it is more evidence.
