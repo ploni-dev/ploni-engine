@@ -8,7 +8,7 @@ Each invariant here is enumerated, as tests/t2_property/test_israeli_id.py is.
 Invariant 1, found means valid: over every sequence of up to four PIECES (11,111 texts; the full
 suite runs all, the fast suite every 22nd, 506), each IBAN detection's text, its separators taken
 out, is IL (in either case) and 21 ASCII digits whose ISO 7064 MOD 97-10 remainder, computed here
-digit by digit apart from the module, is 1; each BANK_ACCOUNT detection's text starts and ends
+digit by digit apart from the module (tests/invented_numbers.py, iban_remainder), is 1; each BANK_ACCOUNT detection's text starts and ends
 with an ASCII digit, holds at least three runs of digits, touches no digit or Latin letter on its
 left, and has a bank word inside it or a bank label in the twenty characters before it; and no
 two detections share a character. PIECES mix an IBAN, a near miss, IL, a grouped triple, an
@@ -33,6 +33,7 @@ from ploni.detect.base import DetectContext
 from ploni.detect.deterministic.iban import Iban
 from tests.detector_contract import projection
 from tests.invented_numbers import BANK_NUMBERS
+from tests.invented_numbers import iban_remainder as remainder
 from tests.sizes import INVARIANT_FULL, full
 
 # CLAUDE.md, Tests: an invariant is held over 500 generated cases, 5,000 at phase close.
@@ -40,15 +41,6 @@ FAST = 500
 SEPARATORS = re.compile("[-./ \\u00a0\\u05be\\u2013\\u2010\\u2011\\u2012\\u2014\\u2212]")
 BANK_WORDS = re.compile("חשבון|ח[-\\u05be\\u2013]ן|ח(?:[\"\\u05f4]|'')ן|בנק|סניף")
 CTX = DetectContext()
-
-
-def remainder(iban: str) -> int:
-    """Return the ISO 7064 MOD 97-10 remainder of an IBAN, digit by digit, apart from the module."""
-    value = 0
-    for ch in (iban[4:] + iban[:4]).upper():
-        for digit in str(ord(ch) - ord("A") + 10) if ch.isalpha() else ch:
-            value = (value * 10 + int(digit)) % 97
-    return value
 
 
 IBAN_FORMS = (

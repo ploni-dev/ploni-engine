@@ -94,7 +94,6 @@ is a Known limit of the module).
 import json
 import re
 from pathlib import Path
-from types import SimpleNamespace
 
 import pytest
 
@@ -103,7 +102,8 @@ from ploni.detect.deterministic import iban
 from ploni.detect.deterministic.iban import TRIPLE, Iban, bank_label_before, iban_ok, is_bank_account
 from ploni.types import Span
 from tests.detector_contract import projection
-from tests.invented_numbers import BANK_NUMBERS, ISRAELI_IDS, fill, with_check
+from tests.invented_numbers import BANK_NUMBERS, ISRAELI_IDS, combined, fill, with_check
+from tests.invented_numbers import iban_remainder as remainder
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "detect" / "iban.json"
 # Invented numbers, made when the tests run (tests/invented_numbers.py).
@@ -112,7 +112,7 @@ PAPER = " ".join(IBAN[i : i + 4] for i in range(0, 23, 4))
 ACCOUNT = BANK_NUMBERS.account[0]
 BANK, BRANCH, NUMBER = ACCOUNT[:2], ACCOUNT[2:5], ACCOUNT[5:11]
 GROUPED = f"{BANK}-{BRANCH}-{NUMBER}"
-NUMBERS = SimpleNamespace(**vars(BANK_NUMBERS), **vars(ISRAELI_IDS))
+NUMBERS = combined(BANK_NUMBERS, ISRAELI_IDS)
 CTX = DetectContext()
 TYPE = {"iban": "IBAN", "bank": "BANK_ACCOUNT"}
 
@@ -156,15 +156,6 @@ def test_k3_the_check_alone_does_not_read_the_country() -> None:
 
 def test_k2_the_remainder_zero_case_is_what_it_says() -> None:
     assert remainder(FAILING["remainder zero"]) == 0
-
-
-def remainder(chars: str) -> int:
-    """Return the ISO 7064 MOD 97-10 remainder of a string, digit by digit, apart from the module."""
-    value = 0
-    for ch in (chars[4:] + chars[:4]).upper():
-        for digit in str(ord(ch) - ord("A") + 10) if ch.isalpha() else ch:
-            value = (value * 10 + int(digit)) % 97
-    return value
 
 
 def test_k4_the_shortest_and_a_letter_z() -> None:

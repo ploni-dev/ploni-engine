@@ -296,9 +296,6 @@ def test_cd6_a_card_in_a_slot() -> None:
     assert text == f"כרטיס {card[:4]} {card[4:10]} {card[10:]}." and spans == [(6, 23)]
 
 
-remainder_digit_by_digit = inv.iban_remainder
-
-
 def test_rm1_the_remainder_of_four_characters() -> None:
     # IL62 moved is IL62 itself: I = 18, L = 21, so the number 182162, whose remainder is computed here.
     assert inv.iban_remainder("IL62") == 182162 % 97
@@ -353,7 +350,7 @@ def test_ib2_these_fail(which: str) -> None:
 
 def test_ib3_iban_ok_agrees_with_the_digit_by_digit_remainder() -> None:
     every = BANK_NUMBERS.iban + BANK_NUMBERS.iban_near + BANK_NUMBERS.iban_lengths + BANK_NUMBERS.iban_foreign
-    assert all(iban_ok(iban) is (remainder_digit_by_digit(iban) == 1) for iban in every)
+    assert all(iban_ok(iban) is (inv.iban_remainder(iban) == 1) for iban in every)
     assert sum(iban_ok(iban) for iban in every) == len(every) - len(BANK_NUMBERS.iban_near)
 
 
@@ -361,7 +358,7 @@ def test_wc1_with_check() -> None:
     stream = inv.digits(inv.SEED, "with_check")
     for _ in range(500):
         iban = inv.with_check("IL", inv.take(stream, 19))
-        assert 2 <= int(iban[2:4]) <= 98 and iban_ok(iban) and remainder_digit_by_digit(iban) == 1
+        assert 2 <= int(iban[2:4]) <= 98 and iban_ok(iban) and inv.iban_remainder(iban) == 1
 
 
 def test_bn1_ibans_and_their_near_misses() -> None:
