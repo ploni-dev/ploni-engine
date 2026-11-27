@@ -1,0 +1,534 @@
+{
+ "about": "Invented for this project (issue #35): hand-written Hebrew sentences; each number is a slot, {name[i]} or {name[i]:shape}, that tests/invented_numbers.py fills when the tests run, from a fixed seed, with card numbers made by the Luhn check and the issuer prefixes of the card brands, so that no number that passes the check is stored (Achia, 2026-11-27, issue #32, \"Make them fresh too (Recommended)\"). A positive's \"found\" lists the slots the detector must find, by their order in the text; a span is the number only, first digit to last, separators included (the span rule of CREDIT_CARD). The numbers written as they are fail the check, or are sixteen zeros, or are no card's length. No real document.",
+ "positives": [
+  {
+   "text": "מספר כרטיס האשראי: {visa[0]:dddd dddd dddd dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "חויב בכרטיס ויזה {visa[1]:dddd-dddd-dddd-dddd} ביום 3.5.2024.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "התובע שילם באמצעות כרטיס אשראי שמספרו {visa[2]}.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מס' כרטיס: {visa[3]:dddd dddd dddd dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מס׳ כרטיס: {visa[4]:dddd-dddd-dddd-dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "הנתבע מסר את פרטי הכרטיס ({visa[5]:dddd dddd dddd dddd}) לנציג.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "{visa[6]:dddd dddd dddd dddd} הוא מספר הכרטיס שנגנב.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "העסקה בוצעה בכרטיס שמספרו {visa[7]:dddd.dddd.dddd.dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ע\"י כרטיס {visa[8]:dddd־dddd־dddd־dddd} שולם הסכום.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ע״י כרטיס {visa[9]:dddd–dddd–dddd–dddd} שולם הסכום.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "לפי דף הפירוט, החיוב בכרטיס ‏{visa[10]:dddd dddd dddd dddd}‎ נעשה בחו\"ל.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "שָׁלוֹם, מספר הכרטיס {visa[11]}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "VISA {visa[12]:dddd dddd dddd dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "Credit card no. {visa[13]:dddd-dddd-dddd-dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "כרטיס:{visa[14]}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ב{visa[15]:dddd dddd dddd dddd} חויבו 200 ש\"ח.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "כרטיס מאסטרקארד {mastercard[0]:dddd dddd dddd dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מאסטרקרד {mastercard[1]:dddd-dddd-dddd-dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "Mastercard {mastercard[2]}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "בכרטיס האשראי {mastercard[3]:dddd dddd dddd dddd} בוצעו שלוש עסקאות.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "{mastercard[4]:dddd-dddd-dddd-dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "כרטיס ישראכרט מסוג מאסטרקארד, מספר {mastercard[5]:dddd dddd dddd dddd}, בתוקף עד 12/26.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "פרטי התשלום: {mastercard[6]:dddd dddd dddd dddd}.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "החיוב בכרטיס {mastercard[7]:dddd dddd dddd dddd} ובכרטיס {mastercard[8]:dddd-dddd-dddd-dddd} בוטל.",
+   "found": [
+    0,
+    1
+   ]
+  },
+  {
+   "text": "מספר כרטיס האשראי של המבקשת הוא {mastercard[9]:dddd.dddd.dddd.dddd}.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "כרטיס {mastercard[10]:dddd־dddd־dddd־dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "לאומי קארד {mastercard[11]:dddd dddd dddd dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "אמריקן אקספרס {amex[0]:dddd dddddd ddddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "כרטיס אמקס {amex[1]:dddd-dddddd-ddddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "AMEX {amex[2]}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "בכרטיס אמריקן אקספרס שמספרו {amex[3]:dddd dddddd ddddd} חויב החשבון.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מספר הכרטיס: {amex[4]:dddd-dddddd-ddddd}.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "{amex[5]:dddd dddddd ddddd}, כרטיס החברה.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "American Express {amex[6]:dddd dddddd ddddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "כרטיס אשראי {amex[7]:dddd dddddd ddddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "כרטיס דיינרס {diners[0]:dddd dddddd dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "Diners {diners[1]}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "דיינרס קלאב, מספר {diners[2]:dddd dddddd dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "עו\"ד כהן מסר כי כרטיס {diners[3]:dddd dddddd dddd} אבד.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "כרטיס Discover {discover[0]:dddd dddd dddd dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "חויב כרטיס {discover[1]:dddd-dddd-dddd-dddd} בארה\"ב.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "{discover[2]}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "עו״ד לוי ציין את הכרטיס {discover[3]:dddd dddd dddd dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "כרטיס JCB {jcb[0]:dddd dddd dddd dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "כרטיס יפני {jcb[1]:dddd-dddd-dddd-dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "{jcb[2]:dddd dddd dddd dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "כרטיס יוניון פיי {unionpay[0]:dddd dddd dddd dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "UnionPay {unionpay[1]:dddd-dddd-dddd-dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "כרטיס {unionpay[2]}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "כרטיס ויזה ישן {visa13[0]:dddd ddd ddd ddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "{visa13[1]}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "כרטיס ויזה {visa19[0]:dddd dddd dddd dddd ddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "{visa19[1]:dddd-dddd-dddd-dddd-ddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "כרטיס {visa[0]:dddd dddd dddd dddd} הוחלף בכרטיס {visa[1]:dddd dddd dddd dddd}.",
+   "found": [
+    0,
+    1
+   ]
+  },
+  {
+   "text": "| כרטיס | {mastercard[0]:dddd dddd dddd dddd} |",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "בכרטיס האשראי (מס׳ {visa[2]:dddd-dddd-dddd-dddd}) ע״ש התובע",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "{visa[3]:dddd dddd-dddd dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "פרטים:\n{visa[4]:dddd dddd dddd dddd}\nסוף",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "כרטיס אשראי {visa[5]:dddd dddd dddd dddd} 12/26",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מספר הכרטיס {mastercard[1]:dddd-dddd-dddd-dddd} 03/2027, קוד 123",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "אמקס {amex[2]:dddd dddddd ddddd} 9/28",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "שולם ב-{visa[6]} 12/26 ע\"י התובע.",
+   "found": [
+    0
+   ]
+  }
+ ],
+ "negatives": [
+  {
+   "text": "מספר כרטיס: {near[0]:dddd dddd dddd dddd}"
+  },
+  {
+   "text": "מספר כרטיס: {near[1]:dddd dddd dddd dddd}"
+  },
+  {
+   "text": "מספר כרטיס: {near[2]:dddd dddd dddd dddd}"
+  },
+  {
+   "text": "מספר כרטיס: {near[3]:dddd dddd dddd dddd}"
+  },
+  {
+   "text": "מספר כרטיס: {near[4]:dddd dddd dddd dddd}"
+  },
+  {
+   "text": "חויב בכרטיס {near[5]:dddd-dddd-dddd-dddd} ביום 3.5.2024."
+  },
+  {
+   "text": "חויב בכרטיס {near[6]:dddd-dddd-dddd-dddd} ביום 3.5.2024."
+  },
+  {
+   "text": "חויב בכרטיס {near[7]:dddd-dddd-dddd-dddd} ביום 3.5.2024."
+  },
+  {
+   "text": "חויב בכרטיס {near[8]:dddd-dddd-dddd-dddd} ביום 3.5.2024."
+  },
+  {
+   "text": "חויב בכרטיס {near[9]:dddd-dddd-dddd-dddd} ביום 3.5.2024."
+  },
+  {
+   "text": "כרטיס מאסטרקארד {near[10]}"
+  },
+  {
+   "text": "כרטיס מאסטרקארד {near[11]}"
+  },
+  {
+   "text": "כרטיס מאסטרקארד {near[12]}"
+  },
+  {
+   "text": "כרטיס מאסטרקארד {near[13]}"
+  },
+  {
+   "text": "כרטיס מאסטרקארד {near[14]}"
+  },
+  {
+   "text": "ע\"י כרטיס {near[15]:dddd dddd dddd dddd} שולם הסכום."
+  },
+  {
+   "text": "ע\"י כרטיס {near[16]:dddd dddd dddd dddd} שולם הסכום."
+  },
+  {
+   "text": "ע\"י כרטיס {near[17]:dddd dddd dddd dddd} שולם הסכום."
+  },
+  {
+   "text": "ע\"י כרטיס {near[18]:dddd dddd dddd dddd} שולם הסכום."
+  },
+  {
+   "text": "ע\"י כרטיס {near[19]:dddd dddd dddd dddd} שולם הסכום."
+  },
+  {
+   "text": "כרטיס {nobrand[0]:dddd dddd dddd dddd}"
+  },
+  {
+   "text": "כרטיס {nobrand[1]:dddd dddd dddd dddd}"
+  },
+  {
+   "text": "כרטיס {nobrand[2]:dddd dddd dddd dddd}"
+  },
+  {
+   "text": "מספר אסמכתא {nobrand[3]}"
+  },
+  {
+   "text": "מספר אסמכתא {nobrand[4]}"
+  },
+  {
+   "text": "מספר אסמכתא {nobrand[5]}"
+  },
+  {
+   "text": "כרטיס {wrong_length[0]:dddd dddd dddd ddd}"
+  },
+  {
+   "text": "כרטיס ויזה {wrong_length[1]:dddd dddd dddd dd}"
+  },
+  {
+   "text": "מספר כרטיס {wrong_length[2]:dddd dddd dddd dddd d}"
+  },
+  {
+   "text": "כרטיס אשראי {wrong_length[3]:dddd dddd dddd dddd dd}"
+  },
+  {
+   "text": "כרטיס {wrong_length[4]:dddd dddd dddd}"
+  },
+  {
+   "text": "מספר הכרטיס {wrong_length[5]:dddd dddd dddd dddd dddd}"
+  },
+  {
+   "text": "אמריקן אקספרס {wrong_length[6]:dddd dddd dddd dddd}"
+  },
+  {
+   "text": "מאסטרקארד {wrong_length[7]:dddd dddd dddd ddd}"
+  },
+  {
+   "text": "מספר {visa[0]}7"
+  },
+  {
+   "text": "מספר {visa[1]:dddd-dddd-dddd-dddd}-5"
+  },
+  {
+   "text": "7-{visa[2]}"
+  },
+  {
+   "text": "כרטיס 0000 0000 0000 0000"
+  },
+  {
+   "text": "כרטיס 1234 5678 9012 3456"
+  },
+  {
+   "text": "כרטיס 4444 4444 4444 4444"
+  },
+  {
+   "text": "ת.ז. 123456782 של בעל הכרטיס"
+  },
+  {
+   "text": "טלפון 03-1234567, פקס 03-7654321"
+  },
+  {
+   "text": "ת\"א 12345-01-20, כב' השופט לוי"
+  },
+  {
+   "text": "סכום של 1,234,567.89 ש\"ח שולם בכרטיס."
+  },
+  {
+   "text": "חשבון 12-345-678901 בבנק"
+  },
+  {
+   "text": "בין 1.1.2020 ל-31.12.2020 חויב הכרטיס."
+  },
+  {
+   "text": "כרטיס מספר 3 מתוך 5"
+  },
+  {
+   "text": "כרטיס מועדון 1234"
+  },
+  {
+   "text": "אין בכתב הטענות מספר כרטיס כלל."
+  },
+  {
+   "text": "כרטיס {nobrand[0]:dddd dddd dddd dddd} 12/26"
+  },
+  {
+   "text": "כרטיס אשראי {near[0]:dddd dddd dddd dddd} 12/2026"
+  }
+ ]
+}
