@@ -9,9 +9,10 @@ detector (issue #35).
 Test matrix:
 
 Equivalence classes:
-  EC1  the detectors of DETECTORS: the Israeli ID detector, then the credit card detector
-                                                     their detections, by default; the
-                                                     placeholder number 123456782 is not one;
+  EC1  the detectors of DETECTORS: the Israeli ID detector, then the company number detector
+       (issue #33), then the credit card detector (issue #35)
+                                                     their detections, by default, in that order;
+                                                     the placeholder number 123456782 is not one;
                                                      an ID and a card, each typed by its detector
   EC2  one detector given                            its detections as (start, end, type), in its order
   EC3  two detectors given                           the first one's, then the second one's
@@ -74,10 +75,12 @@ TEXT = "שָׁלוֹם, ת.ז. 123456782 ו-‏55‎"
 
 
 def test_ec1_the_detectors_of_ploni() -> None:
-    assert [type(each).__name__ for each in detectors.DETECTORS] == ["IsraeliId", "CreditCard"]
+    assert [type(each).__name__ for each in detectors.DETECTORS] == ["IsraeliId", "CompanyNumber", "CreditCard"]
     assert detectors.detect_all(TEXT) == []
     text = "ת.ז. " + ISRAELI_IDS.valid[0]
     assert detectors.detect_all(text) == [(5, 14, "IL_ID")]
+    text = f"ח.פ. {ISRAELI_IDS.company[0]}, ת.ז. {ISRAELI_IDS.valid[0]}"
+    assert detectors.detect_all(text) == [(21, 30, "IL_ID"), (5, 14, "COMPANY_NUMBER")]
     both = f"ת.ז. {ISRAELI_IDS.valid[0]}, כרטיס {CARDS.visa[0]}"
     assert detectors.detect_all(both) == [(5, 14, "IL_ID"), (22, 38, "CREDIT_CARD")]
 

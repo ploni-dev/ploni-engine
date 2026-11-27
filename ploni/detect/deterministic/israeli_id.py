@@ -115,12 +115,13 @@ _GERSHAYIM = r"(?:[\"״]|'')"
 ID_LABELS = (
     r"ת\.\s?ז\.?", rf"ת{_GERSHAYIM}ז", r"תעודת\s+(?:ה)?זהות", r"מס(?:['׳]|פר)\s*(?:(?:ה)?תעודת\s+)?(?:ה)?זהות",
 )  # fmt: skip
+# The labels of company and non-profit numbers (build-plan.md Phase 1): ח.פ. and ע.ר., with or
+# without their dots, and with any gershayim. The company number detector reads them too (#33).
+COMPANY_LABELS = (r"ח\.\s?פ\.?", rf"ח{_GERSHAYIM}פ", r"ע\.\s?ר\.?", rf"ע{_GERSHAYIM}ר")
 # The labels of the numbers that are not an ID and are written the same way: company and
-# non-profit (build-plan.md Phase 1), passport, bank account, phone, health fund, military,
-# licence and card numbers.
+# non-profit, passport, bank account, phone, health fund, military, licence and card numbers.
 OTHER_LABELS = (
-    r"ח\.\s?פ\.?", rf"ח{_GERSHAYIM}פ", r"ע\.\s?ר\.?", rf"ע{_GERSHAYIM}ר", r"דרכון", r"חשבון", r"סניף", r"בנק", r"טלפון",
-    r"טל['׳.]", r"פקס", r"נייד", r"פלאפון", r"קופת\s+חולים", rf"קופ{_GERSHAYIM}ח",
+    *COMPANY_LABELS, r"דרכון", r"חשבון", r"סניף", r"בנק", r"טלפון", r"טל['׳.]", r"פקס", r"נייד", r"פלאפון", r"קופת\s+חולים", rf"קופ{_GERSHAYIM}ח",
     r"מס(?:['׳]|פר)\s*(?:חבר|אישי|רישוי|רכב|לקוח|תיק)", r"מ\.\s?א\.?", rf"מ{_GERSHAYIM}א", r"רישיון", r"רישוי", r"כרטיס",
     r"אשראי",
 )  # fmt: skip
@@ -208,11 +209,26 @@ def label_before(text: str, start: int) -> str | None:
     An ID label beside another number's in the window wins over it, also when the form meant the
     other number ("ת.ז. של בעל חשבון").
     """
+    kinds = {match.lastgroup for match in LABEL.finditer(window_before(text, start))}
+    return "id" if "id" in kinds else "other" if kinds else None
+
+
+def window_before(text: str, start: int) -> str:
+    """Return the text before a number in which its label is read.
+
+    Why: a label stands just before its number, on its line, with no other number between; the
+    Israeli ID and the company number detectors read their labels in the same stretch.
+
+    Contract: `start` is the number's first character in `text`. The LABEL_WINDOW characters
+    before it, or fewer from the start of its line, and of those only what follows the last
+    digit (str.isdigit); "" when the number starts its line or a digit stands right before it.
+
+    Known limits: those of `label_before`.
+    """
     line = text.rfind("\n", 0, start) + 1
     window = text[max(line, start - LABEL_WINDOW) : start]
     last_digit = max((i for i, ch in enumerate(window) if ch.isdigit()), default=-1)
-    kinds = {match.lastgroup for match in LABEL.finditer(window[last_digit + 1 :])}
-    return "id" if "id" in kinds else "other" if kinds else None
+    return window[last_digit + 1 :]
 
 
 def is_israeli_id(raw: str, label: str | None, beside: bool) -> bool:

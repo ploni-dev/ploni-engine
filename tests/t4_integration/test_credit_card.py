@@ -11,15 +11,16 @@ Matrix:
       CREDIT_CARD; no other detector finds anything in them (no IL_ID inside a card)
   M2  every fixture text keeps the Detector contract (tests/detector_contract.py), as a header
       part too
-  M3  the detector is registered in eval.detectors.DETECTORS after the Israeli ID detector, and
-      requires no morphology
-  M4  every text of the Israeli ID detector's fixture gives no CREDIT_CARD
+  M3  the detector is registered in eval.detectors.DETECTORS after the Israeli ID and the company
+      number detectors (issues #32 and #33), and requires no morphology
+  M4  every text of the Israeli ID and the company number detectors' fixtures gives no CREDIT_CARD
 """
 
 from pathlib import Path
 
 from eval import detectors
 from ploni.detect.base import DetectContext
+from ploni.detect.deterministic.company_number import CompanyNumber
 from ploni.detect.deterministic.credit_card import CreditCard
 from ploni.detect.deterministic.israeli_id import IsraeliId
 from tests.detector_contract import breaks, projection
@@ -46,11 +47,12 @@ def test_m2_the_contract_over_the_fixture() -> None:
 
 
 def test_m3_registered_and_needs_no_morphology() -> None:
-    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CreditCard]
+    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, CreditCard]
     assert CreditCard.requires_morph is False and CreditCard.produces == frozenset({"CREDIT_CARD"})
 
 
-def test_m4_no_card_in_the_id_fixture() -> None:
-    positives, negatives = read_cases(FIXTURES / "il_id.json", ISRAELI_IDS)
-    for text, _ in positives + negatives:
-        assert CreditCard().detect(projection(text), DetectContext()) == []
+def test_m4_no_card_in_the_other_fixtures() -> None:
+    for name in ("il_id.json", "company_number.json"):
+        positives, negatives = read_cases(FIXTURES / name, ISRAELI_IDS)
+        for text, _ in positives + negatives:
+            assert CreditCard().detect(projection(text), DetectContext()) == []

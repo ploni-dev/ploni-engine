@@ -114,6 +114,15 @@ and forms write the label of a number before it):
       ת.ז. או דרכון; ת''ז/דרכון (finding 7)                  "id" (issue #299, finding 1)
   L11 an ID label, a digit, then the label of another number: only the labels after the last
       digit count                                          "other"
+window_before (the text label_before reads; the company number detector of issue #33 reads the
+same, so it is a function of its own):
+  W1 a short line: the text from the line's start to the number   all of it
+  W2 a long line: the LABEL_WINDOW characters before the number   only those
+  W3 a digit in the window: what follows its last digit           only that
+  W4 the number at the start of a line, the line before it full    ""
+COMPANY_LABELS (the labels of company and non-profit numbers, issue #33):
+  K1 four patterns, each one of OTHER_LABELS, so the ID detector still drops a valid number
+     after each (EC5)
 The detector, with labels:
   EC5 a valid number after a label of another number      nothing (the fixture has each kind)
   EC6 after an ID label: CONFIDENCE_LABELLED; with no label: CONFIDENCE
@@ -497,6 +506,25 @@ def test_l10_a_combined_form_label(before: str) -> None:
 
 def test_l11_only_the_labels_after_the_last_digit_count() -> None:
     assert label("ת.ז. 3 דרכון ") == "other"
+
+
+@pytest.mark.parametrize(
+    ("before", "window"),
+    [
+        ("שורה\nת.ז. ", "ת.ז. "),
+        ("א" * 30 + "ת.ז. ", ("א" * 30 + "ת.ז. ")[-israeli_id.LABEL_WINDOW :]),
+        ("ת.ז. 3 דרכון ", " דרכון "),
+        ("ת.ז. של המבקש\n", ""),
+    ],
+    ids=["w1 short line", "w2 long line", "w3 a digit in it", "w4 start of a line"],
+)  # fmt: skip
+def test_w_the_window_before_a_number(before: str, window: str) -> None:
+    assert israeli_id.window_before(before + VALID, len(before)) == window
+
+
+def test_k1_the_company_labels_are_labels_of_other_numbers() -> None:
+    assert len(israeli_id.COMPANY_LABELS) == 4
+    assert all(pattern in israeli_id.OTHER_LABELS for pattern in israeli_id.COMPANY_LABELS)
 
 
 @pytest.mark.parametrize("before", OTHER_LABELS)

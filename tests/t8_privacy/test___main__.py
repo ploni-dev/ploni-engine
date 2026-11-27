@@ -45,9 +45,9 @@ Equivalence classes:
        loaded, the lock helper of issue #212 among them, so that selftest's offline check
        sees what each loads
   EC10 the same -> the detector protocol, ploni/detect/base.py of issue #31, the Israeli ID
-       detector, ploni/detect/deterministic/israeli_id.py of issue #32, and the credit card
-       detector, ploni/detect/deterministic/credit_card.py of issue #35, are loaded, for the same
-       reason
+       detector, ploni/detect/deterministic/israeli_id.py of issue #32, the company number
+       detector, company_number.py of issue #33, and the credit card detector, credit_card.py of
+       issue #35, are loaded, for the same reason
 Boundaries:
   B1  the canary given as an argument of the record, not in its format string -> not written
   B2  an error whose own text cannot be made (its `__str__` raises, with the canary) -> the
@@ -364,5 +364,6 @@ print(" ".join(sorted(name for name in sys.modules if name.startswith("ploni.det
 def test_ec10_the_program_loads_the_detectors() -> None:
     done = start(DETECT_LOADED)
     assert done.stdout.split() == [
-        b"ploni.detect.base", b"ploni.detect.deterministic", b"ploni.detect.deterministic.credit_card", b"ploni.detect.deterministic.israeli_id"
+        b"ploni.detect.base", b"ploni.detect.deterministic", b"ploni.detect.deterministic.company_number",
+        b"ploni.detect.deterministic.credit_card", b"ploni.detect.deterministic.israeli_id",
     ]  # fmt: skip

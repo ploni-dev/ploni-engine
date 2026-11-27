@@ -64,7 +64,7 @@ from tests import invented_numbers as inv
 from tests.invented_numbers import CARDS, ISRAELI_IDS, israeli_id_checksum_ok, luhn_ok
 
 FIELDS = ("valid", "near", "zeros", "two_zeros", "cut", "nested", "company", "nonprofit", "landline")
-LENGTHS = {"valid": 60, "near": 30, "zeros": 3, "two_zeros": 1, "cut": 1, "nested": 1, "company": 6, "nonprofit": 6, "landline": 6}
+LENGTHS = {"valid": 60, "near": 30, "zeros": 3, "two_zeros": 1, "cut": 1, "nested": 1, "company": 30, "nonprofit": 30, "landline": 6}
 
 
 def first(seed: int, name: str, length: int = 200) -> str:
