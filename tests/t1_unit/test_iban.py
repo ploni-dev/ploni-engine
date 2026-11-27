@@ -79,6 +79,10 @@ The detector, BANK_ACCOUNT:
   NA6 an amount: the account followed by a decimal part (a dot or a comma and digits), or by
       ש"ח, ש״ח, ₪ or NIS, grouped under a bank label and with words between (the review of #34
       at 28b6032, finding 7: "יתרה בחשבון 12 345 678.50 ש"ח" gave BANK_ACCOUNT)    nothing
+  EA7 a list: two grouped triples after one label, a comma and no space between; an account
+      followed by a comma and three digits or more (no decimal part: a decimal part is one or
+      two digits that end there; pass 2 of the review, at 0f6f0e7, item 8: "ח-ן
+      12-345-123456,12-345-654321" gave nothing)                each account found
   NA4 words between, a bank of four digits; a branch of four digits    nothing (added after the
       code, for the mutants that survived on BANK_LONGEST and BRANCH_LONGEST, 3 made 4)
   EA6 the bank named by its name and no number, then the branch and the account with their
@@ -399,6 +403,7 @@ NOT_ACCOUNTS = {
     "na6 the shekel sign after": "בחשבון 12-345-6789 ₪",
     "na6 NIS after": "balance בחשבון 12 345 67890 NIS",
     "na6 words between, the shekel sign after": f"בנק {BANK} סניף {BRANCH} חשבון {NUMBER} ₪",
+    "na6 a decimal part of one digit, then a word": f"יתרה בחשבון {BANK} {BRANCH} {NUMBER[:4]},5 נוספים",
 }
 
 
@@ -442,6 +447,21 @@ def test_na5_not_by_name(case: str) -> None:
 def test_na4_four_digits_with_words_between(which: str) -> None:
     bank, branch = (ACCOUNT[:4], BRANCH) if which == "bank" else (BANK, ACCOUNT[:4])
     assert found(f"בנק {bank} סניף {branch} חשבון {NUMBER}") == []
+
+
+SECOND = BANK_NUMBERS.account[1]
+SECOND_GROUPED = f"{SECOND[:2]}-{SECOND[2:5]}-{SECOND[5:11]}"
+
+
+def test_ea7_a_list_after_one_label() -> None:
+    text = f"ח-ן {GROUPED},{SECOND_GROUPED}"
+    first, second = text.index(GROUPED), text.rindex(SECOND_GROUPED)
+    assert found(text) == [(first, first + len(GROUPED), "BANK_ACCOUNT"), (second, second + len(SECOND_GROUPED), "BANK_ACCOUNT")]
+
+
+def test_ea7_a_comma_and_three_digits_after() -> None:
+    text = f"חשבון {GROUPED},{SECOND[5:8]} ו-{SECOND[8:11]}"
+    assert found(text) == only(text, GROUPED, "BANK_ACCOUNT")
 
 
 def test_eb1_an_iban_and_an_account_in_one_text() -> None:
