@@ -84,6 +84,8 @@ The detector, BANK_ACCOUNT:
       two digits that end there; pass 2 of the review, at 0f6f0e7, item 8: "ח-ן
       12-345-123456,12-345-654321" gave nothing)                each account found
       A list of three (added after the code, for two mutants of Cosmic Ray)    each found
+      A list joined by ו-, וכן, a semicolon or a slash (pass 3 of the review, at a65350e,
+      finding 11: the later account was found 0.000)             each found
   NA4 words between, a bank of four digits; a branch of four digits    nothing (added after the
       code, for the mutants that survived on BANK_LONGEST and BRANCH_LONGEST, 3 made 4)
   EA6 the bank named by its name and no number, then the branch and the account with their
@@ -471,6 +473,26 @@ def test_ea7_a_list_of_three() -> None:
     text = "ח-ן " + ",".join(items)
     starts = [text.index(item) for item in items]
     assert found(text) == [(start, start + len(item), "BANK_ACCOUNT") for start, item in zip(starts, items, strict=True)]
+
+
+LISTS = {
+    "a, b ו-c": "ח-ן {0}, {1} ו-{2}",
+    "a ו-b": "ח-ן {0} ו-{1}",
+    "a וכן b": "ח-ן {0} וכן {1}",
+    "a; b": "ח-ן {0}; {1}",
+    "a / b": "ח-ן {0} / {1}",
+}
+
+
+@pytest.mark.parametrize("form", LISTS)
+def test_ea7_a_list_joined_by_a_word_or_a_mark(form: str) -> None:
+    # Pass 3 of the review of #34, at a65350e, finding 11: the account after ו-, וכן, ; or / was
+    # found 0.000 of the time.
+    third = BANK_NUMBERS.account[2]
+    items = [GROUPED, SECOND_GROUPED, f"{third[:2]}-{third[2:5]}-{third[5:11]}"]
+    text = LISTS[form].format(*items)
+    written = [item for item in items if item in text]
+    assert found(text) == [(text.index(item), text.index(item) + len(item), "BANK_ACCOUNT") for item in written]
 
 
 def test_ea7_a_comma_and_three_digits_after() -> None:
