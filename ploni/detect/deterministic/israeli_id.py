@@ -14,8 +14,8 @@ characters before the number, on its line, with no digit between), with at most 
 separator; on its right no run of separators, of any length, and then a digit follows (since
 change 3 of issue #32). Its digits, padded with zeros to nine, pass `israeli_id_checksum_ok`, do
 not start with COMPANY_PREFIX and are not trivial (`is_trivial`); its written shape is not that
-of another number (`is_other_shape`); no label of another number stands before it
-(`label_before`). Its span is the number only, first digit to last, separators included, in code
+of another number (`is_other_shape`); no label of another number stands before it, unless an ID
+label stands there too, as in a combined form label, "ת.ז./דרכון" (`label_before`; issue #299). Its span is the number only, first digit to last, separators included, in code
 points of the projection's text (the held-out batch's span rule for IL_ID); the label before it
 is read, never put in the span. Under an ID label its confidence is CONFIDENCE_LABELLED,
 otherwise CONFIDENCE.
@@ -159,18 +159,19 @@ def label_before(text: str, start: int) -> str | None:
     phone's label is that number, and one under ת.ז. is an ID with more evidence than its checksum.
 
     Contract: `start` is the number's first character in `text`. Looks at the LABEL_WINDOW
-    characters before it, on its line; the last label there counts, when no digit stands between
-    it and the number. "id" for one of ID_LABELS or the Latin ID, "other" for one of OTHER_LABELS.
+    characters before it, on its line, after the last digit there (str.isdigit). "id" when a
+    label there is one of ID_LABELS or the Latin ID, wherever it stands (a combined form label,
+    "ת.ז./דרכון", asks for an ID; issue #299); else "other" when one is of OTHER_LABELS; else None.
 
     Known limits: a label further away, on the line before, or not in the two lists is not seen.
+    An ID label beside another number's in the window wins over it, also when the form meant the
+    other number ("ת.ז. של בעל חשבון").
     """
     line = text.rfind("\n", 0, start) + 1
     window = text[max(line, start - LABEL_WINDOW) : start]
-    labels = list(LABEL.finditer(window))
-    last = labels[-1] if labels else None  # the nearest label is the last one found
-    if last is None or any(ch.isdigit() for ch in window[last.end() :]):
-        return None
-    return "id" if last.group("id") else "other"
+    last_digit = max((i for i, ch in enumerate(window) if ch.isdigit()), default=-1)
+    kinds = {match.lastgroup for match in LABEL.finditer(window[last_digit + 1 :])}
+    return "id" if "id" in kinds else "other" if kinds else None
 
 
 def is_israeli_id(raw: str, label: str | None) -> bool:
