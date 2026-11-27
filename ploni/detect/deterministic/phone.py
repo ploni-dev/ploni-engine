@@ -170,9 +170,12 @@ def refused(text: str, match: re.Match[str], label: str | None) -> bool:
 
     Contract: `match`, a match of CANDIDATE in `text`; `label`, what `label_before` gives for it.
     True under an ID label when the ID detector's own candidate (israeli_id.CANDIDATE) matches
-    the same span and `israeli_id.is_israeli_id` takes it under that label (which, under an ID
-    label, does not read whether another number follows, so none is looked for; pass 2 of the
-    review of #36, finding 10: "ת.ז. <ID> /8"-like edges the ID detector refuses); True under
+    where this one starts and `israeli_id.is_israeli_id` takes it under that label (which, under
+    an ID label, does not read whether another number follows, so none is looked for; pass 2 of
+    the review of #36, finding 10: "ת.ז. <ID> /8"-like edges the ID detector refuses). Where it
+    matches, it ends where this one does: a candidate that starts with a digit is a national
+    number of nine digits or more, and the ID detector's candidate there is nine digits (a run
+    of ten has no ID edge after nine), so the span is the same; True under
     another number's label when the match holds SHARED_LENGTH digits or fewer and is no short
     number (a star and four digits); False otherwise, and under a phone label or none.
 
@@ -182,7 +185,7 @@ def refused(text: str, match: re.Match[str], label: str | None) -> bool:
     raw = match.group()
     if label == "id":
         same = israeli_id.CANDIDATE.match(text, match.start())
-        return same is not None and same.end() == match.end() and israeli_id.is_israeli_id(raw, label, beside=False)
+        return same is not None and israeli_id.is_israeli_id(raw, label, beside=False)
     digits = sum(ch.isdigit() for ch in raw)
     return label == "other" and digits <= SHARED_LENGTH and not raw.startswith(SHORT_MARK)
 
