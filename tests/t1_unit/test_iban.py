@@ -125,7 +125,7 @@ from pathlib import Path
 import pytest
 
 from ploni.detect.base import DetectContext
-from ploni.detect.deterministic import iban
+from ploni.detect.deterministic import iban, israeli_id
 from ploni.detect.deterministic.iban import TRIPLE, Iban, bank_label_before, iban_ok, is_bank_account
 from ploni.types import Span
 from tests.detector_contract import projection
@@ -537,6 +537,11 @@ def test_f2_recall_and_precision_on_the_fixture(capsys: pytest.CaptureFixture[st
     assert recall >= 0.98 and precision >= 0.98
 
 
+def literal_ibans(literal: str) -> list[str]:
+    """Return the runs of a text that F3 reads as IBANs, each with its separators taken out."""
+    return [re.sub(r"[^0-9A-Za-z]", "", candidate) for candidate in re.findall(r"[A-Za-z]{2}[0-9 \-./ ‎‏]{13,60}", literal)]
+
+
 def test_f3_no_fixture_holds_a_valid_iban_as_a_literal() -> None:
     files = sorted(FIXTURE.parent.glob("*.json"))
     assert FIXTURE in files and len(files) >= 4
@@ -544,5 +549,13 @@ def test_f3_no_fixture_holds_a_valid_iban_as_a_literal() -> None:
         data = json.loads(path.read_text(encoding="utf-8"))
         for case in [case for value in data.values() if isinstance(value, list) for case in value]:
             literal = re.sub(r"\{[^}]*\}", "", case["text"])
-            for candidate in re.findall(r"[A-Za-z]{2}[0-9 \-./ ‎‏]{13,60}", literal):
-                assert not iban_ok(re.sub(r"[^0-9A-Za-z]", "", candidate)), path.name
+            assert not any(iban_ok(chars) for chars in literal_ibans(literal)), path.name
+
+
+def test_f3_the_scan_reads_every_iban_the_detector_finds() -> None:
+    # Pass 2 of the review of #34, at 0f6f0e7, item 9: an IBAN with en dashes passed the scan.
+    groups = [IBAN[i : i + 4] for i in range(0, 23, 4)]
+    for gap in [*israeli_id.SEPARATORS, "\u200e", "\u200f", "  ", " \u200f"]:
+        text = f"חשבון {gap.join(groups)} נפתח"
+        assert found(text), repr(gap)
+        assert IBAN in literal_ibans(text), repr(gap)
