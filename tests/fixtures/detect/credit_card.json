@@ -350,6 +350,30 @@
    "found": [
     0
    ]
+  },
+  {
+   "text": "כרטיס אשראי {visa[5]:dddd dddd dddd dddd} 12/26",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מספר הכרטיס {mastercard[1]:dddd-dddd-dddd-dddd} 03/2027, קוד 123",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "אמקס {amex[2]:dddd dddddd ddddd} 9/28",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "שולם ב-{visa[6]} 12/26 ע\"י התובע.",
+   "found": [
+    0
+   ]
   }
  ],
  "negatives": [
@@ -499,6 +523,12 @@
   },
   {
    "text": "אין בכתב הטענות מספר כרטיס כלל."
+  },
+  {
+   "text": "כרטיס {nobrand[0]:dddd dddd dddd dddd} 12/26"
+  },
+  {
+   "text": "כרטיס אשראי {near[0]:dddd dddd dddd dddd} 12/2026"
   }
  ]
 }

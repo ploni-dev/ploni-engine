@@ -15,8 +15,9 @@ split across separators.
 
 Invariant 2, every card is found: each of NUMBERS (24 invented cards of every list of CARDS), in
 each of FORMS (5), after each of LEFT (8: labels, a proclitic glued, a geresh in both forms, a
-bracket, nothing) and before each of RIGHT (6): 5,760 texts, all in the full suite, every 11th in
-the fast one (524). Each gives exactly one detection, the number's place.
+bracket, nothing) and before each of RIGHT (7, an expiry after one plain space among them, since
+the review of ec7d0d4, finding 1): 6,720 texts, all in the full suite, every 13th in the fast one
+(517). Each gives exactly one detection, the number's place.
 
 Not applicable: the proclitic and ordinary-word axes of names.
 """
@@ -63,7 +64,7 @@ FORMS = (
     lambda n: f"{n[:4]} {n[4:10]} {n[10:]}",
 )
 LEFT = ("", "כרטיס ", "מספר כרטיס האשראי: ", "מס' כרטיס ", "מס׳ כרטיס ", "בכרטיס ויזה ", "(", "VISA ")
-RIGHT = ("", ".", ",", ")", " נמסר", "\n")
+RIGHT = ("", ".", ",", ")", " נמסר", "\n", " 12/26")
 RECALL_ALL = list(product(NUMBERS, FORMS, LEFT, RIGHT))
 RECALL = RECALL_ALL if full() else RECALL_ALL[:: len(RECALL_ALL) // FAST]
 

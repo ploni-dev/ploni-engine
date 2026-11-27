@@ -20,8 +20,9 @@ luhn_ok:
 brand (the issuer ranges and lengths of the module's source):
   BR1 a card of each list of CARDS                          its brand
   BR2 the edges of each range, a number that fails Luhn (brand reads no check digit): 51, 55,
-      2221, 2720, 34, 37, 300, 305, 36, 38, 39, 6011, 644, 649, 65, 3528, 3589, 62, 4 in;
-      50, 56, 2220, 2721, 35, 306, 6010, 643, 3527, 3590, 63 out (None)
+      2221, 2720, 34, 37, 300, 305, 3095, 36, 38, 39, 6011, 644, 649, 65, 3528, 3589, 62, 4 in;
+      50, 56, 2220, 2721, 35, 306, 3094, 3096, 6010, 643, 3527, 3590, 63 out (None); 3095 was
+      added by the review of ec7d0d4, finding 2
   BR3 a brand's prefix at a length it does not issue: Visa at 12, 14, 15, 17, 18, 20;
       Mastercard at 15, 17; American Express at 14, 16; Diners at 13   None
   BR4 no brand's prefix: 0, 1, 7, 8, 9                      None
@@ -68,8 +69,15 @@ The detector (`CreditCard`):
   A5  a brand's prefix at a length it does not issue, passing the check    nothing
   A6  Arabic-Indic digits                                  nothing
   A7  a nine-digit number after a card label (an ID's length)    nothing
-  A8  a card followed by another number after one separator (an expiry, " 12/26"): nothing
-      (Known limits: it is read as part of the number); after a comma or a word: found
+  A8  a card followed by an expiry after one plain space (" 12/26", " 12/2026", " 1/27"), under a
+      label and with none, a 15-digit American Express too (whose run with "12" and "26" would
+      be 19 digits): found, the span the card only (until the review of ec7d0d4, finding 1, this
+      asked for nothing: it now asks more); after a comma or a word: found
+  A10 an expiry after one plain space behind digits that are no card (no brand's prefix, a near
+      miss)                                                nothing
+  A11 after a card, one plain space and digits that are no expiry (three digits before the
+      slash, five after it), or an expiry after a no-break space    nothing: read as one longer
+      number, as before
   A9  CANDIDATE itself: 13 and 19 digits match whole; 12 and 20 do not
 
 The fixture (tests/fixtures/detect/credit_card.json; its numbers are filled in when the tests
@@ -85,7 +93,7 @@ number; niqqud before it; RLM and LRM around it; the maqaf as a separator; Hebre
 labels. Names that are ordinary words do not apply: the detector reads digits. Document axes: a
 number on a line of its own, in a table row; the part is the projection's.
 
-Known limits: those of the module, among them A8.
+Known limits: those of the module, among them A11.
 """
 
 from pathlib import Path
@@ -162,9 +170,9 @@ IN_RANGE = {
     "34": ("amex", 15), "37": ("amex", 15), "300": ("diners", 14), "305": ("diners", 14), "36": ("diners", 14),
     "38": ("diners", 16), "39": ("diners", 19), "6011": ("discover", 16), "644": ("discover", 16),
     "649": ("discover", 17), "65": ("discover", 19), "3528": ("jcb", 16), "3589": ("jcb", 19),
-    "62": ("unionpay", 16), "4": ("visa", 13),
+    "62": ("unionpay", 16), "4": ("visa", 13), "3095": ("diners", 16),
 }  # fmt: skip
-OUT_OF_RANGE = ("50", "56", "2220", "2721", "35", "306", "6010", "643", "3527", "3590", "63")
+OUT_OF_RANGE = ("50", "56", "2220", "2721", "35", "306", "3094", "3096", "6010", "643", "3527", "3590", "63")
 
 
 @pytest.mark.parametrize("prefix", IN_RANGE)
@@ -361,11 +369,33 @@ def test_a7_an_id_length_number_after_a_card_label() -> None:
     assert found(f"כרטיס {ISRAELI_IDS.valid[0]}") == []
 
 
-def test_a8_another_number_after_one_separator() -> None:
-    assert found(f"כרטיס {groups(VISA, (4, 4, 4, 4))} 12/26") == []
-    for after in (", בתוקף עד 12/26", " בתוקף עד 12/26"):
-        text = f"כרטיס {groups(VISA, (4, 4, 4, 4))}{after}"
-        assert found(text) == only(text, groups(VISA, (4, 4, 4, 4)))
+EXPIRY_CASES = {
+    "label, 12/26": ("כרטיס אשראי ", groups(VISA, (4, 4, 4, 4)), " 12/26"),
+    "label, 12/2026": ("כרטיס אשראי ", groups(VISA, (4, 4, 4, 4)), " 12/2026"),
+    "label, 1/27": ("כרטיס ", groups(CARDS.mastercard[0], (4, 4, 4, 4), "-"), " 1/27 נמסר"),
+    "no label, plain": ("שולם ", VISA, " 12/26"),
+    "amex": ("אמקס ", groups(CARDS.amex[0], (4, 6, 5)), " 12/26"),
+    "comma": ("כרטיס ", groups(VISA, (4, 4, 4, 4)), ", בתוקף עד 12/26"),
+    "a word": ("כרטיס ", groups(VISA, (4, 4, 4, 4)), " בתוקף עד 12/26"),
+}
+
+
+@pytest.mark.parametrize("case", EXPIRY_CASES)
+def test_a8_an_expiry_after_one_plain_space(case: str) -> None:
+    before, card, after = EXPIRY_CASES[case]
+    text = before + card + after
+    assert found(text) == only(text, card)
+
+
+@pytest.mark.parametrize("which", ["no brand", "near miss"])
+def test_a10_an_expiry_after_no_card(which: str) -> None:
+    number = CARDS.nobrand[0] if which == "no brand" else CARDS.near[0]
+    assert found(f"כרטיס {groups(number, (4, 4, 4, 4))} 12/26") == []
+
+
+@pytest.mark.parametrize("after", [" 123/26", " 12/20261", " 12/26"], ids=["three before the slash", "five after it", "no-break space"])
+def test_a11_no_expiry_after_the_card(after: str) -> None:
+    assert found(f"כרטיס {groups(VISA, (4, 4, 4, 4))}{after}") == []
 
 
 def test_a9_the_candidate_pattern() -> None:
