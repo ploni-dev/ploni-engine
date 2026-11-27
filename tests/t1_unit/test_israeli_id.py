@@ -30,9 +30,16 @@ is_other_shape (the written shape of a number that is not an ID):
                                                            True, with a hyphen and with a space
   S2 a case number, five, two and two digits (Net HaMishpat style, build-plan.md Phase 1)  True
   S3 plain nine, eight and one, three-three-three          False
-  S4 01-2345678: 0 then a digit that is no area code       False
-  S5 0, an area code, then groups of three and four (0X-XXX-XXXX)    False: only two and seven
-  S6 two and seven digits that do not start with 0 (3X-XXXXXXX)       False
+  S4 01-2345678 and 01-234-5678: 0 then a digit that is no area code    False
+  S5 0, an area code, then groups of four and three (0X-XXXX-XXX)    False: not a landline's
+     grouping (until issue #302 S5 was 0X-XXX-XXXX, which is one: S7)
+  S6 two and seven digits, and two, three and four, that do not start with 0 (3X-XXXXXXX,
+     3X-XXX-XXXX)                                          False
+  S7 a landline written 0X-XXX-XXXX or 0X XXX XXXX, or with a hyphen and a space (issue #302:
+     the commonest written forms of an Israeli landline after 0X-XXXXXXX)    True
+  S8 under an ID label (label "id"): 0X-XXX-XXXX and 0X XXX XXXX are no landline's shape
+     (False: under an ID label the number is most likely an ID; the review of 7a99fa8, finding
+     1); 0X-XXXXXXX still is (True, as on main)
 T5, S5 and S6 were added after the code, for three mutants that survived Cosmic Ray (the
 commit that added them names them).
 
@@ -58,7 +65,11 @@ The detector (`IsraeliId`):
   A3  a company number (5...) and a non-profit number (58...) that pass the checksum    nothing
   A4  a near miss: a valid number with another check digit  nothing
   A5  trivial numbers                                      nothing
-  A6  a landline shape and a case-number shape that pass the checksum    nothing
+  A6  a landline shape and a case-number shape that pass the checksum; a landline written
+      0X-XXX-XXXX and 0X XXX XXXX with no label (issue #302)    nothing
+  EC10 under an ID label (ת.ז., מספר זהות:), a valid number written in a landline's groups of
+      two, three and four, with hyphens and with spaces: found (the review of 7a99fa8, finding
+      1); written 0X-XXXXXXX under an ID label: nothing, as on main
   A7  Arabic-Indic digits                                  nothing
   A8  CANDIDATE itself: nine digits match it whole; ten, plain and with a hyphen, do not
       (added after the code, for seven mutants that survived Cosmic Ray: the checksum refuses
@@ -131,6 +142,10 @@ is_israeli_id (the decision alone, one row per rule; added after the code, by th
   I5 an ID label, a short form                             True
   I6 no label, nine valid digits, nothing beside           True
   I7 no label, nine digits that fail the checksum          False
+  I8 a company number (starts with 5)                      False
+  I9 a trivial number (nine equal digits)                  False
+  I10 a landline shape (0X-XXXXXXX)                        False
+I8 to I10 were added after the code (the review of #299, pass 3, finding 8, on issue #302).
 
 The fixture (tests/fixtures/detect/il_id.json; its numbers are filled in when the tests run, by
 tests/invented_numbers.py):
@@ -209,12 +224,26 @@ def test_t_trivial(digits: str, expected: bool) -> None:
     ("raw", "expected"),
     [
         (f"{LANDLINE[:2]}-{LANDLINE[2:]}", True), (f"{LANDLINE[:2]} {LANDLINE[2:]}", True), (f"{CASE[:5]}-{CASE[5:7]}-{CASE[7:]}", True), (VALID, False),
-        (f"{VALID[:8]}-{VALID[8]}", False), (f"{VALID[:3]}-{VALID[3:6]}-{VALID[6:]}", False), ("01-2345678", False), (f"{LANDLINE[:2]}-{LANDLINE[2:5]}-{LANDLINE[5:]}", False), (f"3{LANDLINE[1]}-{LANDLINE[2:]}", False),
+        (f"{VALID[:8]}-{VALID[8]}", False), (f"{VALID[:3]}-{VALID[3:6]}-{VALID[6:]}", False), ("01-2345678", False), ("01-234-5678", False),
+        (f"{LANDLINE[:2]}-{LANDLINE[2:6]}-{LANDLINE[6:]}", False), (f"3{LANDLINE[1]}-{LANDLINE[2:]}", False), (f"3{LANDLINE[1]}-{LANDLINE[2:5]}-{LANDLINE[5:]}", False),
+        (f"{LANDLINE[:2]}-{LANDLINE[2:5]}-{LANDLINE[5:]}", True), (f"{LANDLINE[:2]} {LANDLINE[2:5]} {LANDLINE[5:]}", True), (f"{LANDLINE[:2]}-{LANDLINE[2:5]} {LANDLINE[5:]}", True),
     ],
-    ids=["s1 hyphen", "s1 space", "s2 case", "s3 plain", "s3 eight and one", "s3 threes", "s4 no area code", "s5 three and four", "s6 no 0"],
+    ids=[
+        "s1 hyphen", "s1 space", "s2 case", "s3 plain", "s3 eight and one", "s3 threes", "s4 no area code", "s4 no area code three and four",
+        "s5 four and three", "s6 no 0", "s6 no 0 three and four", "s7 hyphens", "s7 spaces", "s7 hyphen and space",
+    ],
 )  # fmt: skip
 def test_s_other_shapes(raw: str, expected: bool) -> None:
     assert is_other_shape(raw) is expected
+
+
+@pytest.mark.parametrize(
+    ("raw", "expected"),
+    [(f"{LANDLINE[:2]}-{LANDLINE[2:5]}-{LANDLINE[5:]}", False), (f"{LANDLINE[:2]} {LANDLINE[2:5]} {LANDLINE[5:]}", False), (f"{LANDLINE[:2]}-{LANDLINE[2:]}", True)],
+    ids=["s8 hyphens", "s8 spaces", "s8 two and seven"],
+)
+def test_s8_under_an_id_label(raw: str, expected: bool) -> None:
+    assert is_other_shape(raw, "id") is expected
 
 
 FORMS = {
@@ -303,12 +332,32 @@ def test_a5_trivial_numbers(number: str) -> None:
 
 @pytest.mark.parametrize(
     "text",
-    [f"טל' {LANDLINE[:2]}-{LANDLINE[2:]}", f"טלפון {LANDLINE[:2]} {LANDLINE[2:]}", f"ת\"א {CASE[:5]}-{CASE[5:7]}-{CASE[7:]}"],
-    ids=["landline hyphen", "landline space", "case number"],
-)
+    [
+        f"טל' {LANDLINE[:2]}-{LANDLINE[2:]}", f"טלפון {LANDLINE[:2]} {LANDLINE[2:]}", f"ת\"א {CASE[:5]}-{CASE[5:7]}-{CASE[7:]}",
+        f"התקשרו {LANDLINE[:2]}-{LANDLINE[2:5]}-{LANDLINE[5:]} מחר", f"המשרד: {LANDLINE[:2]} {LANDLINE[2:5]} {LANDLINE[5:]}",
+    ],
+    ids=["landline hyphen", "landline space", "case number", "landline three and four, no label", "landline spaced, no label"],
+)  # fmt: skip
 def test_a6_other_shapes(text: str) -> None:
     assert israeli_id_checksum_ok(LANDLINE) and israeli_id_checksum_ok(CASE)
     assert found(text) == []
+
+
+LANDLINE_GROUPED = {
+    "hyphens": f"{LANDLINE[:2]}-{LANDLINE[2:5]}-{LANDLINE[5:]}",
+    "spaces": f"{LANDLINE[:2]} {LANDLINE[2:5]} {LANDLINE[5:]}",
+}
+
+
+@pytest.mark.parametrize("before", ["ת.ז. ", "מספר זהות: "])
+@pytest.mark.parametrize("form", LANDLINE_GROUPED)
+def test_ec10_under_an_id_label_in_a_landlines_groups(before: str, form: str) -> None:
+    written = LANDLINE_GROUPED[form]
+    assert found(before + written) == [(len(before), len(before) + len(written))]
+
+
+def test_ec10_two_and_seven_under_an_id_label() -> None:
+    assert found(f"ת.ז. {LANDLINE[:2]}-{LANDLINE[2:]}") == []
 
 
 def test_a7_arabic_indic_digits() -> None:
@@ -531,9 +580,13 @@ def test_sh9_a_short_form_beside_another_number_by_a_plain_space() -> None:
     ("raw", "kind", "beside", "expected"),
     [
         (VALID, "other", False, False), (VALID, None, True, False), (EIGHT, None, False, False), (VALID, "id", True, True),
-        (EIGHT, "id", False, True), (VALID, None, False, True), (NEAR, None, False, False),
+        (EIGHT, "id", False, True), (VALID, None, False, True), (NEAR, None, False, False), (COMPANY, None, False, False),
+        ("000000000", None, False, False), (f"{LANDLINE[:2]}-{LANDLINE[2:]}", None, False, False),
     ],
-    ids=["i1 other label", "i2 no label beside", "i3 no label short", "i4 id label beside", "i5 id label short", "i6 plain valid", "i7 plain invalid"],
+    ids=[
+        "i1 other label", "i2 no label beside", "i3 no label short", "i4 id label beside", "i5 id label short", "i6 plain valid", "i7 plain invalid",
+        "i8 company", "i9 trivial", "i10 landline shape",
+    ],
 )  # fmt: skip
 def test_i_the_decision(raw: str, kind: str | None, beside: bool, expected: bool) -> None:
     assert is_israeli_id(raw, kind, beside) is expected
