@@ -25,6 +25,12 @@ brand (the issuer ranges and lengths of the module's source):
   BR3 a brand's prefix at a length it does not issue: Visa at 12, 14, 15, 17, 18, 20;
       Mastercard at 15, 17; American Express at 14, 16; Diners at 13   None
   BR4 no brand's prefix: 0, 1, 7, 8, 9                      None
+  BR5 each brand at every length it issues (Visa 13, 16, 19; Mastercard 16; American Express 15;
+      Diners, Discover, JCB, UnionPay 16 to 19, Diners from 14)    its brand
+  BR6 the edges of a range at the brand's own length: 33 and 35 at 15 (None), 36 and 38 at 15
+      (Diners, not American Express), 299 at 14, 6012, 66 and 61 at 16    None but where named
+BR5 and BR6 were added after the code, for 25 mutants that survived Cosmic Ray (the commit that
+added them names them).
 
 labelled (a card's label before the number, on its line, within LABEL_WINDOW characters, after
 the last digit there):
@@ -183,6 +189,26 @@ def test_br3_a_prefix_at_a_wrong_length(prefix: str, length: int) -> None:
 @pytest.mark.parametrize("prefix", ["0", "1", "7", "8", "9"])
 def test_br4_no_brand(prefix: str) -> None:
     assert brand(failing(prefix, 16)) is None
+
+
+EVERY_LENGTH = (
+    *(("visa", "4", n) for n in (13, 16, 19)), ("mastercard", "51", 16), ("amex", "34", 15),
+    *(("diners", "36", n) for n in range(14, 20)), *(("discover", "65", n) for n in range(16, 20)),
+    *(("jcb", "3528", n) for n in range(16, 20)), *(("unionpay", "62", n) for n in range(16, 20)),
+)  # fmt: skip
+
+
+@pytest.mark.parametrize(("name", "prefix", "length"), EVERY_LENGTH, ids=[f"{b} {p} at {n}" for b, p, n in EVERY_LENGTH])
+def test_br5_every_length_of_each_brand(name: str, prefix: str, length: int) -> None:
+    assert brand(failing(prefix, length)) == name
+
+
+EDGES = (("33", 15, None), ("35", 15, None), ("36", 15, "diners"), ("38", 15, "diners"), ("299", 14, None), ("6012", 16, None), ("66", 16, None), ("61", 16, None))
+
+
+@pytest.mark.parametrize(("prefix", "length", "name"), EDGES, ids=[f"{p} at {n}" for p, n, _ in EDGES])
+def test_br6_the_edges_at_the_brands_own_length(prefix: str, length: int, name: str | None) -> None:
+    assert brand(failing(prefix, length)) == name
 
 
 LABELS = (
