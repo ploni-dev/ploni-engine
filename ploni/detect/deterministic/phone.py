@@ -15,10 +15,13 @@ repository). A number is the 0 and the area code, then the seven digits in one g
 separator, or one after the area code), or after one separator as three and four, or three, two
 and two (SUBSCRIBER); the area code with its 0 may stand in brackets, with or without a
 separator after them. From abroad, "+972", "972" or "00972" stands in place of the 0, with an
-optional separator after it, and the area code may stand in brackets; or the 0 is kept, as "0"
-or "(0)" right before the area code ("+972-03-...", "+972 (0)3 ...": KEPT_ZERO; Achia,
-2026-11-27, #36, "Yes, find them (Recommended)": "an optional "(0)" or "0" after 972 and its
-separator"). A 1-800 or 1-700 number
+optional separator after it, and the area code may stand in brackets; or the 0 is kept
+("+972-03-...", "+972 (0)3 ..."). Achia, 2026-11-27, #36, asked whether a number from abroad
+that keeps its 0 should be found, answered "Yes, find them (Recommended)". The rule built for
+it, Claude's (KEPT_ZERO, BARE_COUNTRY): the 0 or "(0)" right before the area code; after "+972"
+or "00972" with any separator or none; after a bare "972" a 0 only with a tight separator or
+none, so that "עמוד 972 0X-..." is a page and a phone (pass 2 of the review of #36, finding 9),
+and a "(0)" with any. A 1-800 or 1-700 number
 is 1, 800 or 700, and six digits, as one group, with a separator after 1 or not, then the six
 with or without a separator before them, as six, three and three, or two, two and two (SERVICE).
 A short number is a star and four digits. SEPARATORS are those of
@@ -27,8 +30,9 @@ digit, nor a digit and one separator other than a plain space or a slash (EDGE);
 likewise, no digit, nor such a separator and a digit; so two phones joined by a space or a slash
 are two (the review of b2f3790, finding 3, as the ID detector's _TIGHT, #299). The label before
 it is read in israeli_id.window_before (`label_before`): a phone label raises the confidence; an
-ID label refuses it when the ID detector takes it as written (`israeli_id.is_israeli_id`), and
-otherwise it is found and flagged, so that no span is both; another number's label (a company's,
+ID label refuses it when the ID detector takes the same span (its own candidate,
+israeli_id.CANDIDATE, matches there and `israeli_id.is_israeli_id` takes it), and otherwise it
+is found and flagged, so that no span is both; another number's label (a company's,
 an account's, a card's, a passport's, ...) refuses it when it has SHARED_LENGTH digits or fewer,
 which an ID, a company number or an account can share, and a longer one is found (`refused`;
 the review of b2f3790, findings 1 and 2). Its span is the number from its first character to
@@ -68,10 +72,14 @@ detections beside theirs). A mobile under ת.ז., ח.פ., כרטיס ביקור,
 דרכון, 1.000 (a landline under the six but ת.ז., 0.000); two mobiles joined by a space, a
 slash, a comma, ו- or או, 1.000 each; the phone forms of these tables with every phone label and
 none, 1.000, but the limits above (0.000). The 0 kept from abroad (+972-0X-XXXXXXX, +972 (0)X
-XXXXXXX, +972-05X-XXXXXXX, +972 (0)5X-XXX-XXXX, +972-07X-XXXXXXX): 1.000 each (0.000 before
-Achia's answer). Its cost: the number 972 written before a number from 0 by one plain space,
-with no plus ("עמוד 972 0X-XXXXXXX", "עמוד 972 <ID from 0[23489]>"), is read as one number from
-abroad, the 972 in its span, 1.000, and not flagged.
+XXXXXXX, +972-05X-XXXXXXX, +972 (0)5X-XXX-XXXX, +972-07X-XXXXXXX, and after a bare 972,
+972-0X-XXXXXXX and 972 (0)X XXXXXXX): 1.000 each (0.000 before Achia's answer). The number 972
+one plain space before a number from 0, with no plus ("סעיף 972 0X-XXXXXXX", "עמוד 972
+05X-XXXXXXX"): the phone alone, 1.000, 972 in no span (1.000 in the span at 5ecb939); before an
+ID from 0[23489] written bare, the ID's nine digits as a bare phone, flagged, 1.000. Under an ID
+label, a valid ID from 0[23489] written 0X-XXX-XXXX with "/8" after it, which the ID detector's
+own candidate does not take: found as PHONE, flagged, 1.000 (found by no detector before, on
+main too).
 The detection carries no id (detection_id is ""): ids are made just after detection, with the
 matter's key, never inside a detector (Achia, 2026-11-26, issue #169, "Use the secret key
 (Recommended)").
@@ -101,9 +109,17 @@ GROUPED = rf"(?:[0-9]{{7}}|[0-9]{{3}}{_SEP}[0-9]{{4}}|[0-9]{{3}}{_SEP}[0-9]{{2}}
 SUBSCRIBER = rf"(?:[0-9]{{7}}|{_SEP}{GROUPED})"
 NATIONAL = rf"0{AREA}{SUBSCRIBER}|\(0{AREA}\){_SEP}?{GROUPED}"
 # From abroad the country code, 972, stands in place of the 0 (the plan's "`+972` forms"), or
-# before the 0 kept, glued to the area code (Achia, 2026-11-27, #36, "Yes, find them (Recommended)").
+# before the 0 kept: Achia, 2026-11-27, #36, asked whether numbers from abroad that keep their 0
+# should be found, answered "Yes, find them (Recommended)". The rule built for it, Claude's: the
+# 0 or "(0)" glued to the area code, after +972 or 00972 and any separator or none; after a bare
+# 972 a 0 only with a tight separator or none, so that "עמוד 972 0X-..." is a page and a phone
+# (pass 2 of the review of #36, finding 9), and a "(0)", which no page number writes, with any.
 KEPT_ZERO = r"(?:\(0\)|0)?"
-ABROAD = rf"(?:\+|00)?972{_SEP}?(?:{KEPT_ZERO}{AREA}{SUBSCRIBER}|\({AREA}\){_SEP}?{GROUPED})"
+BARE_COUNTRY = rf"972(?:{EDGE}?0|{_SEP}?\(0\)|{_SEP}?)"
+ABROAD = (
+    rf"(?:\+|00)972{_SEP}?{KEPT_ZERO}{AREA}{SUBSCRIBER}|{BARE_COUNTRY}{AREA}{SUBSCRIBER}"
+    rf"|(?:\+|00)?972{_SEP}?\({AREA}\){_SEP}?{GROUPED}"
+)
 # The 1-800 and 1-700 numbers: 1, 800 or 700, and six digits.
 SERVICE = rf"1{_SEP}?[78]00(?:[0-9]{{6}}|{_SEP}(?:[0-9]{{6}}|[0-9]{{3}}{_SEP}[0-9]{{3}}|[0-9]{{2}}{_SEP}[0-9]{{2}}{_SEP}[0-9]{{2}}))"
 # build-plan.md Phase 1: "`*NNNN` service numbers".
@@ -145,24 +161,28 @@ def label_before(text: str, start: int) -> str | None:
     return "phone" if "phone" in kinds else "id" if "id" in kinds else "other" if kinds else None
 
 
-def refused(raw: str, label: str | None) -> bool:
+def refused(text: str, match: re.Match[str], label: str | None) -> bool:
     """Say whether the label before a candidate makes it another number.
 
     Why: under an ID label the ID detector may take the same digits, and under another number's
     label a number of an ID's length may be that number; a candidate that cannot be is a phone
     (the review of b2f3790, findings 1 and 2).
 
-    Contract: `raw`, a match of CANDIDATE; `label`, what `label_before` gives for it. True under
-    an ID label when `israeli_id.is_israeli_id(raw, "id", False)` is (under an ID label that
-    function does not read whether another number follows, so none is looked for); True under
-    another number's label when `raw` holds SHARED_LENGTH digits or fewer and is no short number
-    (a star and four digits); False otherwise, and under a phone label or none.
+    Contract: `match`, a match of CANDIDATE in `text`; `label`, what `label_before` gives for it.
+    True under an ID label when the ID detector's own candidate (israeli_id.CANDIDATE) matches
+    the same span and `israeli_id.is_israeli_id` takes it under that label (which, under an ID
+    label, does not read whether another number follows, so none is looked for; pass 2 of the
+    review of #36, finding 10: "ת.ז. <ID> /8"-like edges the ID detector refuses); True under
+    another number's label when the match holds SHARED_LENGTH digits or fewer and is no short
+    number (a star and four digits); False otherwise, and under a phone label or none.
 
-    Known limits: the ID detector reads its own candidate; where its candidate and this one differ
-    in their edges, `is_israeli_id` on this one's text is what is asked.
+    Known limits: the ID detector's other rules (its label read in its own window) are not asked
+    again; under an ID label they agree with `label_before`'s "id".
     """
+    raw = match.group()
     if label == "id":
-        return israeli_id.is_israeli_id(raw, label, beside=False)
+        same = israeli_id.CANDIDATE.match(text, match.start())
+        return same is not None and same.end() == match.end() and israeli_id.is_israeli_id(raw, label, beside=False)
     digits = sum(ch.isdigit() for ch in raw)
     return label == "other" and digits <= SHARED_LENGTH and not raw.startswith(SHORT_MARK)
 
@@ -219,7 +239,7 @@ class Phone:
         found = []
         for match in CANDIDATE.finditer(proj.text):
             label = label_before(proj.text, match.start())
-            if refused(match.group(), label):
+            if refused(proj.text, match, label):
                 continue
             confidence = CONFIDENCE_LABELLED if label == "phone" else CONFIDENCE
             reason = review_reason(match.group(), label)
