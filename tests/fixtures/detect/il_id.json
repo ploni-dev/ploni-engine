@@ -327,6 +327,36 @@
    "found": [
     0
    ]
+  },
+  {
+   "text": "ת.ז. {valid[2]:dddddddd‑d}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת.ז. {valid[3]:ddd‐ddd‐ddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת.ז. {nested[0]:dddddddd—d}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת.ז. {valid[2]:dddddddd−d}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת.ז. {valid[3]:dddddddd‒d}",
+   "found": [
+    0
+   ]
   }
  ],
  "negatives": [
@@ -518,6 +548,9 @@
   },
   {
    "text": "ת.ז. {zeros[1]:xddddddd+}"
+  },
+  {
+   "text": "ת.ז. {nested[0]:dddddddd‑‑d}"
   }
  ]
 }

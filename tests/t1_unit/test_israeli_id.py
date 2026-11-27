@@ -38,7 +38,10 @@ commit that added them names them).
 
 The detector (`IsraeliId`):
   EC1 each written form: plain; eight and the check digit after a hyphen, a maqaf (U+05BE), an
-      en dash, a slash, a space; three-three-three with hyphens, dots, spaces, no-break spaces
+      en dash, a slash, a space; three-three-three with hyphens, dots, spaces, no-break spaces;
+      and the hyphens of word processors and PDF text: the Unicode hyphen (U+2010), the
+      non-breaking hyphen (U+2011), the figure dash (U+2012), the em dash (U+2014) and the minus
+      sign (U+2212)
                                                            one detection, the span the number only
   EC2 two numbers in one text                              two detections, in order
   EC3 the label glued to the number (ת.ז.123..., a proclitic on the label, Latin "ID", a
@@ -84,6 +87,8 @@ with zeros, `digits.zfill(9)`, so a number of fewer digits is an ID read with th
   SH5 six digits after an ID label (SHORT_LENGTH is the fewest)    nothing
   SH6 a short near miss after an ID label                  nothing
   SH7 seven zeros after an ID label (trivial once padded)  nothing
+  SH8 eight digits followed by two separators and a digit, after an ID label: part of a longer
+      number                                               nothing
 
 The fixture (tests/fixtures/detect/il_id.json; its numbers are filled in when the tests run, by
 tests/invented_numbers.py):
@@ -181,6 +186,11 @@ FORMS = {
     "threes dot": f"{VALID[:3]}.{VALID[3:6]}.{VALID[6:]}",
     "threes space": f"{VALID[:3]} {VALID[3:6]} {VALID[6:]}",
     "threes no-break space": f"{VALID[:3]} {VALID[3:6]} {VALID[6:]}",
+    "unicode hyphen": f"{VALID[:3]}‐{VALID[3:6]}‐{VALID[6:]}",
+    "non-breaking hyphen": f"{VALID[:8]}‑{VALID[8]}",
+    "figure dash": f"{VALID[:8]}‒{VALID[8]}",
+    "em dash": f"{VALID[:8]}—{VALID[8]}",
+    "minus sign": f"{VALID[:8]}−{VALID[8]}",
 }
 
 
@@ -373,6 +383,12 @@ def test_sh6_a_short_near_miss() -> None:
 def test_sh7_seven_zeros() -> None:
     assert israeli_id_checksum_ok("0000000")
     assert found("ת.ז. 0000000") == []
+
+
+@pytest.mark.parametrize("tail", ["--5", " - 5", "‑‑5"], ids=["two hyphens", "spaced hyphen", "two non-breaking hyphens"])
+def test_sh8_a_short_form_inside_a_longer_number(tail: str) -> None:
+    assert israeli_id_checksum_ok(EIGHT)
+    assert found("ת.ז. " + EIGHT + tail) == []
 
 
 def cases() -> tuple[list[tuple[str, set[tuple[int, int]]]], int, int]:

@@ -37,7 +37,7 @@ from tests.sizes import INVARIANT_FULL, full
 
 # CLAUDE.md, Tests: an invariant is held over 500 generated cases, 5,000 at phase close.
 FAST = 500
-SEPARATORS = re.compile("[-./  ־–]")
+SEPARATORS = re.compile("[-./ \\u00a0\\u05be\\u2013\\u2010\\u2011\\u2012\\u2014\\u2212]")
 CTX = DetectContext()
 
 
