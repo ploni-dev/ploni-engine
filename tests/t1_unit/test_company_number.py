@@ -25,6 +25,10 @@ number_type (the decision alone; label as label_before gives it, beside as NUMBE
   N10 555555555: it fails the checksum, so no nine-digit number starting with 5 is trivial in
       is_trivial's sense (eight running up or down by one cannot start at 5), and the detector
       does not ask                                               None
+  N11 written two and seven (5X-XXXXXXX, a mobile's shape without its 0) with no company label,
+      and under an ID label                                      None; under a company label
+                                                                 COMPANY_NUMBER (the review of
+      4d6e477, finding 2: a mobile written so was found 0.114 of the time)
 
 label_before:
   L1  each company label: ח.פ., ח.פ, ח. פ., ח"פ, ח״פ, ח''פ, ע.ר., ע"ר, ע״ר, ע''ר    "company"
@@ -44,6 +48,8 @@ The detector (`CompanyNumber`):
       CONFIDENCE with none (the ID detector's constants)
   EC4 under ח.פ., a date after it by a plain space                found; with no label, a count
       after it                                                   nothing
+  EC5 a valid company number written 5X-XXXXXXX in a sentence with no label (a mobile's shape),
+      and after ת.ז.                                             nothing; after ח.פ. and ע"ר    found
   B1  the number alone, at the start and at the end of the text   found
   B2  the empty text; a text with no digit                       nothing
   A1  inside a longer number: ten digits, "7-" before, "-5" after    nothing
@@ -114,6 +120,9 @@ DECISIONS = {
     "n8 beside, a company label": (COMPANY, "company", True, "COMPANY_NUMBER"),
     "n9 a case number's shape": (f"{COMPANY[:5]}-{COMPANY[5:7]}-{COMPANY[7:]}", None, False, None),
     "n10 nine fives": ("555555555", None, False, None),
+    "n11 two seven, no label": (f"{COMPANY[:2]}-{COMPANY[2:]}", None, False, None),
+    "n11 two seven, a company label": (f"{COMPANY[:2]}-{COMPANY[2:]}", "company", False, "COMPANY_NUMBER"),
+    "n11 two seven nonprofit, a company label": (f"{NONPROFIT[:2]}-{NONPROFIT[2:]}", "company", False, "NONPROFIT_NUMBER"),
 }
 
 
@@ -205,6 +214,20 @@ def test_ec4_another_number_after_it() -> None:
     text = f"ח.פ. {COMPANY} 1.1.2020"
     assert found(text) == only(text, COMPANY)
     assert found(f"{COMPANY} 3 עובדים") == []
+
+
+TWO_SEVEN = f"{COMPANY[:2]}-{COMPANY[2:]}"
+
+
+@pytest.mark.parametrize("before", ["התקשרו למספר ", "ת.ז. "], ids=["no label", "an id label"])
+def test_ec5_two_seven_with_no_company_label(before: str) -> None:
+    assert found(before + TWO_SEVEN + " מחר") == []
+
+
+@pytest.mark.parametrize("before", ["ח.פ. ", "ע\"ר "], ids=["company label", "nonprofit label"])
+def test_ec5_two_seven_under_a_company_label(before: str) -> None:
+    text = before + TWO_SEVEN
+    assert found(text) == only(text, TWO_SEVEN)
 
 
 @pytest.mark.parametrize("text", [COMPANY, f"{COMPANY} הוא המספר", f"המספר הוא {COMPANY}"], ids=["alone", "start", "end"])

@@ -13,10 +13,11 @@ number, a non-profit number, a near miss, an ID, digits, separators and a compan
 runs of digits join into longer numbers and split across separators.
 
 Invariant 2, every number is found: each of NUMBERS (the 30 invented company and 30 non-profit
-numbers of tests/invented_numbers.py), in each of FORMS (5), after each of LEFT (6: the company
-labels with each gershayim, a proclitic, nothing) and before each of RIGHT (4): 7,200 texts, all
-in the full suite, every 14th in the fast one (515). Each gives exactly one detection, the
-number's place and type.
+numbers of tests/invented_numbers.py), in each of FORMS (5) after each of LABELLED (5: the
+company labels with each gershayim, a proclitic), and in each of ANY_LABEL_FORMS (the 4 but two
+and seven, a mobile's shape without its 0, which counts only under a company label) with no
+label, before each of RIGHT (4): 6,000 and 960 texts, 6,960, all in the full suite, every 13th
+in the fast one (536). Each gives exactly one detection, the number's place and type.
 
 Not applicable: the proclitic and ordinary-word axes of names.
 """
@@ -45,16 +46,17 @@ def checksum(digits: str) -> bool:
 
 
 NUMBERS = [*ISRAELI_IDS.company, *ISRAELI_IDS.nonprofit]
-FORMS = (
+ANY_LABEL_FORMS = (
     lambda n: n,
     lambda n: f"{n[:2]}-{n[2:8]}-{n[8]}",
-    lambda n: f"{n[:2]}-{n[2:]}",
     lambda n: f"{n[:3]}-{n[3:6]}-{n[6:]}",
     lambda n: f"{n[:3]} {n[3:6]} {n[6:]}",
 )
-LEFT = ("", "ח.פ. ", "ח\"פ ", "ע״ר ", "ע''ר ", "וח.פ.")
+# Two and seven, a mobile's shape without its 0, is a company's only under a company label.
+FORMS = (*ANY_LABEL_FORMS, lambda n: f"{n[:2]}-{n[2:]}")
+LABELLED = ("ח.פ. ", "ח\"פ ", "ע״ר ", "ע''ר ", "וח.פ.")
 RIGHT = ("", ".", ")", " נרשמה")
-RECALL_ALL = list(product(NUMBERS, FORMS, LEFT, RIGHT))
+RECALL_ALL = list(product(NUMBERS, FORMS, LABELLED, RIGHT)) + list(product(NUMBERS, ANY_LABEL_FORMS, ("",), RIGHT))
 RECALL = RECALL_ALL if full() else RECALL_ALL[:: len(RECALL_ALL) // FAST]
 
 COMPANY = ISRAELI_IDS.company[0]
