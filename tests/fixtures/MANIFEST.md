@@ -10,5 +10,4 @@ Rules:
 
 | Path | Provenance | Added in |
 |---|---|---|
-
-No fixture exists yet (Phase 0, issue #29).
+| `detect/il_id.json` | Invented for this project: Hebrew sentences written by hand, with a slot for each number; `tests/invented_numbers.py` fills the slots when the tests run, with numbers made from a fixed seed (its `SEED`, 32) by the checksum of `build-plan.md` Phase 1 (valid ones, near misses with another check digit, company, non-profit, landline and case-number shapes), so that no number that passes the checksum is stored (Achia, 2026-11-27, issue #32, "Make them fresh too (Recommended)"); the trivial sequences the detector refuses (such as `000000000`) are written as they are; no real document | issue #32 |
