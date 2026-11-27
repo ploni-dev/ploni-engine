@@ -35,6 +35,21 @@ fill, shaped:
 read_cases:
   R1 a fixture file                                 positives with the spans of their "found"
                                                     slots, negatives with none, in file order
+iban_ok (ISO 13616's check, ISO 7064 MOD 97-10, written apart from ploni/detect/deterministic/iban.py; issue #34):
+  IB1 an IBAN of BANK_NUMBERS                       True; with one digit changed    False
+  IB2 the empty string; four characters; a non-ASCII digit; a space inside; a Hebrew letter    False
+  IB3 iban_ok agrees with the remainder reduced one digit at a time (a second way to the same
+      remainder), over every IBAN of BANK_NUMBERS and its near misses
+with_check:
+  WC1 over 500 stems of the stream: the two check digits are 02 to 98, the result passes iban_ok
+bank_numbers, BANK_NUMBERS (issue #34):
+  BN1 iban: 40, distinct, 23 characters, IL and 21 ASCII digits, iban_ok; iban_near: 20, the
+      first 22 characters of iban[i] and another last digit, each failing iban_ok
+  BN2 iban_lengths: IL and 20, and IL and 22, digits (the check digits among them), each passing
+      iban_ok; iban_foreign: 3, DE and 20 digits, each passing iban_ok
+  BN3 account: 40, distinct, 14 ASCII digits (bank 2, branch 3, account 9), the first not 0
+  BN4 the same seed twice                           equal; another seed: other numbers
+  BN5 fill writes an IBAN into a slot of the paper format's groups of four    the groups, its span
 
 Not applicable: Hebrew axes beyond a Hebrew template (the helper writes digits).
 """
@@ -46,7 +61,7 @@ from pathlib import Path
 import pytest
 
 from tests import invented_numbers as inv
-from tests.invented_numbers import ISRAELI_IDS, israeli_id_checksum_ok
+from tests.invented_numbers import BANK_NUMBERS, ISRAELI_IDS, iban_ok, israeli_id_checksum_ok
 
 FIELDS = ("valid", "near", "zeros", "two_zeros", "cut", "nested", "company", "nonprofit", "landline")
 LENGTHS = {"valid": 60, "near": 30, "zeros": 3, "two_zeros": 1, "cut": 1, "nested": 1, "company": 30, "nonprofit": 30, "landline": 6}
@@ -183,3 +198,79 @@ def test_r1_read_cases(tmp_path: Path) -> None:
         (f"{ISRAELI_IDS.near[1]} ו-{ISRAELI_IDS.valid[1]}", [(12, 21)]),
     ]
     assert negatives == [(f"דרכון {ISRAELI_IDS.valid[2]}", []), ("אין מספר", [])]
+
+
+def remainder_digit_by_digit(iban: str) -> int:
+    """Return the ISO 7064 MOD 97-10 remainder of an IBAN, reduced one digit at a time, apart from iban_ok."""
+    moved = iban[4:] + iban[:4]
+    remainder = 0
+    for ch in moved:
+        for digit in str(ord(ch) - ord("A") + 10) if ch.isalpha() else ch:
+            remainder = (remainder * 10 + int(digit)) % 97
+    return remainder
+
+
+def test_ib1_an_iban_and_one_digit_changed() -> None:
+    iban = BANK_NUMBERS.iban[0]
+    assert iban_ok(iban)
+    assert not iban_ok(iban[:10] + str((int(iban[10]) + 1) % 10) + iban[11:])
+
+
+@pytest.mark.parametrize("which", ["empty", "four characters", "arabic-indic digit", "space inside", "hebrew letter"])
+def test_ib2_these_fail(which: str) -> None:
+    iban = BANK_NUMBERS.iban[1]
+    text = {
+        "empty": "",
+        "four characters": iban[:4],
+        "arabic-indic digit": iban[:-1] + "٣",
+        "space inside": iban[:4] + " " + iban[4:],
+        "hebrew letter": iban[:-1] + "א",
+    }[which]
+    assert not iban_ok(text)
+
+
+def test_ib3_iban_ok_agrees_with_the_digit_by_digit_remainder() -> None:
+    every = BANK_NUMBERS.iban + BANK_NUMBERS.iban_near + BANK_NUMBERS.iban_lengths + BANK_NUMBERS.iban_foreign
+    assert all(iban_ok(iban) is (remainder_digit_by_digit(iban) == 1) for iban in every)
+    assert sum(iban_ok(iban) for iban in every) == len(every) - len(BANK_NUMBERS.iban_near)
+
+
+def test_wc1_with_check() -> None:
+    stream = inv.digits(inv.SEED, "with_check")
+    for _ in range(500):
+        iban = inv.with_check("IL", inv.take(stream, 19))
+        assert 2 <= int(iban[2:4]) <= 98 and iban_ok(iban) and remainder_digit_by_digit(iban) == 1
+
+
+def test_bn1_ibans_and_their_near_misses() -> None:
+    ibans, near = BANK_NUMBERS.iban, BANK_NUMBERS.iban_near
+    assert len(ibans) == 40 and len(set(ibans)) == 40
+    assert all(len(n) == 23 and n[:2] == "IL" and n[2:].isascii() and n[2:].isdigit() and iban_ok(n) for n in ibans)
+    assert len(near) == 20
+    assert all(n[:22] == v[:22] and n[22] != v[22] and not iban_ok(n) for n, v in zip(near, ibans, strict=False))
+
+
+def test_bn2_other_lengths_and_another_country() -> None:
+    assert [len(n) for n in BANK_NUMBERS.iban_lengths] == [22, 24]
+    assert all(n[:2] == "IL" and n[2:].isdigit() and iban_ok(n) for n in BANK_NUMBERS.iban_lengths)
+    assert len(BANK_NUMBERS.iban_foreign) == 3
+    assert all(len(n) == 22 and n[:2] == "DE" and n[2:].isdigit() and iban_ok(n) for n in BANK_NUMBERS.iban_foreign)
+
+
+def test_bn3_accounts() -> None:
+    accounts = BANK_NUMBERS.account
+    assert len(accounts) == 40 and len(set(accounts)) == 40
+    assert all(len(n) == 14 and n.isascii() and n.isdigit() and n[0] != "0" for n in accounts)
+
+
+def test_bn4_the_seed() -> None:
+    assert inv.bank_numbers(inv.SEED) == BANK_NUMBERS
+    other = inv.bank_numbers(inv.SEED + 1)
+    assert set(other.iban).isdisjoint(BANK_NUMBERS.iban) and set(other.account).isdisjoint(BANK_NUMBERS.account)
+
+
+def test_bn5_an_iban_in_a_slot() -> None:
+    iban = BANK_NUMBERS.iban[2]
+    text, spans = inv.fill("חשבון {iban[2]:dddd dddd dddd dddd dddd ddd}.", BANK_NUMBERS)
+    paper = " ".join(iban[i : i + 4] for i in range(0, 23, 4))
+    assert text == f"חשבון {paper}." and spans == [(6, 6 + len(paper))]
