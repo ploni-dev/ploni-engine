@@ -145,7 +145,7 @@ class IsraeliIds:
     with 5. near: 30, near[i] the eight digits of valid[i] and another check digit. zeros: 3
     starting with one 0 (so their last eight, padded, are the same ID). two_zeros: 1 starting
     with two 0s. cut: 1 whose first eight digits, padded, fail the checksum. nested: 1 whose first
-    eight digits, padded, pass it too. company: 6 starting with 51 to 54; nonprofit: 6 starting
+    eight digits, padded, pass it too. company: 30 starting with 51 to 54; nonprofit: 30 starting
     with 58 (build-plan.md Phase 1). landline: 6, a 0, an area code of 0[23489] and seven digits
     (build-plan.md Phase 1, "Israeli phone"). case: one, five digits, a month and a year of
     2015-2025 (NNNNN-MM-YY).
@@ -175,8 +175,8 @@ def israeli_ids(seed: int) -> IsraeliIds:
         two_zeros=invent_ids(digits(seed, "two_zeros"), 1, tuple(f"00{d}" for d in "123456789"), lambda _: True),
         cut=invent_ids(digits(seed, "cut"), 1, tuple(PERSON_FIRST), lambda n: not israeli_id_checksum_ok(n[:-1])),
         nested=invent_ids(digits(seed, "nested"), 1, tuple(PERSON_FIRST), lambda n: israeli_id_checksum_ok(n[:-1])),
-        company=invent_ids(digits(seed, "company"), 6, ("51", "52", "53", "54"), lambda _: True),
-        nonprofit=invent_ids(digits(seed, "nonprofit"), 6, ("58",), lambda _: True),
+        company=invent_ids(digits(seed, "company"), 30, ("51", "52", "53", "54"), lambda _: True),
+        nonprofit=invent_ids(digits(seed, "nonprofit"), 30, ("58",), lambda _: True),
         landline=invent_ids(digits(seed, "landline"), 6, tuple(f"0{d}" for d in "23489"), lambda _: True),
         case=case_number(digits(seed, "case")),
     )
