@@ -22,13 +22,14 @@ for Israel, as the brief of issue #34 gives it; no copy of the standard is in th
 Confidence CONFIDENCE, band "high", needs_review False.
 
 A BANK_ACCOUNT is a match of TRIPLE: the bank's number (1 to 3 digits), the branch's (1 to 3)
-and the account's (4 to 13 digits, with at most one separator but the plain space between any
-two), in that order, and between each two either the words that name what follows (סניף before
+and the account's (4 to 13 digits, with at most one separator but the plain space and the dot
+between any two), in that order, and between each two either the words that name what follows (סניף before
 the branch, after the bank's name in brackets when one stands there; חשבון, a possessive form of
 it such as חשבונו, ח-ן or ח"ן before the account; with מס' or מספר, a proclitic, commas, colons
 and brackets around them), or one separator, with a plain space on either side or none. On its
 left no Latin letter, no digit, nor a digit and a separator; on its right no digit, nor a
-separator but the plain space and a digit. `is_bank_account` accepts it when a word stands
+separator but the plain space and a digit, nor a comma and a digit, nor a currency (CURRENCY:
+₪, ש"ח, NIS, שקל) after spaces: so an amount's decimal part or currency refuses it. `is_bank_account` accepts it when a word stands
 between two of its numbers, or, with none, when a bank label stands before it
 (`bank_label_before`: חשבון, ח-ן, ח"ן, בנק or סניף, with no label of another number beside
 it), its bank has BANK_DIGITS digits and its branch BRANCH_DIGITS, and it is not written in a
@@ -128,9 +129,16 @@ _NAME = rf"{_NAME_WORD}(?:\s+{_NAME_WORD}){{0,{BANK_NAMES - 1}}}"
 _BRANCH_WORD = rf"{_GLUE}(?:\({_NAME}\))?{_GLUE}{_NO}{_BEFORE}(?:{'|'.join(BRANCH_WORDS)}){_AFTER}{_GLUE}{_NO}"
 _ACCOUNT_WORD = rf"{_GLUE}{_NO}{_BEFORE}(?:{'|'.join(ACCOUNT_WORDS)}){_AFTER}{_GLUE}{_NO}"
 _GAP = rf" ?{_SEP} ?"
-# An account's digits, and what may not follow them.
-_ACCOUNT = rf"[0-9](?:{_TIGHT}?[0-9]){{{ACCOUNT_SHORTEST - 1},{ACCOUNT_LONGEST - 1}}}"
-_ACCOUNT_END = rf"(?![0-9])(?!{_TIGHT}[0-9])"
+# An account's digits, with a separator but the plain space and the dot between two of them: a dot
+# and digits after them are an amount's decimal part (the review of #34 at 28b6032, finding 7).
+_ACCOUNT_SEP = "[" + re.escape(SEPARATORS.replace(" ", "").replace(".", "")) + "]"
+_ACCOUNT = rf"[0-9](?:{_ACCOUNT_SEP}?[0-9]){{{ACCOUNT_SHORTEST - 1},{ACCOUNT_LONGEST - 1}}}"
+# The currency of an amount, after its number: the shekel's sign, ש"ח (any gershayim, or a dot),
+# NIS, שקל (finding 7).
+CURRENCY = (r"₪", rf"ש{_GERSHAYIM}ח", r"ש\.ח", r"NIS", r"שקל")
+# What may not follow an account: a digit; a separator but the plain space and a digit; a comma
+# and a digit (a decimal part); spaces and a currency.
+_ACCOUNT_END = rf"(?![0-9])(?!{_TIGHT}[0-9])(?!,[0-9])(?!\s*(?:{'|'.join(CURRENCY)}))"
 TRIPLE = re.compile(
     rf"(?<![0-9A-Za-z])(?<![0-9]{_SEP})(?P<bank>[0-9]{{1,{BANK_LONGEST}}})(?:(?P<branch_word>{_BRANCH_WORD})|{_GAP})"
     rf"(?P<branch>[0-9]{{1,{BRANCH_LONGEST}}})(?:(?P<account_word>{_ACCOUNT_WORD})|{_GAP})(?P<account>{_ACCOUNT}){_ACCOUNT_END}"
