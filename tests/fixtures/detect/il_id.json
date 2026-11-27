@@ -477,6 +477,18 @@
    "found": [
     0
    ]
+  },
+  {
+   "text": "ת.ז. {landline[0]:dd-ddd-dddd} של המבקש",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מספר זהות: {landline[1]:dd ddd dddd}",
+   "found": [
+    0
+   ]
   }
  ],
  "negatives": [
@@ -734,6 +746,9 @@
   },
   {
    "text": "המזכירות, {landline[3]:dd ddd-dddd}"
+  },
+  {
+   "text": "ת.ז. {landline[2]:dd-ddddddd}"
   }
  ]
 }
