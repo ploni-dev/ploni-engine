@@ -60,6 +60,9 @@ The detector (`IsraeliId`):
   A5  trivial numbers                                      nothing
   A6  a landline shape and a case-number shape that pass the checksum    nothing
   A7  Arabic-Indic digits                                  nothing
+  A8  CANDIDATE itself: nine digits match it whole; ten, plain and with a hyphen, do not
+      (added after the code, for seven mutants that survived Cosmic Ray: the checksum refuses
+      more than nine digits too, so the detector's output alone cannot tell them apart)
 
 label_before (the label nearest before a number, on its line, within LABEL_WINDOW characters,
 with no digit between; build-plan.md Phase 1: company and non-profit numbers are their own
@@ -274,6 +277,12 @@ def test_a6_other_shapes(text: str) -> None:
 
 def test_a7_arabic_indic_digits() -> None:
     assert found("ת.ז. " + "".join(chr(0x0660 + int(d)) for d in VALID)) == []
+
+
+@pytest.mark.parametrize("number", [f"{VALID}0", f"{VALID[:8]}-{VALID[8]}0"], ids=["ten digits", "ten with a hyphen"])
+def test_a8_a_candidate_is_at_most_nine_digits(number: str) -> None:
+    assert israeli_id.CANDIDATE.fullmatch(VALID)
+    assert israeli_id.CANDIDATE.fullmatch(number) is None
 
 
 def label(before: str) -> str | None:
