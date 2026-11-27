@@ -179,9 +179,9 @@ def is_bank_account(match: re.Match[str], labelled: bool) -> bool:
 class Iban:
     """The detector of IBANs and bank accounts, IBAN and BANK_ACCOUNT.
 
-    Why: the third deterministic detector of Phase 1 (issue #34), registered in
-    eval.detectors.DETECTORS after the company number detector, so the held-out batch scores it
-    and the T0 suite checks it.
+    Why: the fourth deterministic detector of Phase 1 (issue #34), registered in
+    eval.detectors.DETECTORS last, after the credit card detector, so the held-out batch scores
+    it and the T0 suite checks it.
 
     Contract: a Detector; `detect` returns the IBANs and the bank accounts, as the module
     docstring says.
