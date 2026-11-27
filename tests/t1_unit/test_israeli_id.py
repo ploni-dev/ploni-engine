@@ -71,6 +71,9 @@ type, and forms write the label of a number before it):
   L3 no label                                              None
   L4 two labels: the nearer one counts, either way round
   L5 a label further than LABEL_WINDOW before the number  None
+  L5b the window's edge: a label that starts exactly LABEL_WINDOW characters before the number
+      counts, one that starts a character earlier does not; far into a text as at its start
+      (added after the code, for three mutants that survived Cosmic Ray)
   L6 a label on the line before                            None
   L7 a digit between the label and the number              None
   L8 a proclitic glued to a label (ות.ז., לת"ז, ובדרכון)   its kind
@@ -310,6 +313,16 @@ def test_l4_the_nearer_label_counts(before: str, kind: str) -> None:
 def test_l5_a_label_too_far_before() -> None:
     assert label("ת.ז. " + "א" * israeli_id.LABEL_WINDOW + " ") is None
     assert label("ת.ז. " + "א" * (israeli_id.LABEL_WINDOW - 10) + " ") == "id"
+
+
+@pytest.mark.parametrize("lead", ["", "שָׁלוֹם רב, המבקש פלוני אלמוני; "], ids=["at the start", "far into the text"])
+def test_l5b_the_windows_edge(lead: str) -> None:
+    # "ת.ז." is four characters; spaces fill the rest of the window after it.
+    exactly = lead + "ת.ז." + " " * (israeli_id.LABEL_WINDOW - 4)
+    one_more = lead + "ת.ז." + " " * (israeli_id.LABEL_WINDOW - 3)
+    assert israeli_id.LABEL_WINDOW == 20
+    assert label(exactly) == "id"
+    assert label(one_more) is None
 
 
 def test_l6_a_label_on_the_line_before() -> None:
