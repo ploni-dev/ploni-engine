@@ -93,8 +93,40 @@ The detector, BANK_ACCOUNT:
       one, two and three words, with gershayim (בע"מ)    one BANK_ACCOUNT, from the branch's
       first digit to the account's last (the batch's rule starts at the bank's number; with
       none, at the first number) (finding 3)
-  NA5 by name: a name of four words; no account word before the account; no account; no
-      bank word, a branch and an account alone (#315)            nothing
+  NA5 by name: no account word before the account; no account    nothing (a name of four
+      words, and no bank word, are found since issue #315: EA9)
+
+is_lone_account (the decision on a match of ALONE, issue #315):
+  AD1 a branch before the account word: under no label, with a number after    True
+  AD2 the account alone: labelled, nothing after, one group or two    True
+  AD3 the account alone, not labelled                            False
+  AD4 the account alone, another number after it                 False
+  AD5 the account alone in three groups (a triple's shape, TRIPLE's to judge)    False
+  AD6 the account alone in a landline's shape, 0X-XXXXXXX         False
+
+The detector, BANK_ACCOUNT with no bank's number (issue #315, Achia, 2026-11-27, "Yes, with the
+word (Recommended)": found when חשבון or ח-ן stands right before it, with or without a branch,
+needs_review True):
+  EA8 an account alone right after each spelling of the account word: חשבון, its possessives,
+      ח-ן with a hyphen, a maqaf or an en dash, ח"ן with ", ״ or ''; with a proclitic, a colon,
+      מס' or מספר, in brackets; an account of four and of thirteen digits, in two groups (a
+      hyphen, a slash), an ID's nine digits after חשבון          one BANK_ACCOUNT, the account
+                                                                 only, the word out
+  EA9 a branch and an account: סניף B חשבון A, with commas, colons, מס', proclitics, ח-ן and
+      ח"ן, a branch of one digit; after a bank's name of four words; with no bank word
+                                                                 one, from the branch's first
+                                                                 digit to the account's last
+  EA10 the fields: type BANK_ACCOUNT, band "medium", CONFIDENCE_PATTERN, needs_review True with
+      its review_reason
+  NA7 the account word not right before: a word between (חשבון בנק, חשבון הבנק, חשבון מיום);
+      the plural חשבונות; חשבונית; an account of three digits and of fourteen; an amount (ש"ח
+      with either gershayim, ₪, NIS, שקלים, a decimal part with a dot or a comma, thousands
+      with commas, "הופקדו לחשבון"); another number after it by a plain space; a landline
+      0X-XXXXXXX; a mobile and a date in three groups; a case number NNNNN-MM-YY; a grouped
+      triple with a bank of one digit; another number's label beside the word (ת.ז., טלפון)
+                                                                 nothing
+  EA11 an account found once: a triple after חשבון, a triple with words, a branch after a
+      bank's name: one detection each                             (EA1, EA2, EA6, kept)
 Both:
   EB1 an IBAN and a triple in one text                           both, in the order of the text
   B1  the empty text; a text with no digit                       nothing
@@ -115,7 +147,11 @@ each item, the first and the last slot it covers, and "types" the type of each, 
       IBAN with en dashes passed the old scan); a test holds the scan to each gap.
   F4  the known misses: bank accounts the detector does not find on purpose, each naming the
       limit of the module's Known limits it falls under, neither a positive nor a negative; each
-      is printed with what the detector gives on it (the review of #34 at 28b6032, finding 2)
+      is printed with what the detector gives on it (the review of #34 at 28b6032, finding 2).
+      Since issue #315 two of #34's three, the account alone after חשבון and the account after
+      חשבון with the bank named after the branch, are counted positives; the triple with a bank
+      of one digit stays, and two misses of #315 join it: a word between חשבון and the account
+      (חשבון בנק), and the second account of a list after one word
 
 Hebrew axes: gershayim as ", ״ and two ASCII apostrophes (ח"ן); geresh as ' and ׳ (מס'); a
 proclitic glued to a label and to the words between the numbers; the maqaf as a separator;
@@ -437,10 +473,8 @@ def test_ea6_the_bank_by_its_name(form: str) -> None:
 
 
 NOT_BY_NAME = {
-    "a name of four words": f"בנק אחד שתיים שלוש ארבע סניף {BRANCH} חשבון {NUMBER}",
     "no account word": f"בנק לאומי סניף {BRANCH} {NUMBER}",
     "no account": f"בנק לאומי סניף {BRANCH} ברחוב הרצל",
-    "no bank word": f"סניף {BRANCH} חשבון {NUMBER}",
 }
 
 
@@ -453,6 +487,137 @@ def test_na5_not_by_name(case: str) -> None:
 def test_na4_four_digits_with_words_between(which: str) -> None:
     bank, branch = (ACCOUNT[:4], BRANCH) if which == "bank" else (BANK, ACCOUNT[:4])
     assert found(f"בנק {bank} סניף {branch} חשבון {NUMBER}") == []
+
+
+def decide_alone(text: str, labelled: bool, beside: bool) -> bool:
+    """Return the decision on the first match of ALONE in `text`."""
+    match = iban.ALONE.search(text)
+    assert match is not None
+    return iban.is_lone_account(match, labelled, beside)
+
+
+LANDLINE = ISRAELI_IDS.landline[0]
+ALONE_DECISIONS = {
+    "ad1 a branch, no label, a number after": (f"סניף {BRANCH} חשבון {NUMBER}", False, True, True),
+    "ad2 alone, one group": (f"חשבון {NUMBER}", True, False, True),
+    "ad2 alone, two groups": (f"חשבון {BRANCH}-{NUMBER}", True, False, True),
+    "ad3 alone, not labelled": (f"חשבון {NUMBER}", False, False, False),
+    "ad4 alone, a number after": (f"חשבון {NUMBER}", True, True, False),
+    "ad5 alone, three groups": (f"חשבון {BRANCH}-{NUMBER[:3]}-{NUMBER[3:]}", True, False, False),
+    "ad6 alone, a landline's shape": (f"חשבון {LANDLINE[:2]}-{LANDLINE[2:]}", True, False, False),
+}
+
+
+@pytest.mark.parametrize("case", ALONE_DECISIONS)
+def test_ad_the_decision_on_an_account_alone(case: str) -> None:
+    text, labelled, beside, expected = ALONE_DECISIONS[case]
+    assert decide_alone(text, labelled, beside) is expected
+
+
+ACCOUNT_WORDS = {
+    "חשבון": "חשבון ",
+    "a colon": "חשבון: ",
+    "מס'": "חשבון מס' ",
+    "מס׳": "חשבון מס׳ ",
+    "מספר before": "מספר חשבון ",
+    "מס' before, a colon": "מס' חשבון: ",
+    "a proclitic ב": "בחשבון ",
+    "a proclitic ל": "לחשבון ",
+    "a proclitic ה": "בעל החשבון ",
+    "a possessive": "חשבונו ",
+    "a possessive and proclitics": "ובחשבונה ",
+    "ח-ן": "ח-ן ",
+    "ח־ן, a maqaf": "ח־ן ",
+    "ח–ן, an en dash": "ח–ן ",
+    'ח"ן': 'ח"ן ',
+    "ח״ן": "ח״ן ",
+    "ח''ן": "ח''ן ",
+    "in brackets": "(חשבון ",
+}
+
+
+@pytest.mark.parametrize("word", ACCOUNT_WORDS)
+def test_ea8_an_account_alone_after_each_word(word: str) -> None:
+    text = f"הכסף הועבר {ACCOUNT_WORDS[word]}{NUMBER} אתמול."
+    assert found(text) == only(text, NUMBER, "BANK_ACCOUNT")
+
+
+ALONE_FORMS = {
+    "four digits": NUMBER[:4],
+    "thirteen digits": ACCOUNT[1:],
+    "two groups, a hyphen": f"{BRANCH}-{NUMBER}",
+    "two groups, a slash": f"{NUMBER}/{ACCOUNT[11:13]}",
+    "an id's nine digits": ISRAELI_IDS.valid[0],
+}
+
+
+@pytest.mark.parametrize("form", ALONE_FORMS)
+def test_ea8_each_form_of_an_account_alone(form: str) -> None:
+    text = f"נא להעביר לחשבון {ALONE_FORMS[form]}, כמוסכם."
+    assert found(text) == only(text, ALONE_FORMS[form], "BANK_ACCOUNT")
+
+
+BRANCHED = {
+    "plain": f"סניף {BRANCH} חשבון {NUMBER}",
+    "commas and colons": f"סניף: {BRANCH}, חשבון: {NUMBER}",
+    "מס' and proclitics": f"בסניף מס' {BRANCH} בחשבון מס' {NUMBER}",
+    "ח-ן": f"סניף {BRANCH} ח-ן {NUMBER}",
+    'ח"ן': f'סניף {BRANCH}, ח"ן {NUMBER}',
+    "a branch of one digit": f"סניף {BRANCH[0]} חשבון {NUMBER}",
+    "after a bank's name of four words": f"בנק אחד שתיים שלוש ארבע סניף {BRANCH} חשבון {NUMBER}",
+    "after another bank word": f"בבנק סניף {BRANCH} חשבונו {NUMBER}",
+}
+
+
+@pytest.mark.parametrize("form", BRANCHED)
+def test_ea9_a_branch_and_an_account(form: str) -> None:
+    text = f"{BRANCHED[form]} לטובת התובע."
+    start = text.index(BRANCH[0] if form == "a branch of one digit" else BRANCH)
+    end = text.index(NUMBER, start) + len(NUMBER)
+    assert found(text) == [(start, end, "BANK_ACCOUNT")]
+
+
+def test_ea10_the_fields_of_an_account_alone() -> None:
+    proj = projection(f"ח-ן {NUMBER}", part="footnotes")
+    [detection] = Iban().detect(proj, CTX)
+    assert (detection.span, detection.surface, detection.entity_type, detection.part) == (Span(4, 4 + len(NUMBER)), NUMBER, "BANK_ACCOUNT", "footnotes")
+    assert (detection.confidence, detection.band, detection.base_span, detection.detection_id) == (iban.CONFIDENCE_PATTERN, "medium", None, "")
+    assert detection.needs_review is True and detection.review_reason == iban.REVIEW_REASON
+
+
+CASE = ISRAELI_IDS.case
+NOT_ALONE = {
+    "a word between, בנק": f"חשבון בנק {NUMBER}",
+    "a word between, הבנק": f"חשבון הבנק {NUMBER}",
+    "a word between, מיום": f"חשבון מיום {NUMBER}",
+    "the plural": f"חשבונות {NUMBER}",
+    "an invoice": f"חשבונית {NUMBER}",
+    "three digits": f"חשבון {NUMBER[:3]} ",
+    "fourteen digits": f"חשבון {ACCOUNT}",
+    "shekels": f'הופקדו לחשבון {NUMBER} ש"ח',
+    "shekels, the Hebrew gershayim": f"הופקדו לחשבון {NUMBER} ש״ח",
+    "the shekel sign": f"לחשבון {NUMBER} ₪",
+    "NIS": f"לחשבון {NUMBER} NIS",
+    "שקלים": f"לחשבון {NUMBER} שקלים",
+    "a decimal part with a dot": f"יתרה בחשבון {NUMBER}.50",
+    "a decimal part with a comma": f"יתרה בחשבון {NUMBER},50",
+    "thousands with commas": 'הופקדו לחשבון 12,345 ש"ח',
+    "thousands with commas, no currency": "הופקדו לחשבון 1,234,567",
+    "a number after by a plain space": f"חשבון {NUMBER} 3 עותקים",
+    "an amount grouped by spaces": f"יתרה בחשבון {NUMBER[:4]} {NUMBER[4:]}",
+    "a landline": f"חשבון {LANDLINE[:2]}-{LANDLINE[2:]}",
+    "a mobile in three groups": "חשבון 052-123-4567",
+    "a date in three groups": "חשבון 12/03/2020",
+    "a case number": f"חשבון {CASE[:5]}-{CASE[5:7]}-{CASE[7:]}",
+    "a triple with a bank of one digit": f"חשבון {BANK[0]}-{BRANCH}-{NUMBER}",
+    "an id label beside": f"ת.ז. בעל החשבון {NUMBER}",
+    "a phone label beside": f"טלפון החשבון {NUMBER}",
+}
+
+
+@pytest.mark.parametrize("case", NOT_ALONE)
+def test_na7_not_an_account_alone(case: str) -> None:
+    assert found(NOT_ALONE[case]) == []
 
 
 SECOND = BANK_NUMBERS.account[1]

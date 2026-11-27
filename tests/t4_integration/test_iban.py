@@ -15,6 +15,9 @@ Matrix:
       detector (issue #35), and requires no morphology
   M4  over the four fixtures (il_id.json, company_number.json, credit_card.json, iban.json),
       no detection of this detector shares a character with one of another detector
+  M5  the overlap of Known limits (issue #315): nine digits that pass the ID check right after
+      ח-ן are an account alone, and the ID detector finds them too, the same span typed IL_ID;
+      after חשבון only the account is found
 """
 
 import json
@@ -73,3 +76,11 @@ def test_m4_no_span_shared_with_another_detector() -> None:
         ours = [(start, end) for start, end, kind in found if kind in OURS]
         theirs = [(start, end) for start, end, kind in found if kind not in OURS]
         assert not any(a < d and c < b for a, b in ours for c, d in theirs)
+
+
+def test_m5_an_id_after_the_abbreviation_is_found_twice() -> None:
+    number = ISRAELI_IDS.valid[0]
+    start = len("ח-ן ")
+    assert detectors.detect_all(f"ח-ן {number}") == [(start, start + len(number), "IL_ID"), (start, start + len(number), "BANK_ACCOUNT")]
+    start = len("חשבון ")
+    assert detectors.detect_all(f"חשבון {number}") == [(start, start + len(number), "BANK_ACCOUNT")]
