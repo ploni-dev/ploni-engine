@@ -71,9 +71,10 @@ PLACES = [
     ("company_number.json", 67, 5, 16, False),
     ("credit_card.json", 103, 6, 16, False),
     ("credit_card.json", 103, 22, 32, False),
-    ("iban.json", 59, 6, 18, False),
-    ("iban.json", 60, 7, 18, False),
-    ("iban.json", 77, 17, 28, False),
+    # The same three texts since issue #315, whose 16 new positives come before the negatives.
+    ("iban.json", 75, 6, 18, False),
+    ("iban.json", 76, 7, 18, False),
+    ("iban.json", 93, 17, 28, False),
 ]
 
 

@@ -135,6 +135,15 @@ needs_review True):
       (BANK_NAMES) is found from the bank's first digit; of four, only the branch and the
       account, from the branch (added after the code, for the mutants that survived on
       BANK_NAMES once NA5's name of four words was found by EA9)
+  NA8 a phone after the account word, which the phone detector takes there (#36, merged
+      before this PR): a mobile in two groups and plain after חשבון, a VoIP number after ח-ן,
+      a 1-800 number after חשבון מס', a mobile from abroad as 972 and no plus, a landline of
+      nine digits after ח-ן and after בחשבונו (the phone detector reads no label there), a
+      branch and a mobile                                         nothing; `phone_at` True
+  EA14 a landline of nine digits plain after חשבון and חשבון מס', which the phone detector
+      refuses under another number's label                       one BANK_ACCOUNT; `phone_at`
+                                                                 False
+  PA  `phone_at` at an account of six digits                     False
 Both:
   EB1 an IBAN and a triple in one text                           both, in the order of the text
   B1  the empty text; a text with no digit                       nothing
@@ -179,7 +188,7 @@ from ploni.detect.deterministic import iban, israeli_id
 from ploni.detect.deterministic.iban import TRIPLE, Iban, bank_label_before, iban_ok, is_bank_account
 from ploni.types import Span
 from tests.detector_contract import projection
-from tests.invented_numbers import BANK_NUMBERS, ISRAELI_IDS, combined, fill, with_check
+from tests.invented_numbers import BANK_NUMBERS, ISRAELI_IDS, PHONES, combined, fill, with_check
 from tests.invented_numbers import iban_remainder as remainder
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "detect" / "iban.json"
@@ -629,6 +638,39 @@ NOT_ALONE = {
 @pytest.mark.parametrize("case", NOT_ALONE)
 def test_na7_not_an_account_alone(case: str) -> None:
     assert found(NOT_ALONE[case]) == []
+
+
+MOBILE, LINE = PHONES.mobile[0], PHONES.landline[0]
+PHONE_AFTER_WORD = {
+    "a mobile in two groups after חשבון": f"חשבון {MOBILE[:3]}-{MOBILE[3:]}",
+    "a mobile plain after חשבון": f"חשבון {MOBILE}",
+    "a VoIP number after ח-ן": f"ח-ן {PHONES.voip[0]}",
+    "a service number after חשבון מס'": f"חשבון מס' {PHONES.service[0]}",
+    "a mobile from abroad, 972 with no plus": f"חשבון 972{MOBILE[1:]}",
+    "a landline plain after ח-ן": f"ח-ן {LINE}",
+    "a landline plain after בחשבונו": f"בחשבונו {LINE}",
+    "a branch and a mobile": f"סניף {BRANCH} חשבון {MOBILE}",
+}
+
+
+@pytest.mark.parametrize("case", PHONE_AFTER_WORD)
+def test_na8_a_phone_after_the_account_word_stays_a_phone(case: str) -> None:
+    text = PHONE_AFTER_WORD[case]
+    assert found(text) == []
+    assert iban.phone_at(text, text.rindex(text.split()[-1]))
+
+
+@pytest.mark.parametrize("before", ["חשבון ", "חשבון מס' "])
+def test_ea14_a_landline_of_nine_digits_under_the_account_word_is_an_account(before: str) -> None:
+    # The phone detector refuses a number of nine digits or fewer under another number's label.
+    text = f"{before}{LINE}"
+    assert not iban.phone_at(text, len(before))
+    assert found(text) == only(text, LINE, "BANK_ACCOUNT")
+
+
+def test_pa_no_phone_at_an_account() -> None:
+    text = f"חשבון {NUMBER}"
+    assert not iban.phone_at(text, len("חשבון "))
 
 
 SECOND = BANK_NUMBERS.account[1]

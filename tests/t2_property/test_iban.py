@@ -84,10 +84,11 @@ BY_NAME = (
     lambda n: (f"בנק לאומי, סניף {n[2:5]}, חשבון {n[5:11]}", f"{n[2:5]}, חשבון {n[5:11]}"),
     lambda n: (f"בבנק הפועלים בסניף {n[2:5]} בחשבונו {n[5:13]}", f"{n[2:5]} בחשבונו {n[5:13]}"),
 )
-# Issue #315: an account with no bank's number, right after an account word.
+# Issue #315: an account with no bank's number, right after an account word. Nine digits start
+# with n[0], never 0, so that none is a landline, which the phone detector takes (#36).
 ALONE = (
     lambda n: n[5:11],
-    lambda n: n[5:],
+    lambda n: n[0] + n[6:],
     lambda n: n[:4],
     lambda n: f"{n[2:5]}-{n[5:11]}",
 )

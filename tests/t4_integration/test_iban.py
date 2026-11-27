@@ -18,6 +18,10 @@ Matrix:
   M5  the overlap of Known limits (issue #315): nine digits that pass the ID check right after
       ח-ן are an account alone, and the ID detector finds them too, the same span typed IL_ID;
       after חשבון only the account is found
+  M6  a phone right after the account word that the phone detector takes (#36): a mobile, a
+      mobile in two groups, a VoIP number, a landline after ח"ן, where the phone detector reads
+      no label: PHONE only, no BANK_ACCOUNT on it; a landline of nine digits after חשבון, which
+      the phone detector refuses under that label: BANK_ACCOUNT only
 """
 
 import json
@@ -31,7 +35,7 @@ from ploni.detect.deterministic.iban import Iban
 from ploni.detect.deterministic.israeli_id import IsraeliId
 from ploni.detect.deterministic.phone import Phone
 from tests.detector_contract import breaks, projection
-from tests.invented_numbers import BANK_NUMBERS, CARDS, ISRAELI_IDS, combined, fill, read_cases
+from tests.invented_numbers import BANK_NUMBERS, CARDS, ISRAELI_IDS, PHONES, combined, fill, israeli_id_checksum_ok, read_cases
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "detect"
 FIXTURE = FIXTURES / "iban.json"
@@ -83,5 +87,24 @@ def test_m5_an_id_after_the_abbreviation_is_found_twice() -> None:
     number = ISRAELI_IDS.valid[0]
     start = len("ח-ן ")
     assert detectors.detect_all(f"ח-ן {number}") == [(start, start + len(number), "IL_ID"), (start, start + len(number), "BANK_ACCOUNT")]
+    start = len("חשבון ")
+    assert detectors.detect_all(f"חשבון {number}") == [(start, start + len(number), "BANK_ACCOUNT")]
+
+
+# A landline that fails the ID check, so that the ID detector, which reads no label in ח"ן, does
+# not take it too (that overlap is M5's).
+LANDLINE = next(number for number in PHONES.landline if not israeli_id_checksum_ok(number))
+PHONE_AFTER_WORD = {
+    "a mobile after חשבון": ("חשבון ", PHONES.mobile[1]),
+    "a mobile in two groups after ח-ן": ("ח-ן ", f"{PHONES.mobile[2][:3]}-{PHONES.mobile[2][3:]}"),
+    "a VoIP number after בחשבונו": ("בחשבונו ", PHONES.voip[1]),
+    "a landline after ח\"ן": ('ח"ן ', LANDLINE),
+}
+
+
+def test_m6_a_phone_after_the_account_word_is_a_phone_only() -> None:
+    for before, number in PHONE_AFTER_WORD.values():
+        assert detectors.detect_all(f"{before}{number}") == [(len(before), len(before) + len(number), "PHONE")]
+    number = LANDLINE
     start = len("חשבון ")
     assert detectors.detect_all(f"חשבון {number}") == [(start, start + len(number), "BANK_ACCOUNT")]
