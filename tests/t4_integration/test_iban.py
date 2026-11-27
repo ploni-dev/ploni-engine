@@ -1,0 +1,75 @@
+"""Module suite for ploni/detect/deterministic/iban.py: the detector as the pipeline and the batch call it.
+
+Why: `CLAUDE.md`, Tests: every module gets a suite over its public surface. The unit matrix calls
+the detector on one text at a time; this runs it as it is registered, through
+`eval.detectors.detect_all`, the callable the held-out scorer and the score check use, beside the
+Israeli ID and the company number detectors, and through the conformance check of the T0 suite,
+over every text of its fixture file.
+
+Matrix:
+  M1  every fixture text through detect_all: the places typed IBAN or BANK_ACCOUNT are the
+      fixture's, with the fixture's types, in the order of the text
+  M2  every fixture text keeps the Detector contract (tests/detector_contract.py), as a header
+      part too
+  M3  the detector is registered in eval.detectors.DETECTORS, after the company number
+      detector, and requires no morphology
+  M4  over the three fixtures (il_id.json, company_number.json, iban.json), no detection of
+      this detector shares a character with one of the ID or the company number detector
+"""
+
+import json
+from pathlib import Path
+from types import SimpleNamespace
+
+from eval import detectors
+from ploni.detect.base import DetectContext
+from ploni.detect.deterministic.company_number import CompanyNumber
+from ploni.detect.deterministic.iban import Iban
+from ploni.detect.deterministic.israeli_id import IsraeliId
+from tests.detector_contract import breaks, projection
+from tests.invented_numbers import BANK_NUMBERS, ISRAELI_IDS, fill, read_cases
+
+FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "detect"
+FIXTURE = FIXTURES / "iban.json"
+NUMBERS = SimpleNamespace(**vars(BANK_NUMBERS), **vars(ISRAELI_IDS))
+TYPE = {"iban": "IBAN", "bank": "BANK_ACCOUNT"}
+OURS = frozenset(TYPE.values())
+
+
+def texts() -> list[tuple[str, list[tuple[int, int, str]]]]:
+    """Read every fixture text, its numbers filled in, with its expected places and types, in the order of the text."""
+    data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    read = []
+    for case in data["positives"]:
+        text, spans = fill(case["text"], NUMBERS)
+        items = [(spans[first][0], spans[last][1], TYPE[kind]) for (first, last), kind in zip(case["found"], case["types"], strict=True)]
+        read.append((text, sorted(items)))
+    return read + [(fill(case["text"], NUMBERS)[0], []) for case in data["negatives"]]
+
+
+def test_m1_through_detect_all() -> None:
+    for text, expected in texts():
+        assert [each for each in detectors.detect_all(text) if each[2] in OURS] == expected
+
+
+def test_m2_the_contract_over_the_fixture() -> None:
+    for text, _ in texts():
+        for part in ("body", "header1"):
+            assert breaks(Iban(), projection(text, part), DetectContext()) == []
+
+
+def test_m3_registered_and_needs_no_morphology() -> None:
+    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, Iban]
+    assert Iban.requires_morph is False and Iban.produces == OURS
+
+
+def test_m4_no_span_shared_with_the_id_or_the_company_detector() -> None:
+    every = [text for text, _ in texts()]
+    for name in ("il_id.json", "company_number.json"):
+        positives, negatives = read_cases(FIXTURES / name, ISRAELI_IDS)
+        every += [text for text, _ in positives + negatives]
+    for text in every:
+        found = detectors.detect_all(text)
+        ours = [(start, end) for start, end, kind in found if kind in OURS]
+        theirs = [(start, end) for start, end, kind in found if kind not in OURS]
+        assert not any(a < d and c < b for a, b in ours for c, d in theirs)

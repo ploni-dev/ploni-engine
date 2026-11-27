@@ -13,18 +13,24 @@ Matrix:
   M2  every fixture text keeps the Detector contract (tests/detector_contract.py), as a header
       part too
   M3  the detector is registered in eval.detectors.DETECTORS, first, and requires no morphology
+      (then the company number detector, issue #33, and the IBAN and bank account detector,
+      issue #34)
   M4  the other detections detect_all gives on the fixture are exactly its company and
       non-profit slots, each typed as its list says, seven in all (the review of #33 at
-      4d6e477, finding 4), so that M1's filter leaves nothing unjudged
+      4d6e477, finding 4), and, since issue #34, the IBAN the fixture writes as a literal in
+      the paper format (IL, then groups of four digits and one of three, with spaces), one in
+      all, typed IBAN, so that M1's filter leaves nothing unjudged
 """
 
 import json
+import re
 import string
 from pathlib import Path
 
 from eval import detectors
 from ploni.detect.base import DetectContext
 from ploni.detect.deterministic.company_number import CompanyNumber
+from ploni.detect.deterministic.iban import Iban
 from ploni.detect.deterministic.israeli_id import IsraeliId
 from tests.detector_contract import breaks, projection
 from tests.invented_numbers import ISRAELI_IDS, fill, read_cases
@@ -53,8 +59,17 @@ def test_m2_the_contract_over_the_fixture() -> None:
 
 
 def test_m3_registered_and_needs_no_morphology() -> None:
-    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber]
+    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, Iban]
     assert IsraeliId.requires_morph is False and IsraeliId.produces == frozenset({"IL_ID"})
+
+
+# The IBAN the fixture writes as a literal, in the paper format (issue #34).
+IBAN_LITERAL = re.compile(r"IL[0-9]{2}(?: [0-9]{4}){4} [0-9]{3}")
+
+
+def iban_literals(text: str) -> list[tuple[int, int, str]]:
+    """Return the places of the IBANs a text writes as literals, typed IBAN."""
+    return [(match.start(), match.end(), "IBAN") for match in IBAN_LITERAL.finditer(text)]
 
 
 def registry_slots(template: str) -> list[tuple[int, int, str]]:
@@ -67,10 +82,11 @@ def registry_slots(template: str) -> list[tuple[int, int, str]]:
 def test_m4_the_other_detections_are_the_registry_slots() -> None:
     data = json.loads(FIXTURE.read_text(encoding="utf-8"))
     templates = [case["text"] for case in data["positives"] + data["negatives"]]
-    seen = 0
+    seen = ibans = 0
     for template in templates:
         text, _ = fill(template, ISRAELI_IDS)
         others = [each for each in detectors.detect_all(text) if each[2] != "IL_ID"]
-        assert others == registry_slots(template)
-        seen += len(others)
-    assert seen == 7
+        assert others == registry_slots(template) + iban_literals(text)
+        seen += len(registry_slots(template))
+        ibans += len(iban_literals(text))
+    assert seen == 7 and ibans == 1

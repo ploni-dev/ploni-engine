@@ -9,7 +9,8 @@ Test matrix:
 
 Equivalence classes:
   EC1  the detectors of DETECTORS: the Israeli ID detector, then the company number detector
-       (issue #33)                                   their detections, by default, in that order;
+       (issue #33), then the IBAN and bank account detector (issue #34)
+                                                     their detections, by default, in that order;
                                                      the placeholder number 123456782 is not one
   EC2  one detector given                            its detections as (start, end, type), in its order
   EC3  two detectors given                           the first one's, then the second one's
@@ -34,7 +35,7 @@ from eval import detectors
 from ploni.detect.base import DetectContext, Detector
 from ploni.types import Anchor, Detection, Span, TextProjection
 from tests.detector_contract import Digits
-from tests.invented_numbers import ISRAELI_IDS
+from tests.invented_numbers import BANK_NUMBERS, ISRAELI_IDS
 
 
 class Seen:
@@ -72,12 +73,14 @@ TEXT = "שָׁלוֹם, ת.ז. 123456782 ו-‏55‎"
 
 
 def test_ec1_the_detectors_of_ploni() -> None:
-    assert [type(each).__name__ for each in detectors.DETECTORS] == ["IsraeliId", "CompanyNumber"]
+    assert [type(each).__name__ for each in detectors.DETECTORS] == ["IsraeliId", "CompanyNumber", "Iban"]
     assert detectors.detect_all(TEXT) == []
     text = "ת.ז. " + ISRAELI_IDS.valid[0]
     assert detectors.detect_all(text) == [(5, 14, "IL_ID")]
     text = f"ח.פ. {ISRAELI_IDS.company[0]}, ת.ז. {ISRAELI_IDS.valid[0]}"
     assert detectors.detect_all(text) == [(21, 30, "IL_ID"), (5, 14, "COMPANY_NUMBER")]
+    text = f"IBAN {BANK_NUMBERS.iban[0]}, ת.ז. {ISRAELI_IDS.valid[0]}, ח.פ. {ISRAELI_IDS.company[0]}"
+    assert detectors.detect_all(text) == [(35, 44, "IL_ID"), (51, 60, "COMPANY_NUMBER"), (5, 28, "IBAN")]
 
 
 def test_ec2_one_detector() -> None:
