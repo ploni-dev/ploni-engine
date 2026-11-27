@@ -8,20 +8,27 @@ candidate, precision from the checksum, which is never weakened.
 
 Contract: `IsraeliId` is a Detector (`ploni/detect/base.py`) of type IL_ID. A detection is a run
 of nine ASCII digits, or of SHORT_LENGTH to eight right after an ID label (an ID written without
-its leading zeros), with at most one separator (SEPARATORS) between any two, not touching
-another digit (or a separator and a digit) on either side, whose digits, padded with zeros to
-nine, pass `israeli_id_checksum_ok`, do not start with COMPANY_PREFIX, are not trivial
-(`is_trivial`), whose written shape is not that of another number (`is_other_shape`), and
-before which no label of another number stands (`label_before`). Its span is the number only, first digit to last,
-separators included, in code points of the projection's text (the held-out batch's span rule for
-IL_ID); the label before it is read, never put in the span. Under an ID label its confidence is
-CONFIDENCE_LABELLED, otherwise CONFIDENCE.
+its leading zeros; "right after" as `label_before` reads it: the label within LABEL_WINDOW, 20,
+characters before the number, on its line, with no digit between), with at most one separator
+(SEPARATORS) between any two digits. On its left it touches no digit, nor a digit and one
+separator; on its right no run of separators, of any length, and then a digit follows (since
+change 3 of issue #32). Its digits, padded with zeros to nine, pass `israeli_id_checksum_ok`, do
+not start with COMPANY_PREFIX and are not trivial (`is_trivial`); its written shape is not that
+of another number (`is_other_shape`); no label of another number stands before it
+(`label_before`). Its span is the number only, first digit to last, separators included, in code
+points of the projection's text (the held-out batch's span rule for IL_ID); the label before it
+is read, never put in the span. Under an ID label its confidence is CONFIDENCE_LABELLED,
+otherwise CONFIDENCE.
 
 Known limits: a landline written as nine digits with no separator (0X1234567) and no phone label
-is found as an ID; an ID written without its leading zeros and with no ID label before it is not
-found; a valid number in another context whose label is not one of OTHER_LABELS (a reference
-number) is found as an ID. The detection carries no id (detection_id is ""): ids are made just after detection, with the matter's key,
-never inside a detector (Achia, 2026-11-26, issue #169, "Use the secret key (Recommended)").
+is found as an ID. An ID written without its leading zeros is not found with no ID label before
+it, and never found when six digits or fewer are left (three leading zeros or more). A valid
+number under the label of another number (OTHER_LABELS: a health fund member's, a client's, a
+card's, ...) is dropped, not flagged as that number: no other detector on main finds it yet. A
+valid number in another context whose label is not one of OTHER_LABELS (a reference number) is
+found as an ID. The detection carries no id (detection_id is ""): ids are made just after
+detection, with the matter's key, never inside a detector (Achia, 2026-11-26, issue #169, "Use
+the secret key (Recommended)").
 """
 
 from __future__ import annotations
@@ -36,8 +43,8 @@ ENTITY_TYPE = "IL_ID"
 # build-plan.md Phase 1: "Nine digits, last is a check digit".
 ID_LENGTH = 9
 # The fewest digits of an ID written without its leading zeros, read only after an ID label: the
-# plan's checksum pads with zeros (`digits.zfill(9)`); IDs with three leading zeros are not issued
-# in practice, and six digits are too common in other numbers.
+# plan's checksum pads with zeros (`digits.zfill(9)`); that IDs with three leading zeros are not
+# issued in practice is Claude's reading, with no source; six digits are too common in other numbers.
 SHORT_LENGTH = 7
 # build-plan.md Phase 1: "companies (ח.פ.) start with `5`, non-profits (ע.ר.) with `58`": a number
 # that starts with 5 is a company's or an association's, not a person's.
