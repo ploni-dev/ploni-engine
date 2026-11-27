@@ -357,6 +357,42 @@
    "found": [
     0
    ]
+  },
+  {
+   "text": "המבקש, ת.ז./דרכון {valid[46]}, הגיש בקשה.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מספר זהות/דרכון: {valid[47]:ddd-ddd-ddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת\"ז/דרכון {valid[48]:dddddddd-d}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת.ז./ח.פ. {valid[49]}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מס' זהות/דרכון {valid[50]:ddd.ddd.ddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת״ז או דרכון {valid[0]:ddd ddd ddd}",
+   "found": [
+    0
+   ]
   }
  ],
  "negatives": [
@@ -551,6 +587,18 @@
   },
   {
    "text": "ת.ז. {nested[0]:dddddddd‑‑d}"
+  },
+  {
+   "text": "ת.ז./דרכון {near[20]}"
+  },
+  {
+   "text": "מספר זהות/דרכון: {near[21]:ddd-ddd-ddd}"
+  },
+  {
+   "text": "ת.ז./ח.פ. {company[3]}"
+  },
+  {
+   "text": "ע.ר./ח.פ. {valid[47]}"
   }
  ]
 }

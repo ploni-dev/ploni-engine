@@ -64,15 +64,16 @@ The detector (`IsraeliId`):
       (added after the code, for seven mutants that survived Cosmic Ray: the checksum refuses
       more than nine digits too, so the detector's output alone cannot tell them apart)
 
-label_before (the label nearest before a number, on its line, within LABEL_WINDOW characters,
-with no digit between; build-plan.md Phase 1: company and non-profit numbers are their own
-type, and forms write the label of a number before it):
+label_before (the labels before a number, on its line, within LABEL_WINDOW characters, after
+the last digit there; build-plan.md Phase 1: company and non-profit numbers are their own type,
+and forms write the label of a number before it):
   L1 each ID label: ת.ז., ת.ז, ת"ז, ת״ז, תעודת זהות, תעודת הזהות, מס' זהות, מס׳ זהות, מספר
      זהות, מספר תעודת זהות, ID, I.D.                       "id"
   L2 each label of another number: ח.פ., ח"פ, ע.ר., ע״ר, דרכון, חשבון, טלפון, טל', טל׳, פקס,
      נייד, קופת חולים, מס' חבר, מספר אישי, מ.א., רישיון    "other"
   L3 no label                                              None
-  L4 two labels: the nearer one counts, either way round
+  L4 an ID label and the label of another number: the ID label counts, either way round (issue
+     #299, finding 1: until then the nearer one counted, and "ת.ז. או דרכון" was "other")
   L5 a label further than LABEL_WINDOW before the number  None
   L5b the window's edge: a label that starts exactly LABEL_WINDOW characters before the number
       counts, one that starts a character earlier does not; far into a text as at its start
@@ -81,9 +82,16 @@ type, and forms write the label of a number before it):
   L7 a digit between the label and the number              None
   L8 a proclitic glued to a label (ות.ז., לת"ז, ובדרכון)   its kind
   L9 a label's letters inside a longer word (מתזמן, טלפונית)    not a label
+  L10 a combined form label, an ID's and another number's, with a slash or "או": ת.ז./דרכון,
+      ת"ז/דרכון, ת״ז/ח.פ., מספר זהות/דרכון, מס' זהות/דרכון, ת.ז./ח.פ., תעודת זהות/דרכון,
+      ת.ז. או דרכון                                         "id" (issue #299, finding 1)
+  L11 an ID label, a digit, then the label of another number: only the labels after the last
+      digit count                                          "other"
 The detector, with labels:
   EC5 a valid number after a label of another number      nothing (the fixture has each kind)
   EC6 after an ID label: CONFIDENCE_LABELLED; with no label: CONFIDENCE
+  EC7 a valid number after a combined form label (L10)    found, CONFIDENCE_LABELLED; a company
+      number after ת.ז./ח.פ.                                nothing (it starts with 5)
 The detector, an ID written without its leading zeros (build-plan.md Phase 1's checksum pads
 with zeros, `digits.zfill(9)`, so a number of fewer digits is an ID read with them):
   SH1 eight digits after an ID label                       found, the span the digits as written
@@ -314,9 +322,9 @@ def test_l3_no_label(before: str) -> None:
     assert label(before) is None
 
 
-@pytest.mark.parametrize(("before", "kind"), [("דרכון ות.ז. ", "id"), ("ת.ז. או דרכון ", "other")], ids=["id nearer", "other nearer"])
-def test_l4_the_nearer_label_counts(before: str, kind: str) -> None:
-    assert label(before) == kind
+@pytest.mark.parametrize("before", ["דרכון ות.ז. ", "ת.ז. או דרכון "], ids=["id nearer", "other nearer"])
+def test_l4_the_id_label_counts_either_way_round(before: str) -> None:
+    assert label(before) == "id"
 
 
 def test_l5_a_label_too_far_before() -> None:
@@ -352,6 +360,21 @@ def test_l9_letters_inside_a_longer_word(before: str) -> None:
     assert label(before) is None
 
 
+COMBINED_LABELS = [
+    "ת.ז./דרכון ", "ת\"ז/דרכון ", "ת״ז/ח.פ. ", "מספר זהות/דרכון: ", "מס' זהות/דרכון ", "ת.ז./ח.פ. ", "תעודת זהות/דרכון ",
+    "ת.ז. או דרכון ",
+]  # fmt: skip
+
+
+@pytest.mark.parametrize("before", COMBINED_LABELS)
+def test_l10_a_combined_form_label(before: str) -> None:
+    assert label(before) == "id"
+
+
+def test_l11_only_the_labels_after_the_last_digit_count() -> None:
+    assert label("ת.ז. 3 דרכון ") == "other"
+
+
 @pytest.mark.parametrize("before", OTHER_LABELS)
 def test_ec5_a_valid_number_after_a_label_of_another_number(before: str) -> None:
     assert found(before + VALID) == []
@@ -362,6 +385,17 @@ def test_ec6_the_confidence(before: str, confidence: str) -> None:
     [detection] = IsraeliId().detect(projection(before + VALID), CTX)
     assert detection.confidence == getattr(israeli_id, confidence)
     assert israeli_id.CONFIDENCE < israeli_id.CONFIDENCE_LABELLED <= 1.0
+
+
+@pytest.mark.parametrize("before", COMBINED_LABELS)
+def test_ec7_a_valid_number_after_a_combined_form_label(before: str) -> None:
+    detections = IsraeliId().detect(projection(before + VALID), CTX)
+    assert [(each.span.start, each.span.end, each.confidence) for each in detections] == [(len(before), len(before) + 9, israeli_id.CONFIDENCE_LABELLED)]
+
+
+def test_ec7_a_company_number_after_a_combined_form_label() -> None:
+    assert israeli_id_checksum_ok(COMPANY)
+    assert found("ת.ז./ח.פ. " + COMPANY) == []
 
 
 # ZERO without its leading zero (eight digits), and an invented valid number with two (seven).

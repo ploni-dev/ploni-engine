@@ -15,10 +15,10 @@ digits and separators, so that runs of digits join into longer numbers and split
 separators.
 
 Invariant 2, every ID is found: each of NUMBERS (20 invented valid numbers, completed with the
-check digit computed here), in each of FORMS (6), after each of LEFT (9 labels, with both
-gershayim and both gereshes, a proclitic glued, Latin, nothing) and before each of RIGHT (6):
-6,480 texts, all in the full suite, every 12th in the fast one (540). Each gives exactly one
-detection, the number's place.
+check digit computed here), in each of FORMS (6), after each of LEFT (10 labels, with both
+gershayim and both gereshes, a proclitic glued, Latin, a combined form label (issue #299),
+nothing) and before each of RIGHT (6): 7,200 texts, all in the full suite, every 14th in the
+fast one (515). Each gives exactly one detection, the number's place.
 
 Not applicable: the proclitic and ordinary-word axes of names. A landline written with no
 separator is found as an ID (the module's Known limits); none is among the pieces.
@@ -64,7 +64,7 @@ FORMS = (
     lambda n: f"{n[:3]} {n[3:6]} {n[6:]}",
     lambda n: f"{n[:8]}־{n[8]}",
 )
-LEFT = ("", "ת.ז. ", "ת\"ז ", "ת״ז ", "מס' זהות ", "מס׳ זהות ", "ות.ז.", "(", "ID ")
+LEFT = ("", "ת.ז. ", "ת\"ז ", "ת״ז ", "מס' זהות ", "מס׳ זהות ", "ות.ז.", "(", "ID ", "ת.ז./דרכון ")
 RIGHT = ("", ".", ",", ")", " נמסר", "\n")
 RECALL_ALL = list(product(NUMBERS, FORMS, LEFT, RIGHT))
 RECALL = RECALL_ALL if full() else RECALL_ALL[:: len(RECALL_ALL) // FAST]
