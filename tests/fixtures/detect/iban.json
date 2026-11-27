@@ -800,6 +800,18 @@
   },
   {
    "text": "IBAN: {iban[31]:xxdddddddddddddddddddd}"
+  },
+  {
+   "text": "יתרה בחשבון 12 345 678.50 ש\"ח"
+  },
+  {
+   "text": "יתרה בחשבון 12 345 6789 ש\"ח"
+  },
+  {
+   "text": "בחשבון {account[34]:dd-ddd-dddd} ₪ נמשכו"
+  },
+  {
+   "text": "יתרת החשבון: 12 345 6789,50"
   }
  ],
  "known_misses": [

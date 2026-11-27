@@ -76,6 +76,9 @@ The detector, BANK_ACCOUNT:
   NA2 grouped under a bank label: a landline 0X-XXX-XXXX; a mobile 05X-XXX-XXXX; a date
       DD.MM.YYYY and D.M.YYYY; an amount with commas; a branch of two digits    nothing
   NA3 inside a longer number: a digit and a hyphen before the bank's number    nothing
+  NA6 an amount: the account followed by a decimal part (a dot or a comma and digits), or by
+      ש"ח, ש״ח, ₪ or NIS, grouped under a bank label and with words between (the review of #34
+      at 28b6032, finding 7: "יתרה בחשבון 12 345 678.50 ש"ח" gave BANK_ACCOUNT)    nothing
   NA4 words between, a bank of four digits; a branch of four digits    nothing (added after the
       code, for the mutants that survived on BANK_LONGEST and BRANCH_LONGEST, 3 made 4)
   EA6 the bank named by its name and no number, then the branch and the account with their
@@ -389,6 +392,13 @@ NOT_ACCOUNTS = {
     "an amount with commas": "בחשבון יתרה של 12,345,678 ש\"ח",
     "a branch of two digits": f"חשבון {BANK}-{BRANCH[:2]}-{NUMBER}",
     "inside a longer number": f"חשבון 7-{GROUPED}",
+    "na6 a decimal part with a dot": 'יתרה בחשבון 12 345 678.50 ש"ח',
+    "na6 a decimal part with a comma": "יתרה בחשבון 12 345 6789,50",
+    "na6 shekels after": 'יתרה בחשבון 12 345 6789 ש"ח',
+    "na6 shekels after, the Hebrew gershayim": "יתרה בחשבון 12 345 6789 ש״ח",
+    "na6 the shekel sign after": "בחשבון 12-345-6789 ₪",
+    "na6 NIS after": "balance בחשבון 12 345 67890 NIS",
+    "na6 words between, the shekel sign after": f"בנק {BANK} סניף {BRANCH} חשבון {NUMBER} ₪",
 }
 
 
