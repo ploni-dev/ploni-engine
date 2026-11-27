@@ -7,10 +7,12 @@ test_detect_base.py is (hypothesis is not installed; no seeded `random` needs a 
 
 Invariant 1, found means valid: over every sequence of up to four PIECES (11,111 texts; the full
 suite runs all, the fast suite every 22nd, 506), each detection's text, its separators taken out,
-is nine ASCII digits that pass the checksum (computed here, apart from the module), does not
-start with 5, and is not nine equal digits. PIECES mix a valid number, a near miss, a company
-number, a trivial number, a landline shape, digits and separators, so that runs of digits join
-into longer numbers and split across separators.
+is nine ASCII digits, or seven or eight right after "ת.ז." (an ID written without its leading
+zeros, accepted only after an ID label), that, padded with zeros to nine, pass the checksum
+(computed here, apart from the module), do not start with 5, and are not nine equal digits.
+PIECES mix a valid number, a near miss, a company number, a trivial number, a landline shape,
+digits and separators, so that runs of digits join into longer numbers and split across
+separators.
 
 Invariant 2, every ID is found: each of NUMBERS (20 invented valid numbers, completed with the
 check digit computed here), in each of FORMS (6), after each of LEFT (9 labels, with both
@@ -83,8 +85,12 @@ def test_invariant_1_found_means_valid() -> None:
     bad = []
     for text in SOUND:
         for detection in IsraeliId().detect(projection(text), CTX):
-            digits = SEPARATORS.sub("", detection.surface)
-            if not (len(digits) == 9 and digits.isascii() and digits.isdigit() and checksum(digits)):
+            written = SEPARATORS.sub("", detection.surface)
+            labelled = "ת.ז." in text[max(0, detection.span.start - 25) : detection.span.start]
+            digits = written.zfill(9)
+            if not (len(written) == 9 or (len(written) in (7, 8) and labelled)):
+                bad.append((text, detection.surface))
+            elif not (digits.isascii() and digits.isdigit() and checksum(digits)):
                 bad.append((text, detection.surface))
             elif digits[0] == "5" or len(set(digits)) == 1:
                 bad.append((text, detection.surface))

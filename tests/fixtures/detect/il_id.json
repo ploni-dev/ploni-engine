@@ -297,6 +297,36 @@
    "found": [
     0
    ]
+  },
+  {
+   "text": "ת.ז. {zeros[0]:xdddddddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת\"ז {zeros[1]:xdddddddd} (בלי האפס שבראשו)",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "מס' זהות {zeros[2]:xddddddd-d}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "תעודת זהות {zeros[0]:xdddd dddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת.ז. {valid[2]}, {zeros[2]:xdddddddd}",
+   "found": [
+    0
+   ]
   }
  ],
  "negatives": [
@@ -476,6 +506,18 @@
   },
   {
    "text": "ע״ר {valid[56]}"
+  },
+  {
+   "text": "המספר {zeros[0]:xdddddddd} בלי תווית"
+  },
+  {
+   "text": "דרכון {zeros[1]:xdddddddd}"
+  },
+  {
+   "text": "ת.ז.\n{zeros[0]:xdddddddd}"
+  },
+  {
+   "text": "ת.ז. {zeros[1]:xddddddd+}"
   }
  ]
 }

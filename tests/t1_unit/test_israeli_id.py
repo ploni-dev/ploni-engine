@@ -75,6 +75,15 @@ type, and forms write the label of a number before it):
 The detector, with labels:
   EC5 a valid number after a label of another number      nothing (the fixture has each kind)
   EC6 after an ID label: CONFIDENCE_LABELLED; with no label: CONFIDENCE
+The detector, an ID written without its leading zeros (build-plan.md Phase 1's checksum pads
+with zeros, `digits.zfill(9)`, so a number of fewer digits is an ID read with them):
+  SH1 eight digits after an ID label                       found, the span the digits as written
+  SH2 seven digits after an ID label                       found
+  SH3 eight digits with a separator after an ID label (7-1, 4-4)    found
+  SH4 eight digits with no label, and after a label of another number    nothing
+  SH5 six digits after an ID label (SHORT_LENGTH is the fewest)    nothing
+  SH6 a short near miss after an ID label                  nothing
+  SH7 seven zeros after an ID label (trivial once padded)  nothing
 
 The fixture (tests/fixtures/detect/il_id.json; its numbers are filled in when the tests run, by
 tests/invented_numbers.py):
@@ -321,6 +330,49 @@ def test_ec6_the_confidence(before: str, confidence: str) -> None:
     [detection] = IsraeliId().detect(projection(before + VALID), CTX)
     assert detection.confidence == getattr(israeli_id, confidence)
     assert israeli_id.CONFIDENCE < israeli_id.CONFIDENCE_LABELLED <= 1.0
+
+
+# ZERO without its leading zero (eight digits), and an invented valid number with two (seven).
+EIGHT = ZERO[1:]
+SEVEN = ISRAELI_IDS.two_zeros[0][2:]
+
+
+@pytest.mark.parametrize("before", ["ת.ז. ", "ת\"ז ", "מס' זהות ", "תעודת זהות "])
+def test_sh1_eight_digits_after_an_id_label(before: str) -> None:
+    assert israeli_id_checksum_ok(EIGHT)
+    assert found(before + EIGHT) == [(len(before), len(before) + 8)]
+
+
+def test_sh2_seven_digits_after_an_id_label() -> None:
+    assert israeli_id_checksum_ok(SEVEN) and israeli_id_checksum_ok("00" + SEVEN)
+    assert found("ת.ז. " + SEVEN) == [(5, 12)]
+
+
+@pytest.mark.parametrize("written", [f"{EIGHT[:7]}-{EIGHT[7]}", f"{EIGHT[:4]} {EIGHT[4:]}"], ids=["7-1", "4-4"])
+def test_sh3_eight_digits_with_a_separator(written: str) -> None:
+    assert found("ת.ז. " + written) == [(5, 5 + len(written))]
+
+
+@pytest.mark.parametrize("before", ["", "המספר ", "דרכון "])
+def test_sh4_eight_digits_with_no_id_label(before: str) -> None:
+    assert found(before + EIGHT) == []
+
+
+def test_sh5_six_digits_after_an_id_label() -> None:
+    six = next(f"{n:06d}" for n in range(100000, 999999) if israeli_id_checksum_ok(f"{n:06d}"))
+    assert israeli_id.SHORT_LENGTH == 7
+    assert found("ת.ז. " + six) == []
+
+
+def test_sh6_a_short_near_miss() -> None:
+    near = EIGHT[:-1] + str((int(EIGHT[-1]) + 1) % 10)
+    assert not israeli_id_checksum_ok(near)
+    assert found("ת.ז. " + near) == []
+
+
+def test_sh7_seven_zeros() -> None:
+    assert israeli_id_checksum_ok("0000000")
+    assert found("ת.ז. 0000000") == []
 
 
 def cases() -> tuple[list[tuple[str, set[tuple[int, int]]]], int, int]:
