@@ -28,11 +28,13 @@ the branch, after the bank's name in brackets when one stands there; חשבון,
 it such as חשבונו, ח-ן or ח"ן before the account; with מס' or מספר, a proclitic, commas, colons
 and brackets around them), or one separator, with a plain space on either side or none. On its
 left no Latin letter, no digit, nor a digit and a separator; on its right no digit, nor a
-separator but the plain space and a digit, nor a comma and a digit, nor a currency (CURRENCY:
-₪, ש"ח, NIS, שקל) after spaces: so an amount's decimal part or currency refuses it. `is_bank_account` accepts it when a word stands
+separator but the plain space and a digit, nor a decimal part (a comma and one or two digits
+that end there; a comma and another number is a list, and each account in it is found), nor a
+currency (CURRENCY: ₪, ש"ח, NIS, שקל) after spaces: so an amount's decimal part or currency
+refuses it. `is_bank_account` accepts it when a word stands
 between two of its numbers, or, with none, when a bank label stands before it
 (`bank_label_before`: חשבון, ח-ן, ח"ן, בנק or סניף, with no label of another number beside
-it), its bank has BANK_DIGITS digits and its branch BRANCH_DIGITS, and it is not written in a
+it; or right after an accepted triple and a comma, as in a list after one label), its bank has BANK_DIGITS digits and its branch BRANCH_DIGITS, and it is not written in a
 landline's shape (`israeli_id.is_other_shape`). Its span runs from the bank's first digit to the
 account's last, the separators and the words between them included; a label before it is read,
 never put in it. Confidence CONFIDENCE_PATTERN, band "medium", needs_review True with
@@ -143,9 +145,12 @@ _ACCOUNT = rf"[0-9](?:{_ACCOUNT_SEP}?[0-9]){{{ACCOUNT_SHORTEST - 1},{ACCOUNT_LON
 # The currency of an amount, after its number: the shekel's sign, ש"ח (any gershayim, or a dot),
 # NIS, שקל (finding 7).
 CURRENCY = (r"₪", rf"ש{_GERSHAYIM}ח", r"ש\.ח", r"NIS", r"שקל")
-# What may not follow an account: a digit; a separator but the plain space and a digit; a comma
-# and a digit (a decimal part); spaces and a currency.
-_ACCOUNT_END = rf"(?![0-9])(?!{_TIGHT}[0-9])(?!,[0-9])(?!\s*(?:{'|'.join(CURRENCY)}))"
+# What may not follow an account: a digit; a separator but the plain space and a digit; a decimal
+# part, a comma and one or two digits with no digit, nor a separator and a digit, after them (a
+# comma and another number is a list: pass 2 of the review of #34, at 0f6f0e7, item 8); spaces
+# and a currency.
+_DECIMAL = rf",[0-9]{{1,2}}(?![0-9]|{_SEP}[0-9])"
+_ACCOUNT_END = rf"(?![0-9])(?!{_TIGHT}[0-9])(?!{_DECIMAL})(?!\s*(?:{'|'.join(CURRENCY)}))"
 TRIPLE = re.compile(
     rf"(?<![0-9A-Za-z])(?<![0-9]{_SEP})(?P<bank>[0-9]{{1,{BANK_LONGEST}}})(?:(?P<branch_word>{_BRANCH_WORD})|{_GAP})"
     rf"(?P<branch>[0-9]{{1,{BRANCH_LONGEST}}})(?:(?P<account_word>{_ACCOUNT_WORD})|{_GAP})(?P<account>{_ACCOUNT}){_ACCOUNT_END}"
@@ -156,6 +161,8 @@ BY_NAME = re.compile(
     rf"(?<![א-ת])[ובלהשמכ]{{0,2}}בנק[\s,:]+{_NAME}{_BRANCH_WORD}(?P<branch>[0-9]{{1,{BRANCH_LONGEST}}})"
     rf"{_ACCOUNT_WORD}(?P<account>{_ACCOUNT}){_ACCOUNT_END}"
 )
+# A comma, and a space or none, between two accounts of a list after one label (item 8).
+LIST_GAP = re.compile(r", ?")
 # The labels of a bank account in forms and court papers: the words of the account, בנק and סניף.
 BANK_LABELS = (*ACCOUNT_WORDS, r"בנק", *BRANCH_WORDS)
 # A bank label first, so that חשבון, בנק and סניף are read as one where the ID detector reads
@@ -278,18 +285,20 @@ class Iban:
         Why: the pattern-only half of `detect`, flagged for review.
 
         Contract: one Detection per match of TRIPLE that `is_bank_account` accepts under
-        `bank_label_before`, from its bank's first digit, and one per match of BY_NAME, from its
+        `bank_label_before` (a match that follows an accepted one with only LIST_GAP between
+        them counts as labelled: a list after one label), from its bank's first digit, and one per match of BY_NAME, from its
         branch's first digit, each to the account's last digit, sorted by where each starts; type
         BANK_ACCOUNT, CONFIDENCE_PATTERN, band "medium", needs_review True, review_reason
         REVIEW_REASON.
 
         Known limits: those of the module.
         """
-        places = [
-            Span(match.start(), match.end())
-            for match in TRIPLE.finditer(proj.text)
-            if is_bank_account(match, bank_label_before(proj.text, match.start()))
-        ] + [Span(match.start("branch"), match.end("account")) for match in BY_NAME.finditer(proj.text)]
+        places: list[Span] = []
+        for match in TRIPLE.finditer(proj.text):
+            listed = bool(places) and LIST_GAP.fullmatch(proj.text, places[-1].end, match.start()) is not None
+            if is_bank_account(match, listed or bank_label_before(proj.text, match.start())):
+                places.append(Span(match.start(), match.end()))
+        places += [Span(match.start("branch"), match.end("account")) for match in BY_NAME.finditer(proj.text)]
         return [
             Detection(
                 "", proj.part, span, proj.text[span.start : span.end], BANK_ACCOUNT, CONFIDENCE_PATTERN, "medium",
