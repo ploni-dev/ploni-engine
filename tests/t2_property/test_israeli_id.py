@@ -15,11 +15,12 @@ digits and separators, so that runs of digits join into longer numbers and split
 separators.
 
 Invariant 2, every ID is found: each of NUMBERS (20 invented valid numbers, completed with the
-check digit computed here), in each of FORMS (6), after each of LEFT (12: labels, with both
+check digit computed here), in each of FORMS (6), after each of LEFT (11: labels, with both
 gershayim, the two ASCII apostrophes Word writes for them (issue #299) and both gereshes, a
-proclitic glued, Latin, a combined form label (issue #299), a section number and a plain space
-(issue #299), nothing) and before each of RIGHT (7, a count after a plain space among them,
-issue #299): 10,080 texts, all in the full suite, every 20th in the fast one (504). Each gives
+proclitic glued, Latin, a combined form label (issue #299), nothing) and before each of RIGHT
+(6); and after each of LABELLED (the 9 of LEFT with an ID label) before each of BESIDE (2,
+another number after a plain space, which ends an ID only after an ID label: issue #299): 7,920
+and 2,160 texts, 10,080, all in the full suite, every 20th in the fast one (504). Each gives
 exactly one detection, the number's place.
 
 Not applicable: the proclitic and ordinary-word axes of names. A landline written with no
@@ -66,9 +67,12 @@ FORMS = (
     lambda n: f"{n[:3]} {n[3:6]} {n[6:]}",
     lambda n: f"{n[:8]}־{n[8]}",
 )
-LEFT = ("", "ת.ז. ", "ת\"ז ", "ת״ז ", "מס' זהות ", "מס׳ זהות ", "ות.ז.", "(", "ID ", "ת.ז./דרכון ", "סעיף 3 ", "ת''ז ")
-RIGHT = ("", ".", ",", ")", " נמסר", "\n", " 3 ילדים")
-RECALL_ALL = list(product(NUMBERS, FORMS, LEFT, RIGHT))
+LEFT = ("", "ת.ז. ", "ת\"ז ", "ת״ז ", "מס' זהות ", "מס׳ זהות ", "ות.ז.", "(", "ID ", "ת.ז./דרכון ", "ת''ז ")
+RIGHT = ("", ".", ",", ")", " נמסר", "\n")
+# Another number after a plain space ends an ID only after an ID label (issue #299).
+LABELLED = tuple(left for left in LEFT if left not in ("", "("))
+BESIDE = (" 3 ילדים", " 1.1.2020")
+RECALL_ALL = list(product(NUMBERS, FORMS, LEFT, RIGHT)) + list(product(NUMBERS, FORMS, LABELLED, BESIDE))
 RECALL = RECALL_ALL if full() else RECALL_ALL[:: len(RECALL_ALL) // FAST]
 
 VALID = NUMBERS[0]

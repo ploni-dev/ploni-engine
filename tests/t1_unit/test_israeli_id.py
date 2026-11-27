@@ -63,10 +63,17 @@ The detector (`IsraeliId`):
   A8  CANDIDATE itself: nine digits match it whole; ten, plain and with a hyphen, do not
       (added after the code, for seven mutants that survived Cosmic Ray: the checksum refuses
       more than nine digits too, so the detector's output alone cannot tell them apart)
-  EC8 a nine-digit ID beside another number by a plain space (U+0020), after it (a date, a
-      count) or before it (a section number), or both; plain, three-three-three with hyphens
-      and with spaces, eight and one: found, the span the ID only (issue #299, finding 3)
-  EC9 two nine-digit IDs side by side, one plain space between   two detections
+  EC8 a nine-digit ID after an ID label, another number after it by a plain space (U+0020): a
+      date, a count, an age; plain, three-three-three with hyphens and with spaces, eight and
+      one: found, the span the ID only (issue #299, finding 3, narrowed after the review of
+      e2bcb86 to an ID label before the number)
+  EC9 two nine-digit IDs one plain space apart, after an ID label: the first is found; the
+      second is not, the first's digits cutting its label off (Known limits)
+  A10 with no ID label, a nine-digit number beside another number by a plain space: a section
+      number before it, numbers on both sides, a count after it, a section number before eight
+      and one; and the false IDs the review of e2bcb86 measured, each with a nine-digit piece
+      that passes the checksum: an amount with spaces between its thousands (1 and three
+      threes, ש"ח), twelve digits in threes, a row of short numbers, years and counts    nothing
   A9  a separator other than the plain space keeps a nine-digit number's edge: a dot, a slash
       or a no-break space and then a digit after it, a digit and one of them before it; a
       hyphen and then a space and a digit after it         nothing
@@ -307,11 +314,10 @@ def test_a8_a_candidate_is_at_most_nine_digits(number: str) -> None:
 BESIDE = {
     "date after": ("ת.ז. ", VALID, " 1.1.2020"),
     "count after": ("ת.ז. ", VALID, " 3 ילדים"),
-    "section before": ("סעיף 3 ", VALID, ""),
-    "both sides": ("3 ", VALID, " 4"),
+    "age after": ("המבקש, ת.ז. ", VALID, " 12 שנים"),
     "threes hyphen": ("ת.ז. ", f"{VALID[:3]}-{VALID[3:6]}-{VALID[6:]}", " 3 ילדים"),
     "threes space": ("ת.ז. ", f"{VALID[:3]} {VALID[3:6]} {VALID[6:]}", " 3 ילדים"),
-    "eight and one": ("סעיף 3 ", f"{VALID[:8]}-{VALID[8]}", ""),
+    "eight and one": ("ת.ז. ", f"{VALID[:8]}-{VALID[8]}", " 12 שנים"),
 }
 
 
@@ -321,8 +327,26 @@ def test_ec8_beside_another_number_by_a_plain_space(case: str) -> None:
     assert found(before + number + after) == [(len(before), len(before) + len(number))]
 
 
-def test_ec9_two_ids_side_by_side() -> None:
-    assert found(f"{VALID} {OTHER}") == [(0, 9), (10, 19)]
+def test_ec9_two_ids_one_space_apart() -> None:
+    assert found(f"ת.ז. {VALID} {OTHER}") == [(5, 14)]
+
+
+THREES = f"{VALID[:3]} {VALID[3:6]} {VALID[6:]}"
+UNLABELLED_BESIDE = {
+    "section before": f"סעיף 3 {VALID}",
+    "both sides": f"3 {VALID} 4",
+    "count after": f"{VALID} 3 ילדים",
+    "section before eight and one": f"סעיף 3 {VALID[:8]}-{VALID[8]}",
+    "amount": f"סכום של 1 {THREES} ש\"ח",
+    "twelve in threes": f"מספר {THREES} 123",
+    "row of short numbers": f"7 {THREES} 45 3",
+    "years and counts": f"בשנים 2019 {VALID[:4]} {VALID[4:6]} {VALID[6:]}",
+}
+
+
+@pytest.mark.parametrize("case", UNLABELLED_BESIDE)
+def test_a10_beside_another_number_with_no_id_label(case: str) -> None:
+    assert found(UNLABELLED_BESIDE[case]) == []
 
 
 @pytest.mark.parametrize(
