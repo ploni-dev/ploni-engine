@@ -26,9 +26,8 @@ rule for IL_ID); the label before it is read, never put in the span. Under an ID
 confidence is CONFIDENCE_LABELLED, otherwise CONFIDENCE.
 
 Known limits: a landline written as nine digits with no separator (0X1234567) and no phone label
-is found as an ID, and so is one written 0X-XXX-XXXX or 0X XXX XXXX, about one time in ten
-(the independent review of issue #299 measured 0.095 and 0.096 of 3,000 invented texts, the same
-on main): `is_other_shape` refuses only the grouping of two and seven. After an ID label, a
+is found as an ID; written with separators, 0X-XXXXXXX, 0X-XXX-XXXX or 0X XXX XXXX, it is not
+(`is_other_shape`, issue #302), nor is an ID written in those groups. After an ID label, a
 longer number grouped by plain spaces gives up its first nine digits, found as an ID when they
 pass the checksum (one in ten). With no ID label, an ID with another number after it by a plain
 space ("<id> 3 ילדים") is not found; nor is one right after another number and a plain space
@@ -64,8 +63,9 @@ SHORT_LENGTH = 7
 COMPANY_PREFIX = "5"
 # build-plan.md Phase 1, "Israeli phone": landline area codes `0[23489]`.
 AREA_CODES = "23489"
-# The digits of a landline after its area code.
-LANDLINE_REST = 7
+# The groups a landline is written in: a 0 and its area code, then its seven digits in one group
+# (0X-XXXXXXX) or in three and four (0X-XXX-XXXX, 0X XXX XXXX; issue #302).
+LANDLINE_GROUPS = ([2, 7], [2, 3, 4])
 # build-plan.md Phase 1, "Court case numbers": Net HaMishpat style `NNNNN-MM-YY`.
 CASE_NUMBER_GROUPS = [5, 2, 2]
 # Hyphen, dot, slash, space, no-break space, maqaf (U+05BE) and en dash: the separators the held-out
@@ -169,13 +169,16 @@ def is_other_shape(raw: str) -> bool:
     digits too, and one in ten passes the checksum; their written shape tells them apart, where
     the digits alone cannot.
 
-    Contract: `raw`, the candidate as written. True when it is a 0, an area code of AREA_CODES and
-    one separator before seven digits, or three groups of five, two and two digits.
+    Contract: `raw`, the candidate as written. True when it is a 0 and an area code of AREA_CODES,
+    then seven digits in one of LANDLINE_GROUPS (seven, or three and four, after a separator;
+    issue #302), or three groups of five, two and two digits.
 
-    Known limits: the same numbers written with no separator are not told apart.
+    Known limits: the same numbers written with no separator are not told apart. An ID that starts
+    with 0 and an area code, written in a landline's groups (0X-XXX-XXXX), is taken for a landline,
+    also under an ID label; an ID is written in threes, or eight and one.
     """
     groups = [len(group) for group in re.split(_SEP, raw)]
-    landline = groups == [2, LANDLINE_REST] and raw[0] == "0" and raw[1] in AREA_CODES
+    landline = groups in LANDLINE_GROUPS and raw[0] == "0" and raw[1] in AREA_CODES
     return landline or groups == CASE_NUMBER_GROUPS
 
 
