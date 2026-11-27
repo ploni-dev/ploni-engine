@@ -35,6 +35,21 @@ fill, shaped:
 read_cases:
   R1 a fixture file                                 positives with the spans of their "found"
                                                     slots, negatives with none, in file order
+luhn_ok (the card check digit, copied apart from ploni/detect/deterministic/credit_card.py; issue #35):
+  L1 a number completed by `complete(stem, luhn_ok)`; sixteen zeros (trivial)    True
+  L2 another check digit; the empty string; a letter; Arabic-Indic digits    False
+  L3 the plan's ID check and Luhn agree on nine digits (the ID check is Luhn on nine)
+cards, CARDS (issue #35):
+  CD1 each list: its length, its numbers' number of digits, ASCII digits, distinct, Luhn passed
+      (near: failed)
+  CD2 the brand prefixes: visa 4; mastercard 51-55 and 2221-2720, both kinds; amex 34, 37;
+      diners 36; discover 6011, 644-649, 65; jcb 3528-3589; unionpay 62; nobrand 1, 7, 8, 9
+  CD3 near[i]: the first fifteen digits of visa[i] (i < 10) or mastercard[i - 10], another
+      check digit
+  CD4 wrong_length: a visa prefix at 15, 14, 17, 18, 12 and 20 digits, an amex prefix at 16,
+      a mastercard prefix at 15
+  CD5 the same seed twice                           equal; another seed: other numbers
+  CD6 fill writes a card into a slot of a shape     the shape's groups, its span
 
 Not applicable: Hebrew axes beyond a Hebrew template (the helper writes digits).
 """
@@ -46,7 +61,7 @@ from pathlib import Path
 import pytest
 
 from tests import invented_numbers as inv
-from tests.invented_numbers import ISRAELI_IDS, israeli_id_checksum_ok
+from tests.invented_numbers import CARDS, ISRAELI_IDS, israeli_id_checksum_ok, luhn_ok
 
 FIELDS = ("valid", "near", "zeros", "two_zeros", "cut", "nested", "company", "nonprofit", "landline")
 LENGTHS = {"valid": 60, "near": 30, "zeros": 3, "two_zeros": 1, "cut": 1, "nested": 1, "company": 6, "nonprofit": 6, "landline": 6}
@@ -183,3 +198,77 @@ def test_r1_read_cases(tmp_path: Path) -> None:
         (f"{ISRAELI_IDS.near[1]} ו-{ISRAELI_IDS.valid[1]}", [(12, 21)]),
     ]
     assert negatives == [(f"דרכון {ISRAELI_IDS.valid[2]}", []), ("אין מספר", [])]
+
+
+CARD_COUNTS = {
+    "visa": (16, 16), "visa13": (2, 13), "visa19": (2, 19), "mastercard": (12, 16), "amex": (8, 15), "diners": (4, 14),
+    "discover": (4, 16), "jcb": (3, 16), "unionpay": (3, 16), "near": (20, 16), "nobrand": (6, 16),
+}  # fmt: skip
+WRONG_LENGTHS = (15, 14, 17, 18, 12, 20, 16, 15)
+
+
+def test_l1_luhn_passes() -> None:
+    stem = CARDS.visa[0][:15]
+    assert luhn_ok(inv.complete(stem, luhn_ok)) and inv.complete(stem, luhn_ok) == CARDS.visa[0]
+    assert luhn_ok("0000000000000000")
+
+
+@pytest.mark.parametrize("which", ["another check digit", "empty", "letter", "arabic-indic"])
+def test_l2_luhn_fails(which: str) -> None:
+    card = CARDS.visa[0]
+    digits = {
+        "another check digit": card[:-1] + str((int(card[-1]) + 1) % 10),
+        "empty": "",
+        "letter": card[:-1] + "a",
+        "arabic-indic": "٠" * 16,
+    }[which]
+    assert not luhn_ok(digits)
+
+
+def test_l3_luhn_and_the_id_check_agree_on_nine_digits() -> None:
+    for number in ISRAELI_IDS.valid + ISRAELI_IDS.near:
+        assert luhn_ok(number) is israeli_id_checksum_ok(number)
+
+
+@pytest.mark.parametrize("field", CARD_COUNTS)
+def test_cd1_each_list_of_cards(field: str) -> None:
+    numbers = getattr(CARDS, field)
+    how_many, length = CARD_COUNTS[field]
+    assert len(numbers) == how_many and len(set(numbers)) == how_many
+    assert all(len(n) == length and n.isascii() and n.isdigit() for n in numbers)
+    assert all(luhn_ok(n) is (field != "near") for n in numbers)
+
+
+def test_cd2_the_brand_prefixes() -> None:
+    assert all(n[0] == "4" for n in CARDS.visa + CARDS.visa13 + CARDS.visa19)
+    assert all(51 <= int(n[:2]) <= 55 or 2221 <= int(n[:4]) <= 2720 for n in CARDS.mastercard)
+    assert any(n[0] == "5" for n in CARDS.mastercard) and any(n[0] == "2" for n in CARDS.mastercard)
+    assert all(n[:2] in ("34", "37") for n in CARDS.amex)
+    assert all(n[:2] == "36" for n in CARDS.diners)
+    assert all(n[:4] == "6011" or 644 <= int(n[:3]) <= 649 or n[:2] == "65" for n in CARDS.discover)
+    assert all(3528 <= int(n[:4]) <= 3589 for n in CARDS.jcb)
+    assert all(n[:2] == "62" for n in CARDS.unionpay)
+    assert all(n[0] in "1789" for n in CARDS.nobrand)
+
+
+def test_cd3_near_misses() -> None:
+    sources = CARDS.visa[:10] + CARDS.mastercard[:10]
+    assert all(n[:15] == s[:15] and n[15] != s[15] for n, s in zip(CARDS.near, sources, strict=True))
+
+
+def test_cd4_wrong_lengths() -> None:
+    numbers = CARDS.wrong_length
+    assert tuple(len(n) for n in numbers) == WRONG_LENGTHS and all(luhn_ok(n) for n in numbers)
+    assert all(n[0] == "4" for n in numbers[:6]) and numbers[6][:2] in ("34", "37")
+    assert 51 <= int(numbers[7][:2]) <= 55 or 2221 <= int(numbers[7][:4]) <= 2720
+
+
+def test_cd5_the_seed() -> None:
+    assert inv.cards(inv.SEED) == CARDS
+    assert set(inv.cards(inv.SEED + 1).visa).isdisjoint(CARDS.visa)
+
+
+def test_cd6_a_card_in_a_slot() -> None:
+    card = CARDS.amex[0]
+    text, spans = inv.fill("כרטיס {amex[0]:dddd dddddd ddddd}.", CARDS)
+    assert text == f"כרטיס {card[:4]} {card[4:10]} {card[10:]}." and spans == [(6, 23)]
