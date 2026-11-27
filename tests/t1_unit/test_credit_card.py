@@ -3,7 +3,8 @@
 Why: build-plan.md Phase 1, "Credit card": "Luhn plus brand prefix sanity." Issue #35: "T1 with
 at least 40 positive and 40 negative examples, in Hebrew context, with separator and gershayim
 variants ... Gate: recall and precision at or above 0.98 on the fixtures (checksum-backed type)."
-The span is the held-out batch's rule for CREDIT_CARD (eval/heldout/SPAN_RULES.md): "The number
+The span is the held-out batch's rule for CREDIT_CARD (its span rules, which the detector side
+may read by Achia's third answer on #283): "The number
 only: first digit to last, separators between included. Not the label." Every number that passes
 the Luhn check is made when the tests run (tests/invented_numbers.py, CARDS; Achia, 2026-11-27,
 #32, "Make them fresh too (Recommended)"); the numbers written here fail it, or are sixteen zeros.
