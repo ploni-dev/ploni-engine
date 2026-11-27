@@ -16,8 +16,11 @@ Matrix:
       NONPROFIT_NUMBER or CREDIT_CARD one; a PHONE span that shares one with an IL_ID is the
       same span, a bare run of digits with no label, flagged for review (the ID detector's
       known limit: a landline written as nine digits with no separator and no phone label);
-      and each of the other three fixtures gives at least one PHONE (each holds phone lines),
-      so that the check is not run on nothing
+      and the other three fixtures give exactly PHONES_IN of them, each read when this was
+      written (the ID fixture's nine: phones under a phone label, or landlines in groups of two,
+      three and four with no label; the company fixture's three: two under a phone label and an
+      ID written as nine bare digits from 0[23489], flagged; the card fixture's two, under
+      phone labels), so that nothing is left unjudged, as the ID suite's M4 asks of its fixture
 """
 
 from pathlib import Path
@@ -34,6 +37,8 @@ from tests.invented_numbers import CARDS, ISRAELI_IDS, PHONES, read_cases
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "detect"
 OTHERS = {"il_id.json": ISRAELI_IDS, "company_number.json": ISRAELI_IDS, "credit_card.json": CARDS}
 NEVER_SHARED = frozenset({"COMPANY_NUMBER", "NONPROFIT_NUMBER", "CREDIT_CARD"})
+# The PHONE detections of the other fixtures, each read (M4 of the module docstring).
+PHONES_IN = {"il_id.json": 9, "company_number.json": 3, "credit_card.json": 2}
 
 
 def texts() -> list[tuple[str, list[tuple[int, int]]]]:
@@ -81,4 +86,4 @@ def test_m4_no_span_claimed_by_a_phone_and_another_number() -> None:
                 assert not [kind for _, _, kind in shared if kind in NEVER_SHARED]
                 if shared:
                     assert [(s, e) for s, e, _ in shared] == [(start, end)] and found.review_reason == REVIEW_REASON
-    assert min(phones_in[name] for name in OTHERS) >= 1
+    assert {name: phones_in[name] for name in OTHERS} == PHONES_IN
