@@ -23,7 +23,8 @@ Confidence CONFIDENCE, band "high", needs_review False.
 A BANK_ACCOUNT is a match of TRIPLE: the bank's number (1 to 3 digits), the branch's (1 to 3)
 and the account's (4 to 13 digits, with at most one separator but the plain space between any
 two), in that order, and between each two either the words that name what follows (סניף before
-the branch; חשבון, ח-ן or ח"ן before the account; with מס' or מספר, a proclitic, commas, colons
+the branch, after the bank's name in brackets when one stands there; חשבון, a possessive form of
+it such as חשבונו, ח-ן or ח"ן before the account; with מס' or מספר, a proclitic, commas, colons
 and brackets around them), or one separator, with a plain space on either side or none. On its
 left no Latin letter, no digit, nor a digit and a separator; on its right no digit, nor a
 separator but the plain space and a digit. `is_bank_account` accepts it when a word stands
@@ -36,13 +37,19 @@ never put in it. Confidence CONFIDENCE_PATTERN, band "medium", needs_review True
 REVIEW_REASON. The upper bounds of the three numbers (3, 3 and 13 digits) are those of Israel's
 IBAN, which pads each to that length.
 
+A BANK_ACCOUNT is also a match of BY_NAME: בנק (with a proclitic or not), the bank's name (one to
+BANK_NAMES Hebrew words, none of them סניף), then the branch's number after its word and the
+account's after its word, as in TRIPLE. Its span runs from the branch's first digit to the
+account's last: the batch's rule starts at the bank's number, and with none, the first number is
+the branch's (Claude's reading). The same confidence, band and review flag.
+
 `detect` returns the IBANs and the triples in the order of the text.
 
 Known limits: no check digit is applied to a triple: the banks' own check-digit rules are not
 cited here, so none is invented (the brief of issue #34); a triple is found by its words and
 labels only. The fewest digits of an account (ACCOUNT_SHORTEST, 4), the two digits of a bank and
 the three of a branch with no word between are Claude's reading of how Israeli papers write them,
-with no source. Not found: an account with no bank's number before it (a branch and an account,
+with no source. Not found: an account with no bank before it, by number or by name (a branch and an account,
 or an account alone, under any label: an account alone is no triple, and the Israeli ID detector
 drops nine digits under חשבון); a triple in another order (the account first); a triple grouped
 by separators with no bank label before it, with a bank of one or three digits, or a branch of
@@ -97,15 +104,31 @@ _GLUE = r"[\s,:;.()\-־–]*"
 # מס' or מספר, "number", before or after a word, with either geresh or a dot.
 _NO = rf"(?:מס(?:['׳.]|פר){_GLUE})?"
 BRANCH_WORDS = (r"סניף",)
-# חשבון, "account", and its abbreviation ח-ן (a hyphen, a maqaf or an en dash) or ח"ן (any gershayim).
-ACCOUNT_WORDS = (r"חשבון", r"ח[-־–]ן", rf"ח{_GERSHAYIM}ן")
-_BRANCH_WORD = rf"{_GLUE}{_NO}{_BEFORE}(?:{'|'.join(BRANCH_WORDS)}){_AFTER}{_GLUE}{_NO}"
+# חשבון, "account"; its forms with a possessive suffix, as חשבונו ("his account"), חשבונה, חשבונם,
+# חשבוננו (the review of #34 at 28b6032, finding 3); its abbreviation ח-ן (a hyphen, a maqaf or
+# an en dash) or ח"ן (any gershayim).
+ACCOUNT_WORDS = (r"חשבון", r"חשבונ(?:ו|ה|ם|ן|י|נו|ך|כם)", r"ח[-־–]ן", rf"ח{_GERSHAYIM}ן")
+# A word of a bank's name: Hebrew letters, with gershayim, geresh or a hyphen inside (בע"מ), and
+# not סניף, with a proclitic or not. A name is one word to BANK_NAMES; Claude's reading, no source.
+_NAME_WORD = r"(?![ובלהשמכ]{0,2}סניף)[א-ת][א-ת\"״'׳-]*"
+BANK_NAMES = 3
+_NAME = rf"{_NAME_WORD}(?:\s+{_NAME_WORD}){{0,{BANK_NAMES - 1}}}"
+# The branch's word, after the bank's name in brackets when one stands there, "בנק 12 (לאומי) סניף".
+_BRANCH_WORD = rf"{_GLUE}(?:\({_NAME}\))?{_GLUE}{_NO}{_BEFORE}(?:{'|'.join(BRANCH_WORDS)}){_AFTER}{_GLUE}{_NO}"
 _ACCOUNT_WORD = rf"{_GLUE}{_NO}{_BEFORE}(?:{'|'.join(ACCOUNT_WORDS)}){_AFTER}{_GLUE}{_NO}"
 _GAP = rf" ?{_SEP} ?"
+# An account's digits, and what may not follow them.
+_ACCOUNT = rf"[0-9](?:{_TIGHT}?[0-9]){{{ACCOUNT_SHORTEST - 1},{ACCOUNT_LONGEST - 1}}}"
+_ACCOUNT_END = rf"(?![0-9])(?!{_TIGHT}[0-9])"
 TRIPLE = re.compile(
     rf"(?<![0-9A-Za-z])(?<![0-9]{_SEP})(?P<bank>[0-9]{{1,{BANK_LONGEST}}})(?:(?P<branch_word>{_BRANCH_WORD})|{_GAP})"
-    rf"(?P<branch>[0-9]{{1,{BRANCH_LONGEST}}})(?:(?P<account_word>{_ACCOUNT_WORD})|{_GAP})"
-    rf"(?P<account>[0-9](?:{_TIGHT}?[0-9]){{{ACCOUNT_SHORTEST - 1},{ACCOUNT_LONGEST - 1}}})(?![0-9])(?!{_TIGHT}[0-9])"
+    rf"(?P<branch>[0-9]{{1,{BRANCH_LONGEST}}})(?:(?P<account_word>{_ACCOUNT_WORD})|{_GAP})(?P<account>{_ACCOUNT}){_ACCOUNT_END}"
+)
+# A triple whose bank is named by its name, with no number: בנק, the name, then the branch and the
+# account, each after its word (finding 3). Its item runs from the branch's first digit.
+BY_NAME = re.compile(
+    rf"(?<![א-ת])[ובלהשמכ]{{0,2}}בנק[\s,:]+{_NAME}{_BRANCH_WORD}(?P<branch>[0-9]{{1,{BRANCH_LONGEST}}})"
+    rf"{_ACCOUNT_WORD}(?P<account>{_ACCOUNT}){_ACCOUNT_END}"
 )
 # The labels of a bank account in forms and court papers: the words of the account, בנק and סניף.
 BANK_LABELS = (*ACCOUNT_WORDS, r"בנק", *BRANCH_WORDS)
@@ -229,16 +252,22 @@ class Iban:
         Why: the pattern-only half of `detect`, flagged for review.
 
         Contract: one Detection per match of TRIPLE that `is_bank_account` accepts under
-        `bank_label_before`; type BANK_ACCOUNT, CONFIDENCE_PATTERN, band "medium", needs_review
-        True, review_reason REVIEW_REASON.
+        `bank_label_before`, from its bank's first digit, and one per match of BY_NAME, from its
+        branch's first digit, each to the account's last digit, sorted by where each starts; type
+        BANK_ACCOUNT, CONFIDENCE_PATTERN, band "medium", needs_review True, review_reason
+        REVIEW_REASON.
 
         Known limits: those of the module.
         """
-        return [
-            Detection(
-                "", proj.part, Span(match.start(), match.end()), match.group(), BANK_ACCOUNT, CONFIDENCE_PATTERN, "medium",
-                self.name, None, needs_review=True, review_reason=REVIEW_REASON,
-            )  # fmt: skip
+        places = [
+            Span(match.start(), match.end())
             for match in TRIPLE.finditer(proj.text)
             if is_bank_account(match, bank_label_before(proj.text, match.start()))
+        ] + [Span(match.start("branch"), match.end("account")) for match in BY_NAME.finditer(proj.text)]
+        return [
+            Detection(
+                "", proj.part, span, proj.text[span.start : span.end], BANK_ACCOUNT, CONFIDENCE_PATTERN, "medium",
+                self.name, None, needs_review=True, review_reason=REVIEW_REASON,
+            )  # fmt: skip
+            for span in sorted(places, key=lambda span: span.start)
         ]
