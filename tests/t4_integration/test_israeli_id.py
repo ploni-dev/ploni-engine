@@ -9,7 +9,8 @@ Matrix:
   M1  every fixture text through detect_all: the places found are the fixture's, each typed IL_ID
   M2  every fixture text keeps the Detector contract (tests/detector_contract.py), as a header
       part too
-  M3  the detector is the one registered in eval.detectors.DETECTORS, and requires no morphology
+  M3  the detector is registered in eval.detectors.DETECTORS, first, before the credit card
+      detector of issue #35, and requires no morphology
 """
 
 from pathlib import Path
@@ -41,5 +42,5 @@ def test_m2_the_contract_over_the_fixture() -> None:
 
 
 def test_m3_registered_and_needs_no_morphology() -> None:
-    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId]
+    assert [type(each).__name__ for each in detectors.DETECTORS] == ["IsraeliId", "CreditCard"]
     assert IsraeliId.requires_morph is False and IsraeliId.produces == frozenset({"IL_ID"})
