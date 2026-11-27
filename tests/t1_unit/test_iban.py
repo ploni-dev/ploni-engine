@@ -86,8 +86,9 @@ The detector, BANK_ACCOUNT:
       A list of three (added after the code, for two mutants of Cosmic Ray)    each found
       A list joined by ו-, וכן, a semicolon or a slash (pass 3 of the review, at a65350e,
       finding 11: the later account was found 0.000)             each found
-  NA4 words between, a bank of four digits; a branch of four digits    nothing (added after the
-      code, for the mutants that survived on BANK_LONGEST and BRANCH_LONGEST, 3 made 4)
+  NA4 words between, a bank of four digits; a branch of four digits    no triple (added after the
+      code, for the mutants that survived on BANK_LONGEST and BRANCH_LONGEST, 3 made 4); since
+      issue #315 the branch and the account, or the account alone, after their words, are found
   EA6 the bank named by its name and no number, then the branch and the account with their
       words: בנק לאומי, סניף R, חשבון A; with a proclitic on בנק and on the words; a name of
       one, two and three words, with gershayim (בע"מ)    one BANK_ACCOUNT, from the branch's
@@ -486,7 +487,10 @@ def test_na5_not_by_name(case: str) -> None:
 @pytest.mark.parametrize("which", ["bank", "branch"])
 def test_na4_four_digits_with_words_between(which: str) -> None:
     bank, branch = (ACCOUNT[:4], BRANCH) if which == "bank" else (BANK, ACCOUNT[:4])
-    assert found(f"בנק {bank} סניף {branch} חשבון {NUMBER}") == []
+    text = f"בנק {bank} סניף {branch} חשבון {NUMBER}"
+    # Issue #315: with no triple, what follows סניף and חשבון is found by itself.
+    start = text.index(f"סניף {BRANCH}") + len("סניף ") if which == "bank" else text.rindex(NUMBER)
+    assert found(text) == [(start, text.rindex(NUMBER) + len(NUMBER), "BANK_ACCOUNT")]
 
 
 def decide_alone(text: str, labelled: bool, beside: bool) -> bool:

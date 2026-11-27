@@ -12,7 +12,7 @@ digit by digit apart from the module (tests/invented_numbers.py, iban_remainder)
 with an ASCII digit, touches no digit or Latin letter on its left, and either holds at least
 three runs of digits and has a bank word inside it or a bank label in the twenty characters
 before it, or (issue #315) ends with an account of 4 to 13 digits in one or two runs that an
-account word stands right before, with only spaces and a colon between; and no two detections
+account word stands right before, with only the module's glue and מס' between; and no two detections
 share a character. PIECES mix an IBAN, a near miss, IL, a grouped triple, an account number,
 digits, separators and the bank words, so that runs of digits join and split.
 
@@ -130,9 +130,10 @@ def iban_is_valid(surface: str) -> bool:
 
 
 # Issue #315: an account of one or two runs of digits at the end of a detection, and the account
-# word right before it, with only spaces and a colon between.
+# word right before it, with only the module's glue between (spaces, commas, colons, semicolons,
+# dots, brackets, hyphens) and מס'.
 ACCOUNT_AT_END = re.compile("[0-9]+(?:[-/][0-9]+)?$")
-ACCOUNT_WORD_BEFORE = re.compile("(?:חשבון|חשבונו|ח-ן|ח\"ן)[ :]*(?:מס' )?$")
+ACCOUNT_WORD_BEFORE = re.compile("(?:חשבון|חשבונו|ח-ן|ח\"ן)[\\s,:;.()\\-\\u05be\\u2013]*(?:מס' )?$")
 # The digits of an account, 4 to 13, written apart from the module's ACCOUNT_SHORTEST and ACCOUNT_LONGEST.
 ACCOUNT_DIGITS = range(4, 14)
 

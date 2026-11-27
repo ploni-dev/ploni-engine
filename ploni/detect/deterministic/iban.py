@@ -42,22 +42,37 @@ never put in it. Confidence CONFIDENCE_PATTERN, band "medium", needs_review True
 REVIEW_REASON. The upper bounds of the three numbers (3, 3 and 13 digits) are those of Israel's
 IBAN, which pads each to that length.
 
-A BANK_ACCOUNT is also a match of BY_NAME: בנק (with a proclitic or not), the bank's name (one to
-BANK_NAMES Hebrew words, none of them סניף), then the branch's number after its word and the
-account's after its word, as in TRIPLE. Its span runs from the branch's first digit to the
-account's last: the batch's rule starts at the bank's number, and with none, the first number is
-the branch's (Claude's reading). The same confidence, band and review flag.
+A BANK_ACCOUNT is also a match of ALONE, an account written with no bank's number (issue #315;
+Achia, 2026-11-27, "Yes, with the word (Recommended)": found when חשבון or ח-ן stands right
+before it, with or without a branch, needs_review True): an account word of ACCOUNT_WORDS, with
+מס' or מספר, a proclitic, commas, colons and brackets around it as in TRIPLE, right before the
+account's digits, as in TRIPLE with its right edge; and before that word, or not, סניף and the
+branch's number (1 to 3 digits). `is_lone_account` accepts it with a branch; with none, when
+the account word is a bank label and no other number's label stands beside it
+(`bank_label_before` at the account's first digit), no other number follows it
+(`israeli_id.NUMBER_AFTER`: separators, the plain space among them, and a digit), it is in at
+most LONE_GROUPS groups of digits (three or more are a triple's shape, which TRIPLE judges), and
+it is not in a landline's shape (`israeli_id.is_other_shape`). Its span runs from the branch's
+first digit, or with no branch from the account's, to the account's last; the words before
+them are read, never put in it. A match that shares a character with an accepted triple is
+dropped: the triple holds the account. A bank named by its name before the branch ("בנק לאומי,
+סניף B, חשבון A") is found so, from the branch's first digit: the batch's rule starts at the
+bank's number, and with none, the first number is the branch's (Claude's reading, as since
+#34). The same confidence, band and review flag.
 
-`detect` returns the IBANs and the triples in the order of the text.
+`detect` returns the IBANs and the bank accounts in the order of the text.
 
 Known limits: no check digit is applied to a triple: the banks' own check-digit rules are not
 cited here, so none is invented (the brief of issue #34); a triple is found by its words and
 labels only. The fewest digits of an account (ACCOUNT_SHORTEST, 4), the two digits of a bank and
 the three of a branch with no word between, the three words of a bank's name and the run of
 three separators in an IBAN are Claude's reading of how Israeli papers write them, with no
-source. Not found: an account with no bank before it, by number or by name (a branch and an
-account, or an account alone, under any label: to be found after this detector, by Achia's
-answer of 2026-11-27 on issue #315, "Yes, with the word (Recommended)"); a triple in another order (the account first); a triple grouped by
+source; so is LONE_GROUPS. Not found: an account with no bank's number but with a word between
+it and its account word (חשבון בנק, חשבון הבנק), or under no account word (סניף B A, a list's
+second account after one word, "חשבון A, A2"), or with its word on the line before it or out of
+`israeli_id.window_before`, or with another number after it by separators or a plain space
+("חשבון A 3 עותקים"), or in three groups or more that TRIPLE refuses, or written 0X-XXXXXXX; a
+triple in another order (the account first); a triple grouped by
 separators with no bank label before it, with a bank of one or three digits, or a branch of one
 or two; a word between the numbers other than those listed (קוד בנק, a bar, the bank's name
 between the branch and the account), or the words written with niqqud; a grouped triple in a
@@ -76,18 +91,39 @@ review of #34, at a65350e). Measured on invented texts, 3,000 per form, by a scr
 in the repository (its table is in the text of this detector's PR, issue #34), at 4b2f0b4: IL
 and 21 random digits give an IBAN 0.007 to 0.012 of the time in each of six written forms (the
 check passes one in 97); and 0.000, IBAN and BANK_ACCOUNT alike, for each of: an ID after ת.ז.,
-after חשבון, and written 3-3-3 after חשבון; a company number after ח.פ., and 2-6-1 after חשבון; a
+after חשבון (1.000 since issue #315, below), and written 3-3-3 after חשבון; a company number after ח.פ., and 2-6-1 after חשבון; a
 card in fours after כרטיס and after חשבון; a landline 0X-XXX-XXXX with no label, after חשבון and
 after "טלפון סניף הבנק", 0X XXX XXXX and 0X-XXXXXXX after חשבון; a mobile 05X-XXX-XXXX and
 +972-5X-XXX-XXXX after חשבון; an amount XX XXX XXX, XX,XXX,XXX, XX.XXX.XXX, X XXX XXX XXX, XX XXX
 XXX.XX and XX XXX XXXX ש"ח after בחשבון, and XX XXX XXX with no label; a case number
 NNNNN-MM-YY, with and without חשבון before it, and NNNN/YY; a date DD.MM.YYYY and D/M/YY after
-"חשבון מיום"; a bank by its name and a branch, then a balance after החשבון, or a date. A triple's
-account of nine digits after ח-ן or ח"ן, with words between, is also found by the Israeli ID or
-the company number detector when it passes their check (by the reviewer's script of the review
-of #34 at 28b6032, 3,000 invented triples per form: 0.104 after ח-ן, 0.088 after ח"ן, 0.104 after
-ח״ן; 0.000 after חשבון, and grouped after ח-ן): their labels of other numbers do not hold ח-ן and
-ח"ן. The detection carries no id (detection_id is ""): ids are made just after detection, with
+"חשבון מיום"; a bank by its name and a branch, then a balance after החשבון, or a date.
+Since issue #315 a number of 4 to 13 digits, in one group or two, right after an account word,
+with no currency, decimal part or other number after it, is found as an account whatever it is.
+Measured on invented texts, 3,000 per form after each of חשבון, ח-ן, "חשבון מס'" and בחשבונו, by
+a scratch script that is not in the repository (its table is in the text of this detector's PR,
+issue #315): found 1.000 after each, an ID of nine digits; a company number of nine; a landline
+0XXXXXXXX with no separator; a mobile 05X-XXXXXXX and 05XXXXXXXX; an amount XXXXX with no
+currency, -XXXXX, and XXXXX דולר; a case number NNNN/YY; a year; and so the sentences "הופקדו
+לחשבון XXXXX דולר", "יתרה בחשבון XXXXX", "יתרה בחשבון -XXXXX" and "על חשבון XXXX". Found 0.000
+after each: an ID 3-3-3; a company number 2-6-1; a card in fours with spaces or hyphens, and of
+sixteen digits; a landline 0X-XXXXXXX, 0X-XXX-XXXX and 0X XXX XXXX; a mobile 05X-XXX-XXXX and
++972-5X-XXX-XXXX; an amount XX,XXX ש"ח, XX,XXX, X,XXX,XXX, XXXXX ש"ח, XXXXX ₪, XXXXX.XX,
+XXXXX,XX, XX XXX ש"ח, XX XXX XXX, XX.XXX.XXX, X XXX XXX XXX, XX XXX XXX.XX and XX XXX XXXX ש"ח; a
+case number NNNNN-MM-YY; a date DD.MM.YYYY, D.M.YYYY, DD/MM/YYYY and D/M/YY, and DD.MM.YYYY after
+מיום; an IBAN, paper and electronic, as BANK_ACCOUNT; and the sentences "הופקדו לחשבון XX,XXX
+ש"ח", "יתרה בחשבון XX,XXX ש"ח", "הופקדו לחשבון XXXXX ש"ח", "יתרה בחשבון XXXXX.XX ש"ח" and "על
+חשבון XXXX ש"ח". An account alone of nine digits right after ח-ן, ח"ן or a possessive form
+(בחשבונו) is also found by the Israeli ID or the company number detector when it passes their
+check (the same script, 3,000 invented accounts per word: 0.107 after ח-ן, 0.099 after ח"ן,
+0.102 after ח״ן, 0.098 after בחשבונו; 0.000 after חשבון and "חשבון מס'"; accounts of 4 to 13
+digits 0.006 to 0.013 after those four, 0.001 after חשבון and "חשבון מס'", a few of them cards of
+thirteen digits that the card detector finds); so is a triple's account of nine digits after ח-ן
+or ח"ן, with words between (by the reviewer's script of the review of #34 at 28b6032, 3,000
+invented triples per form: 0.104 after ח-ן, 0.088 after ח"ן, 0.104 after ח״ן; 0.000 after
+חשבון, and grouped after ח-ן): their labels of other numbers do not hold ח-ן, ח"ן and the
+possessive forms; treating them as another number's label there is a follow-up named on issue
+#315. The detection carries no id (detection_id is ""): ids are made just after detection, with
 the matter's key, never inside a detector (Achia, 2026-11-26, issue #169, "Use the secret key
 (Recommended)").
 """
@@ -159,12 +195,13 @@ TRIPLE = re.compile(
     rf"(?<![0-9A-Za-z])(?<![0-9]{_SEP})(?P<bank>[0-9]{{1,{BANK_LONGEST}}})(?:(?P<branch_word>{_BRANCH_WORD})|{_GAP})"
     rf"(?P<branch>[0-9]{{1,{BRANCH_LONGEST}}})(?:(?P<account_word>{_ACCOUNT_WORD})|{_GAP})(?P<account>{_ACCOUNT}){_ACCOUNT_END}"
 )
-# A triple whose bank is named by its name, with no number: בנק, the name, then the branch and the
-# account, each after its word (finding 3). Its item runs from the branch's first digit.
-BY_NAME = re.compile(
-    rf"(?<![א-ת])[ובלהשמכ]{{0,2}}בנק[\s,:]+{_NAME}{_BRANCH_WORD}(?P<branch>[0-9]{{1,{BRANCH_LONGEST}}})"
-    rf"{_ACCOUNT_WORD}(?P<account>{_ACCOUNT}){_ACCOUNT_END}"
-)
+# An account with no bank's number, right after its word, and before the word, or not, סניף and
+# the branch's number (issue #315). Its item runs from the branch's first digit, or the account's.
+_BRANCH = rf"{_BEFORE}(?:{'|'.join(BRANCH_WORDS)}){_AFTER}{_GLUE}{_NO}(?P<branch>[0-9]{{1,{BRANCH_LONGEST}}})"
+ALONE = re.compile(rf"(?:{_BRANCH})?{_ACCOUNT_WORD}(?P<account>{_ACCOUNT}){_ACCOUNT_END}")
+# An account alone is written in one group of digits, or two (a branch and an account together);
+# in three or more it has a triple's shape, which TRIPLE judges. Claude's reading, no source.
+LONE_GROUPS = 2
 # What stands between two accounts of a list after one label: a comma or a semicolon, a space,
 # and the joining word ו ("and", with a hyphen or not) or וכן ("and also"), each optional; or a
 # slash with a space on either side or none (item 8; pass 3 of the review of #34, at a65350e,
@@ -239,6 +276,28 @@ def is_bank_account(match: re.Match[str], labelled: bool) -> bool:
     return labelled and shaped and not israeli_id.is_other_shape(match.group())
 
 
+def is_lone_account(match: re.Match[str], labelled: bool, beside: bool) -> bool:
+    """Say whether a match of ALONE, under its label and beside what follows, is a bank account.
+
+    Why: the decision on an account written with no bank's number (issue #315), apart from the
+    search, so each rule is tested by itself.
+
+    Contract: `match`, a match of ALONE; `labelled`, what `bank_label_before` gives at its
+    account's first digit; `beside`, whether another number follows the account
+    (`israeli_id.NUMBER_AFTER` matches right after it). True when a branch stands before the
+    account's word (its group branch matched); with none, when it is labelled, nothing is
+    beside it, its account is in at most LONE_GROUPS groups of digits, and its shape is not a
+    landline's (`israeli_id.is_other_shape`).
+
+    Known limits: those of the module.
+    """
+    if match["branch"] is not None:
+        return True
+    raw = match["account"]
+    grouped = len(re.split(_SEP, raw)) <= LONE_GROUPS
+    return labelled and not beside and grouped and not israeli_id.is_other_shape(raw)
+
+
 class Iban:
     """The detector of IBANs and bank accounts, IBAN and BANK_ACCOUNT.
 
@@ -293,10 +352,10 @@ class Iban:
 
         Contract: one Detection per match of TRIPLE that `is_bank_account` accepts under
         `bank_label_before` (a match that follows an accepted one with only LIST_GAP between
-        them counts as labelled: a list after one label), from its bank's first digit, and one per match of BY_NAME, from its
-        branch's first digit, each to the account's last digit, sorted by where each starts; type
-        BANK_ACCOUNT, CONFIDENCE_PATTERN, band "medium", needs_review True, review_reason
-        REVIEW_REASON.
+        them counts as labelled: a list after one label), from its bank's first digit, and one
+        per place of `alone` that shares no character with those, each to the account's last
+        digit, sorted by where each starts; type BANK_ACCOUNT, CONFIDENCE_PATTERN, band "medium",
+        needs_review True, review_reason REVIEW_REASON.
 
         Known limits: those of the module.
         """
@@ -305,11 +364,32 @@ class Iban:
             listed = bool(places) and LIST_GAP.fullmatch(proj.text, places[-1].end, match.start()) is not None
             if is_bank_account(match, listed or bank_label_before(proj.text, match.start())):
                 places.append(Span(match.start(), match.end()))
-        places += [Span(match.start("branch"), match.end("account")) for match in BY_NAME.finditer(proj.text)]
+        places += [span for span in self.alone(proj.text) if not any(span.start < p.end and p.start < span.end for p in places)]
         return [
             Detection(
                 "", proj.part, span, proj.text[span.start : span.end], BANK_ACCOUNT, CONFIDENCE_PATTERN, "medium",
                 self.name, None, needs_review=True, review_reason=REVIEW_REASON,
             )  # fmt: skip
             for span in sorted(places, key=lambda span: span.start)
+        ]
+
+    def alone(self, text: str) -> list[Span]:
+        """Return the places of the accounts with no bank's number in a text, in the order of the text.
+
+        Why: the half of `accounts` that Achia's answer of 2026-11-27 on issue #315 adds, "Yes,
+        with the word (Recommended)".
+
+        Contract: one Span per match of ALONE that `is_lone_account` accepts, under
+        `bank_label_before` at its account's first digit, and with `israeli_id.NUMBER_AFTER`
+        read right after the account; from the branch's first digit when its group branch
+        matched, else from the account's, to the account's last digit.
+
+        Known limits: those of the module.
+        """
+        return [
+            Span(match.start("branch") if match["branch"] is not None else match.start("account"), match.end("account"))
+            for match in ALONE.finditer(text)
+            if is_lone_account(
+                match, bank_label_before(text, match.start("account")), israeli_id.NUMBER_AFTER.match(text, match.end("account")) is not None
+            )
         ]
