@@ -15,8 +15,12 @@ Test matrix:
 iban_ok (the check alone, the separators taken out):
   K1  each invented IBAN; its country in small letters           True
   K2  another last digit; two digits swapped; the empty string; four characters; a non-ASCII
-      digit; a Hebrew letter                                     False
+      digit; a Hebrew letter; check digits one less, so the remainder is 0 (added after the
+      code, for a mutant of Cosmic Ray that survived: `== 1` made `<= 1`)    False
   K3  a valid German IBAN (the check alone does not read the country)    True
+  K4  the shortest: four characters that leave 1, False; five that leave 1, True; a letter Z,
+      read as 35 (added after the code, for the mutants that survived on the length guard,
+      `< 5` made `== 5`, `<= 5`, `< 6`, `< 4`, and on the base, 36 made 35)
 
 bank_label_before (the labels of the grouped triple):
   L1  each label: חשבון, ח-ן, ח־ן, ח"ן, ח״ן, ח''ן, בנק, סניף, מס' חשבון, מס׳ חשבון, חשבון בנק    True
@@ -62,6 +66,8 @@ The detector, BANK_ACCOUNT:
   NA2 grouped under a bank label: a landline 0X-XXX-XXXX; a mobile 05X-XXX-XXXX; a date
       DD.MM.YYYY and D.M.YYYY; an amount with commas; a branch of two digits    nothing
   NA3 inside a longer number: a digit and a hyphen before the bank's number    nothing
+  NA4 words between, a bank of four digits; a branch of four digits    nothing (added after the
+      code, for the mutants that survived on BANK_LONGEST and BRANCH_LONGEST, 3 made 4)
 Both:
   EB1 an IBAN and a triple in one text                           both, in the order of the text
   B1  the empty text; a text with no digit                       nothing
@@ -94,7 +100,7 @@ from ploni.detect.deterministic import iban
 from ploni.detect.deterministic.iban import TRIPLE, Iban, bank_label_before, iban_ok, is_bank_account
 from ploni.types import Span
 from tests.detector_contract import projection
-from tests.invented_numbers import BANK_NUMBERS, ISRAELI_IDS, fill
+from tests.invented_numbers import BANK_NUMBERS, ISRAELI_IDS, fill, with_check
 
 FIXTURE = Path(__file__).resolve().parents[1] / "fixtures" / "detect" / "iban.json"
 # Invented numbers, made when the tests run (tests/invented_numbers.py).
@@ -132,6 +138,7 @@ FAILING = {
     "four characters": IBAN[:4],
     "arabic-indic digit": IBAN[:-1] + "٣",
     "hebrew letter": IBAN[:-1] + "א",
+    "remainder zero": f"{IBAN[:2]}{int(IBAN[2:4]) - 1:02d}{IBAN[4:]}",
 }
 
 
@@ -142,6 +149,28 @@ def test_k2_these_fail(which: str) -> None:
 
 def test_k3_the_check_alone_does_not_read_the_country() -> None:
     assert all(iban_ok(each) for each in BANK_NUMBERS.iban_foreign)
+
+
+def test_k2_the_remainder_zero_case_is_what_it_says() -> None:
+    assert remainder(FAILING["remainder zero"]) == 0
+
+
+def remainder(chars: str) -> int:
+    """Return the ISO 7064 MOD 97-10 remainder of a string, digit by digit, apart from the module."""
+    value = 0
+    for ch in (chars[4:] + chars[:4]).upper():
+        for digit in str(ord(ch) - ord("A") + 10) if ch.isalpha() else ch:
+            value = (value * 10 + int(digit)) % 97
+    return value
+
+
+def test_k4_the_shortest_and_a_letter_z() -> None:
+    four = next(f"IL{cd:02d}" for cd in range(100) if remainder(f"IL{cd:02d}") == 1)
+    assert not iban_ok(four)
+    five = next(f"IL{cd:02d}{last}" for cd in range(100) for last in "0123456789" if remainder(f"IL{cd:02d}{last}") == 1)
+    assert iban_ok(five)
+    with_z = with_check("XK", "Z" + ACCOUNT)
+    assert remainder(with_z) == 1 and iban_ok(with_z)
 
 
 LABELS = ["חשבון ", "ח-ן ", "ח־ן ", 'ח"ן ', "ח״ן ", "ח''ן ", "בנק ", "סניף ", "מס' חשבון ", "מס׳ חשבון ", "חשבון בנק: "]
@@ -332,6 +361,12 @@ NOT_ACCOUNTS = {
 @pytest.mark.parametrize("case", NOT_ACCOUNTS)
 def test_na_not_an_account(case: str) -> None:
     assert found(NOT_ACCOUNTS[case]) == []
+
+
+@pytest.mark.parametrize("which", ["bank", "branch"])
+def test_na4_four_digits_with_words_between(which: str) -> None:
+    bank, branch = (ACCOUNT[:4], BRANCH) if which == "bank" else (BANK, ACCOUNT[:4])
+    assert found(f"בנק {bank} סניף {branch} חשבון {NUMBER}") == []
 
 
 def test_eb1_an_iban_and_an_account_in_one_text() -> None:
