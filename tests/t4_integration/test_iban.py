@@ -3,7 +3,7 @@
 Why: `CLAUDE.md`, Tests: every module gets a suite over its public surface. The unit matrix calls
 the detector on one text at a time; this runs it as it is registered, through
 `eval.detectors.detect_all`, the callable the held-out scorer and the score check use, beside the
-Israeli ID and the company number detectors, and through the conformance check of the T0 suite,
+Israeli ID, the company number and the credit card detectors, and through the conformance check of the T0 suite,
 over every text of its fixture file.
 
 Matrix:
@@ -11,10 +11,10 @@ Matrix:
       fixture's, with the fixture's types, in the order of the text
   M2  every fixture text keeps the Detector contract (tests/detector_contract.py), as a header
       part too
-  M3  the detector is registered in eval.detectors.DETECTORS, after the company number
-      detector, and requires no morphology
-  M4  over the three fixtures (il_id.json, company_number.json, iban.json), no detection of
-      this detector shares a character with one of the ID or the company number detector
+  M3  the detector is registered in eval.detectors.DETECTORS, last, after the credit card
+      detector (issue #35), and requires no morphology
+  M4  over the four fixtures (il_id.json, company_number.json, credit_card.json, iban.json),
+      no detection of this detector shares a character with one of another detector
 """
 
 import json
@@ -24,10 +24,11 @@ from types import SimpleNamespace
 from eval import detectors
 from ploni.detect.base import DetectContext
 from ploni.detect.deterministic.company_number import CompanyNumber
+from ploni.detect.deterministic.credit_card import CreditCard
 from ploni.detect.deterministic.iban import Iban
 from ploni.detect.deterministic.israeli_id import IsraeliId
 from tests.detector_contract import breaks, projection
-from tests.invented_numbers import BANK_NUMBERS, ISRAELI_IDS, fill, read_cases
+from tests.invented_numbers import BANK_NUMBERS, CARDS, ISRAELI_IDS, fill, read_cases
 
 FIXTURES = Path(__file__).resolve().parents[1] / "fixtures" / "detect"
 FIXTURE = FIXTURES / "iban.json"
@@ -59,14 +60,14 @@ def test_m2_the_contract_over_the_fixture() -> None:
 
 
 def test_m3_registered_and_needs_no_morphology() -> None:
-    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, Iban]
+    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, CreditCard, Iban]
     assert Iban.requires_morph is False and Iban.produces == OURS
 
 
-def test_m4_no_span_shared_with_the_id_or_the_company_detector() -> None:
+def test_m4_no_span_shared_with_another_detector() -> None:
     every = [text for text, _ in texts()]
-    for name in ("il_id.json", "company_number.json"):
-        positives, negatives = read_cases(FIXTURES / name, ISRAELI_IDS)
+    for name, numbers in (("il_id.json", ISRAELI_IDS), ("company_number.json", ISRAELI_IDS), ("credit_card.json", CARDS)):
+        positives, negatives = read_cases(FIXTURES / name, numbers)
         every += [text for text, _ in positives + negatives]
     for text in every:
         found = detectors.detect_all(text)
