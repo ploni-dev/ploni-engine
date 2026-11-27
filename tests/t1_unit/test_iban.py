@@ -83,6 +83,9 @@ each item, the first and the last slot it covers, and "types" the type of each, 
   F3  no file under tests/fixtures/detect/ holds, outside its slots, an IBAN that passes the
       check (widened from this fixture to every one by the review of #34 at 28b6032, finding 1:
       the ID and the company number fixtures held a published example IBAN, now a slot)
+  F4  the known misses: bank accounts the detector does not find on purpose, each naming the
+      limit of the module's Known limits it falls under, neither a positive nor a negative; each
+      is printed with what the detector gives on it (the review of #34 at 28b6032, finding 2)
 
 Hebrew axes: gershayim as ", ״ and two ASCII apostrophes (ח"ן); geresh as ' and ׳ (מס'); a
 proclitic glued to a label and to the words between the numbers; the maqaf as a separator;
@@ -394,6 +397,17 @@ def test_f1_the_fixture_has_enough_cases() -> None:
     assert all(items for _, items in read[:n_pos]) and not any(items for _, items in read[n_pos:])
     kinds = [kind for _, items in read[:n_pos] for _, _, kind in items]
     assert kinds.count("IBAN") >= 20 and kinds.count("BANK_ACCOUNT") >= 20
+
+
+def test_f4_the_known_misses_are_listed_and_not_counted(capsys: pytest.CaptureFixture[str]) -> None:
+    data = json.loads(FIXTURE.read_text(encoding="utf-8"))
+    misses = data["known_misses"]
+    counted = {case["text"] for case in data["positives"] + data["negatives"]}
+    assert misses and all(case["limit"] and "Known limits" in case["limit"] for case in misses)
+    assert not counted & {case["text"] for case in misses}
+    with capsys.disabled():
+        for place, case in enumerate(misses):
+            print(f"\nknown miss {place}: {case['limit']}: found {[kind for _, _, kind in found(fill(case['text'], NUMBERS)[0])]}")
 
 
 def score(read: list[tuple[str, set[tuple[int, int, str]]]], kind: str) -> tuple[float, float, list[str], list[str]]:
