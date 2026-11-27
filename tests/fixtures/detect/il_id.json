@@ -465,6 +465,18 @@
    "found": [
     0
    ]
+  },
+  {
+   "text": "ת.ז. {zeros[1]:ddd-ddd-ddd} (מתחילה באפס)",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת\"ז {zeros[2]:ddd ddd ddd}",
+   "found": [
+    0
+   ]
   }
  ],
  "negatives": [
@@ -710,6 +722,18 @@
   },
   {
    "text": "בשנים 2019 {valid[15]:dddd dd ddd}"
+  },
+  {
+   "text": "לבירורים: {landline[3]:dd-ddd-dddd}"
+  },
+  {
+   "text": "המשרד בירושלים, {landline[4]:dd ddd dddd}, פתוח בבוקר."
+  },
+  {
+   "text": "התקשרו {landline[5]:dd-ddd dddd} עד השעה חמש"
+  },
+  {
+   "text": "המזכירות, {landline[3]:dd ddd-dddd}"
   }
  ]
 }
