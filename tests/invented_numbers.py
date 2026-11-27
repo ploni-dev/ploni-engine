@@ -22,6 +22,11 @@ Contract:
   ploni/detect/deterministic/credit_card.py, as `israeli_id_checksum_ok` is.
 - `cards(seed)`: a `Cards` (its fields say what each list holds), each list from its own stream
   of the same seed. CARDS is `cards(SEED)`.
+- `phones(seed)`: a `Phones` (its fields say what each list holds), Israeli phone numbers of the
+  prefixes and lengths of build-plan.md Phase 1, "Israeli phone" (issue #36). A phone has no check
+  digit: these are made here too, so that no file holds a phone number (Achia, 2026-11-27, #32).
+  PHONES is `phones(SEED)`. A number from abroad holds its "+" or "00" as written, so that a
+  slot's span takes it in; the shape's "d" writes it as it is.
 - `fill(template, numbers)`: (text, spans). A slot is written as a field of str.format: `{name}`
   or `{name[i]}`, a field of `numbers` (a dataclass), optionally `{name[i]:shape}`. The shape
   writes the number: "d" writes its next digit, "x" skips one, "+" writes the next digit plus one,
@@ -278,6 +283,96 @@ def cards(seed: int) -> Cards:
 
 
 CARDS = cards(SEED)
+
+# The prefixes of the Israeli numbering plan of the Ministry of Communications, as build-plan.md
+# Phase 1, "Israeli phone", names them: "Landline `0[23489]`, mobile `05\d`, VoIP `07[2-9]`, `+972`
+# forms, `*NNNN` service numbers"; after the 0 and its area code, SUBSCRIBER digits. The 1-800 and
+# 1-700 numbers are 1, 800 or 700, and SERVICE digits. Written apart from ploni/detect/deterministic/phone.py.
+LANDLINE_AREAS = tuple(f"0{d}" for d in "23489")
+MOBILE_AREAS = tuple(f"05{d}" for d in DECIMAL)
+VOIP_AREAS = tuple(f"07{d}" for d in "23456789")
+SERVICE_PREFIXES = ("1800", "1700")
+SUBSCRIBER = 7
+SERVICE = 6
+SHORT = 4
+# Prefixes no line of the plan above names: 01 and 06, and 05 and 07 as a landline's two digits.
+WRONG_AREAS_LONG = tuple(f"0{a}{d}" for a in "16" for d in DECIMAL)
+WRONG_AREAS_SHORT = ("01", "05", "06", "07")
+# Abroad, the plan's +972 forms write the country code in place of the leading 0.
+COUNTRY = "972"
+
+
+def invent_phones(stream: Iterator[str], how_many: int, prefixes: tuple[str, ...], length: int) -> tuple[str, ...]:
+    """Make distinct numbers: one of `prefixes` (picked by the stream), then `length` digits of the stream."""
+    made: list[str] = []
+    while len(made) < how_many:
+        number = pick(stream, prefixes) + take(stream, length)
+        if number not in made:
+            made.append(number)
+    return tuple(made)
+
+
+def abroad(numbers: tuple[str, ...], lead: str) -> tuple[str, ...]:
+    """Write national numbers as from abroad: `lead` and the country code in place of the leading 0."""
+    return tuple(lead + COUNTRY + n[1:] for n in numbers)
+
+
+@dataclasses.dataclass(frozen=True)
+class Phones:
+    """Invented Israeli phone numbers of the plan's prefixes and lengths, and near misses that are none.
+
+    Why: the cases of the phone detector (issue #36), each kind a list a fixture's slot can name;
+    a phone has no check digit, so a number of the right prefix and length is a phone's.
+
+    Contract: each list is distinct. mobile: 12, 05X and seven digits (10). landline: 10, two of
+    each area code 0[23489], and seven digits (9). voip: 6, 07[2-9] and seven (10). service: 4,
+    1800 or 1700 and six (10). short: 4, a star and four digits. abroad_mobile: 8, "+972" and a
+    mobile without its 0; abroad_landline: 5, one per area code; abroad_voip: 2; double_zero: 4,
+    "00972" and a mobile without its 0. wrong_area: 8, 01X or 06X and seven digits (10) and 4,
+    01, 05, 06 or 07 and seven (9). short_line: 2 mobiles and 2 landlines a digit short; long_line:
+    2 and 2 a digit long.
+
+    Known limits: the numbers are invented, not checked against any operator's list: one may be
+    someone's.
+    """
+
+    mobile: tuple[str, ...]
+    landline: tuple[str, ...]
+    voip: tuple[str, ...]
+    service: tuple[str, ...]
+    short: tuple[str, ...]
+    abroad_mobile: tuple[str, ...]
+    abroad_landline: tuple[str, ...]
+    abroad_voip: tuple[str, ...]
+    double_zero: tuple[str, ...]
+    wrong_area: tuple[str, ...]
+    short_line: tuple[str, ...]
+    long_line: tuple[str, ...]
+
+
+def phones(seed: int) -> Phones:
+    """Make the invented phone numbers of one seed, each list from its own stream."""
+    by_area = digits(seed, "phone_landline")
+    return Phones(
+        mobile=invent_phones(digits(seed, "phone_mobile"), 12, MOBILE_AREAS, SUBSCRIBER),
+        landline=tuple(n for area in LANDLINE_AREAS for n in invent_phones(by_area, 2, (area,), SUBSCRIBER)),
+        voip=invent_phones(digits(seed, "phone_voip"), 6, VOIP_AREAS, SUBSCRIBER),
+        service=invent_phones(digits(seed, "phone_service"), 4, SERVICE_PREFIXES, SERVICE),
+        short=tuple("*" + n for n in invent_phones(digits(seed, "phone_short"), 4, ("",), SHORT)),
+        abroad_mobile=abroad(invent_phones(digits(seed, "phone_abroad_mobile"), 8, MOBILE_AREAS, SUBSCRIBER), "+"),
+        abroad_landline=abroad(tuple(invent_phones(digits(seed, "phone_abroad_landline"), 1, (a,), SUBSCRIBER)[0] for a in LANDLINE_AREAS), "+"),
+        abroad_voip=abroad(invent_phones(digits(seed, "phone_abroad_voip"), 2, VOIP_AREAS, SUBSCRIBER), "+"),
+        double_zero=abroad(invent_phones(digits(seed, "phone_double_zero"), 4, MOBILE_AREAS, SUBSCRIBER), "00"),
+        wrong_area=invent_phones(digits(seed, "phone_wrong_long"), 8, WRONG_AREAS_LONG, SUBSCRIBER)
+        + invent_phones(digits(seed, "phone_wrong_short"), 4, WRONG_AREAS_SHORT, SUBSCRIBER),
+        short_line=invent_phones(digits(seed, "phone_short_line"), 2, MOBILE_AREAS, SUBSCRIBER - 1)
+        + invent_phones(digits(seed, "phone_short_line_landline"), 2, LANDLINE_AREAS, SUBSCRIBER - 1),
+        long_line=invent_phones(digits(seed, "phone_long_line"), 2, MOBILE_AREAS, SUBSCRIBER + 1)
+        + invent_phones(digits(seed, "phone_long_line_landline"), 2, LANDLINE_AREAS, SUBSCRIBER + 1),
+    )
+
+
+PHONES = phones(SEED)
 
 
 def shaped(number: str, shape: str) -> str:

@@ -8,11 +8,14 @@ its fixture file (issue #35).
 
 Matrix:
   M1  every fixture text through detect_all: the places found are the fixture's, each typed
-      CREDIT_CARD; no other detector finds anything in them (no IL_ID inside a card)
+      CREDIT_CARD; no other detector but the phone detector finds anything in them (no IL_ID
+      inside a card); since issue #36 detect_all runs the phone detector too, whose detections
+      the fixture's phone line holds; tests/t4_integration/test_phone.py, M4, judges those
   M2  every fixture text keeps the Detector contract (tests/detector_contract.py), as a header
       part too
   M3  the detector is registered in eval.detectors.DETECTORS after the Israeli ID and the company
-      number detectors (issues #32 and #33), and requires no morphology
+      number detectors (issues #32 and #33), and before the phone detector (issue #36), and
+      requires no morphology
   M4  every text of the Israeli ID and the company number detectors' fixtures gives no CREDIT_CARD
 """
 
@@ -23,6 +26,7 @@ from ploni.detect.base import DetectContext
 from ploni.detect.deterministic.company_number import CompanyNumber
 from ploni.detect.deterministic.credit_card import CreditCard
 from ploni.detect.deterministic.israeli_id import IsraeliId
+from ploni.detect.deterministic.phone import Phone
 from tests.detector_contract import breaks, projection
 from tests.invented_numbers import CARDS, ISRAELI_IDS, read_cases
 
@@ -37,7 +41,7 @@ def texts() -> list[tuple[str, list[tuple[int, int]]]]:
 
 def test_m1_through_detect_all() -> None:
     for text, spans in texts():
-        assert detectors.detect_all(text) == [(start, end, "CREDIT_CARD") for start, end in spans]
+        assert [each for each in detectors.detect_all(text) if each[2] != "PHONE"] == [(start, end, "CREDIT_CARD") for start, end in spans]
 
 
 def test_m2_the_contract_over_the_fixture() -> None:
@@ -47,7 +51,7 @@ def test_m2_the_contract_over_the_fixture() -> None:
 
 
 def test_m3_registered_and_needs_no_morphology() -> None:
-    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, CreditCard]
+    assert [type(each) for each in detectors.DETECTORS] == [IsraeliId, CompanyNumber, CreditCard, Phone]
     assert CreditCard.requires_morph is False and CreditCard.produces == frozenset({"CREDIT_CARD"})
 
 
