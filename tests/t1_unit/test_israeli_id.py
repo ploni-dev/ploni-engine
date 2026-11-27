@@ -75,9 +75,11 @@ label_before (the labels before a number, on its line, within LABEL_WINDOW chara
 the last digit there; build-plan.md Phase 1: company and non-profit numbers are their own type,
 and forms write the label of a number before it):
   L1 each ID label: ת.ז., ת.ז, ת"ז, ת״ז, תעודת זהות, תעודת הזהות, מס' זהות, מס׳ זהות, מספר
-     זהות, מספר תעודת זהות, ID, I.D.                       "id"
+     זהות, מספר תעודת זהות, ID, I.D.; ת''ז, gershayim written as two ASCII apostrophes, as
+     Word writes them (issue #299, finding 7)              "id"
   L2 each label of another number: ח.פ., ח"פ, ע.ר., ע״ר, דרכון, חשבון, טלפון, טל', טל׳, פקס,
-     נייד, קופת חולים, מס' חבר, מספר אישי, מ.א., רישיון    "other"
+     נייד, קופת חולים, מס' חבר, מספר אישי, מ.א., רישיון; ח''פ, ע''ר, קופ''ח, מ''א (two
+     apostrophes, issue #299, finding 7)                   "other"
   L3 no label                                              None
   L4 an ID label and the label of another number: the ID label counts, either way round (issue
      #299, finding 1: until then the nearer one counted, and "ת.ז. או דרכון" was "other")
@@ -87,11 +89,11 @@ and forms write the label of a number before it):
       (added after the code, for three mutants that survived Cosmic Ray)
   L6 a label on the line before                            None
   L7 a digit between the label and the number              None
-  L8 a proclitic glued to a label (ות.ז., לת"ז, ובדרכון)   its kind
+  L8 a proclitic glued to a label (ות.ז., לת"ז, ובדרכון, ולת''ז)   its kind
   L9 a label's letters inside a longer word (מתזמן, טלפונית)    not a label
   L10 a combined form label, an ID's and another number's, with a slash or "או": ת.ז./דרכון,
       ת"ז/דרכון, ת״ז/ח.פ., מספר זהות/דרכון, מס' זהות/דרכון, ת.ז./ח.פ., תעודת זהות/דרכון,
-      ת.ז. או דרכון                                         "id" (issue #299, finding 1)
+      ת.ז. או דרכון; ת''ז/דרכון (finding 7)                  "id" (issue #299, finding 1)
   L11 an ID label, a digit, then the label of another number: only the labels after the last
       digit count                                          "other"
 The detector, with labels:
@@ -101,7 +103,7 @@ The detector, with labels:
       number after ת.ז./ח.פ.                                nothing (it starts with 5)
 The detector, an ID written without its leading zeros (build-plan.md Phase 1's checksum pads
 with zeros, `digits.zfill(9)`, so a number of fewer digits is an ID read with them):
-  SH1 eight digits after an ID label                       found, the span the digits as written
+  SH1 eight digits after an ID label, ת''ז among them      found, the span the digits as written
   SH2 seven digits after an ID label                       found
   SH3 eight digits with a separator after an ID label (7-1, 4-4)    found
   SH4 eight digits with no label, and after a label of another number    nothing
@@ -339,10 +341,10 @@ def label(before: str) -> str | None:
     return result
 
 
-ID_LABELS = ["ת.ז. ", "ת.ז ", "ת\"ז ", "ת״ז ", "תעודת זהות ", "תעודת הזהות ", "מס' זהות ", "מס׳ זהות ", "מספר זהות: ", "מספר תעודת זהות ", "ID ", "I.D. "]
+ID_LABELS = ["ת.ז. ", "ת.ז ", "ת\"ז ", "ת״ז ", "תעודת זהות ", "תעודת הזהות ", "מס' זהות ", "מס׳ זהות ", "מספר זהות: ", "מספר תעודת זהות ", "ID ", "I.D. ", "ת''ז "]
 OTHER_LABELS = [
     "ח.פ. ", "ח\"פ ", "ע.ר. ", "ע״ר ", "דרכון ", "חשבון ", "טלפון ", "טל' ", "טל׳ ", "פקס ", "נייד ", "קופת חולים ", "מס' חבר ",
-    "מספר אישי ", "מ.א. ", "רישיון ",
+    "מספר אישי ", "מ.א. ", "רישיון ", "ח''פ ", "ע''ר ", "קופ''ח ", "מ''א ",
 ]  # fmt: skip
 
 
@@ -389,7 +391,7 @@ def test_l7_a_digit_between() -> None:
     assert label("ת.ז. 3 ו") is None
 
 
-@pytest.mark.parametrize(("before", "kind"), [("ות.ז. ", "id"), ("לת\"ז ", "id"), ("ובדרכון ", "other")])
+@pytest.mark.parametrize(("before", "kind"), [("ות.ז. ", "id"), ("לת\"ז ", "id"), ("ובדרכון ", "other"), ("ולת''ז ", "id")])
 def test_l8_a_proclitic_on_the_label(before: str, kind: str) -> None:
     assert label(before) == kind
 
@@ -401,7 +403,7 @@ def test_l9_letters_inside_a_longer_word(before: str) -> None:
 
 COMBINED_LABELS = [
     "ת.ז./דרכון ", "ת\"ז/דרכון ", "ת״ז/ח.פ. ", "מספר זהות/דרכון: ", "מס' זהות/דרכון ", "ת.ז./ח.פ. ", "תעודת זהות/דרכון ",
-    "ת.ז. או דרכון ",
+    "ת.ז. או דרכון ", "ת''ז/דרכון ",
 ]  # fmt: skip
 
 
@@ -442,7 +444,7 @@ EIGHT = ZERO[1:]
 SEVEN = ISRAELI_IDS.two_zeros[0][2:]
 
 
-@pytest.mark.parametrize("before", ["ת.ז. ", "ת\"ז ", "מס' זהות ", "תעודת זהות "])
+@pytest.mark.parametrize("before", ["ת.ז. ", "ת\"ז ", "מס' זהות ", "תעודת זהות ", "ת''ז "])
 def test_sh1_eight_digits_after_an_id_label(before: str) -> None:
     assert israeli_id_checksum_ok(EIGHT)
     assert found(before + EIGHT) == [(len(before), len(before) + 8)]

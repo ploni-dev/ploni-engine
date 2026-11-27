@@ -430,6 +430,42 @@
    "found": [
     0
    ]
+  },
+  {
+   "text": "ת''ז {valid[5]}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "המצהיר, ת''ז {valid[6]:ddd-ddd-ddd}, חתם בפניי.",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ולת''ז {valid[7]:dddddddd-d} של המצהיר",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת''ז/דרכון {valid[8]:ddd.ddd.ddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "ת''ז {zeros[1]:xdddddddd}",
+   "found": [
+    0
+   ]
+  },
+  {
+   "text": "המצהיר, ת''ז {zeros[2]:xddddddd-d}, חתם בפניי.",
+   "found": [
+    0
+   ]
   }
  ],
  "negatives": [
@@ -651,6 +687,18 @@
   },
   {
    "text": "ת.ז. {zeros[0]:xdddddddd} 12 שנים"
+  },
+  {
+   "text": "ת''ז {near[24]}"
+  },
+  {
+   "text": "ח''פ {valid[9]}"
+  },
+  {
+   "text": "ע''ר {valid[10]:ddd-ddd-ddd}"
+  },
+  {
+   "text": "מ''א {valid[11]}"
   }
  ]
 }
