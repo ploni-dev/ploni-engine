@@ -128,6 +128,13 @@ needs_review True):
                                                                  nothing
   EA11 an account found once: a triple after חשבון, a triple with words, a branch after a
       bank's name: one detection each                             (EA1, EA2, EA6, kept)
+  EA12 an account alone and a triple in one text, either order    both, in the order of the
+      text (added after the code, for the mutants of Cosmic Ray that survived on the overlap
+      check of `accounts`: `and` made `or`, `<` made `!=` and `is not`)
+  EA13 a triple with the bank's name in brackets after its number: a name of three words
+      (BANK_NAMES) is found from the bank's first digit; of four, only the branch and the
+      account, from the branch (added after the code, for the mutants that survived on
+      BANK_NAMES once NA5's name of four words was found by EA9)
 Both:
   EB1 an IBAN and a triple in one text                           both, in the order of the text
   B1  the empty text; a text with no digit                       nothing
@@ -667,6 +674,23 @@ def test_ea7_a_list_joined_by_a_word_or_a_mark(form: str) -> None:
 def test_ea7_a_comma_and_three_digits_after() -> None:
     text = f"חשבון {GROUPED},{SECOND[5:8]} ו-{SECOND[8:11]}"
     assert found(text) == only(text, GROUPED, "BANK_ACCOUNT")
+
+
+def test_ea12_an_account_alone_and_a_triple_in_one_text() -> None:
+    alone = SECOND[5:11]
+    text = f"חשבון {GROUPED}, וגם ח-ן {alone}"
+    first, second = text.index(GROUPED), text.rindex(alone)
+    assert found(text) == [(first, first + len(GROUPED), "BANK_ACCOUNT"), (second, second + len(alone), "BANK_ACCOUNT")]
+    text = f"ח-ן {alone}, וגם חשבון {GROUPED}"
+    first, second = text.index(alone), text.index(GROUPED)
+    assert found(text) == [(first, first + len(alone), "BANK_ACCOUNT"), (second, second + len(GROUPED), "BANK_ACCOUNT")]
+
+
+def test_ea13_the_longest_bank_name_in_brackets() -> None:
+    text = f"בנק {BANK} (אחד שתיים שלוש) סניף {BRANCH} חשבון {NUMBER}"
+    assert found(text) == [(text.index(BANK), text.rindex(NUMBER) + len(NUMBER), "BANK_ACCOUNT")]
+    text = f"בנק {BANK} (אחד שתיים שלוש ארבע) סניף {BRANCH} חשבון {NUMBER}"
+    assert found(text) == [(text.index(f"סניף {BRANCH}") + len("סניף "), text.rindex(NUMBER) + len(NUMBER), "BANK_ACCOUNT")]
 
 
 def test_eb1_an_iban_and_an_account_in_one_text() -> None:
