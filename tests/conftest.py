@@ -4,7 +4,7 @@ Why: Achia, 2026-11-27, issue #32, "Hide them on GitHub (Recommended)": "On GitH
 shows one short line (which test, which line) and not the values. On the laptop, nothing changes:
 full detail." The tests of a checksum detector make their numbers when they run; a traceback, an
 assertion's explanation, an exception's message or captured output would print them into a
-public log. pytest's own --tb=no hides them too, but names no line (measured on #32).
+public log. --tb=no still prints a failure's message on its summary line, and names no line (measured on #32).
 
 Contract: when the environment variable GITHUB_ACTIONS is "true" (GitHub sets it in every step of
 a workflow run), every failed report of a test's setup, call or teardown, and of a collection,
