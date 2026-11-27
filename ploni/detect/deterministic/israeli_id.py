@@ -10,19 +10,27 @@ Contract: `IsraeliId` is a Detector (`ploni/detect/base.py`) of type IL_ID. A de
 of nine ASCII digits, or of SHORT_LENGTH to eight right after an ID label (an ID written without
 its leading zeros; "right after" as `label_before` reads it: the label within LABEL_WINDOW, 20,
 characters before the number, on its line, with no digit between), with at most one separator
-(SEPARATORS) between any two digits. On its left it touches no digit, nor a digit and one
-separator; on its right no run of separators, of any length, and then a digit follows (since
-change 3 of issue #32). Its digits, padded with zeros to nine, pass `israeli_id_checksum_ok`, do
-not start with COMPANY_PREFIX and are not trivial (`is_trivial`); its written shape is not that
-of another number (`is_other_shape`); no label of another number stands before it, unless an ID
-label stands there too, as in a combined form label, "ת.ז./דרכון" (`label_before`; issue #299). Its span is the number only, first digit to last, separators included, in code
-points of the projection's text (the held-out batch's span rule for IL_ID); the label before it
-is read, never put in the span. Under an ID label its confidence is CONFIDENCE_LABELLED,
-otherwise CONFIDENCE.
+(SEPARATORS) between any two digits. Its edges: on its left it touches no digit, nor a digit and
+one separator; on its right no run of separators, of any length, and then a digit follows (since
+change 3 of issue #32). For nine digits a plain space (U+0020) is another number's edge (issue
+#299): on the left a digit and a plain space may stand, on the right a plain space and then
+anything; the other separators keep the edges above, and so do the short forms, for which a
+plain space and a digit after still mean a longer number. Its digits, padded with zeros to nine,
+pass `israeli_id_checksum_ok`, do not start with COMPANY_PREFIX and are not trivial
+(`is_trivial`); its written shape is not that of another number (`is_other_shape`); no label of
+another number stands before it, unless an ID label stands there too, as in a combined form
+label, "ת.ז./דרכון" (`label_before`; issue #299). Its span is the number only, first digit to
+last, separators included, in code points of the projection's text (the held-out batch's span
+rule for IL_ID); the label before it is read, never put in the span. Under an ID label its
+confidence is CONFIDENCE_LABELLED, otherwise CONFIDENCE.
 
 Known limits: a landline written as nine digits with no separator (0X1234567) and no phone label
-is found as an ID. An ID written without its leading zeros is not found with no ID label before
-it, and never found when six digits or fewer are left (three leading zeros or more). A valid
+is found as an ID. A longer number grouped by plain spaces gives up a piece of nine digits that
+stands whole between its spaces, and one in ten such pieces passes the checksum and is found as
+an ID: an amount with spaces between its thousands ("1 234 567 891"), twelve digits in groups of
+three, a mobile number written "+972 50 123 4567" (its last nine digits). An ID written without
+its leading zeros is not found with no ID label before it, nor with a plain space and a digit
+after it, and never found when six digits or fewer are left (three leading zeros or more). A valid
 number under the label of another number (OTHER_LABELS: a health fund member's, a client's, a
 card's, ...) is dropped, not flagged as that number: no other detector on main finds it yet. A
 valid number in another context whose label is not one of OTHER_LABELS (a reference number) is
@@ -61,8 +69,16 @@ CASE_NUMBER_GROUPS = [5, 2, 2]
 # Word inserts (U+2011), the figure dash (U+2012), the em dash (U+2014), the minus sign (U+2212).
 SEPARATORS = "-./  ־–‐‑‒—−"
 _SEP = "[" + re.escape(SEPARATORS) + "]"
+# The separators but the plain space: a plain space beside nine digits ends the number, as Hebrew
+# text writes a date, a count or a section number beside an ID (issue #299, finding 3).
+_TIGHT = "[" + re.escape(SEPARATORS.replace(" ", "")) + "]"
 # A number is not followed by a run of separators and a digit: it would be part of a longer one.
-CANDIDATE = re.compile(rf"(?<![0-9])(?<![0-9]{_SEP})[0-9](?:{_SEP}?[0-9]){{{SHORT_LENGTH - 1},{ID_LENGTH - 1}}}(?!{_SEP}*[0-9])")
+# For nine digits, a run that starts with a plain space, or a digit and a plain space before them,
+# is another number's edge; the short forms keep the whole run as their edge.
+CANDIDATE = re.compile(
+    rf"(?<![0-9])(?<![0-9]{_TIGHT})[0-9](?:{_SEP}?[0-9]){{{ID_LENGTH - 1}}}(?![0-9])(?!{_TIGHT}{_SEP}*[0-9])"
+    rf"|(?<![0-9])(?<![0-9]{_SEP})[0-9](?:{_SEP}?[0-9]){{{SHORT_LENGTH - 1},{ID_LENGTH - 2}}}(?!{_SEP}*[0-9])"
+)
 # shortcut: one fixed confidence for every checksum match until calibration (build-plan.md
 # section 4.7, detect/calibration.py) gives a measured one; a random nine-digit number passes the
 # check one time in ten, and an ID label before it is more evidence.
