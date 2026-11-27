@@ -107,6 +107,9 @@ each item, the first and the last slot it covers, and "types" the type of each, 
   F3  no file under tests/fixtures/detect/ holds, outside its slots, an IBAN that passes the
       check (widened from this fixture to every one by the review of #34 at 28b6032, finding 1:
       the ID and the company number fixtures held a published example IBAN, now a slot)
+      The scan is the detector's IBAN_CANDIDATE, so it reads every gap the detector reads, and
+      the check is the remainder computed apart (pass 2 of the review, at 0f6f0e7, item 9: an
+      IBAN with en dashes passed the old scan); a test holds the scan to each gap.
   F4  the known misses: bank accounts the detector does not find on purpose, each naming the
       limit of the module's Known limits it falls under, neither a positive nor a negative; each
       is printed with what the detector gives on it (the review of #34 at 28b6032, finding 2)
@@ -537,9 +540,14 @@ def test_f2_recall_and_precision_on_the_fixture(capsys: pytest.CaptureFixture[st
     assert recall >= 0.98 and precision >= 0.98
 
 
+# What an IBAN may carry between its characters, as the detector reads it: the ID detector's
+# separators and the two marks of direction.
+SCAN_GAP = re.compile("[" + re.escape(israeli_id.SEPARATORS + "\u200e\u200f") + "]")
+
+
 def literal_ibans(literal: str) -> list[str]:
-    """Return the runs of a text that F3 reads as IBANs, each with its separators taken out."""
-    return [re.sub(r"[^0-9A-Za-z]", "", candidate) for candidate in re.findall(r"[A-Za-z]{2}[0-9 \-./ ‎‏]{13,60}", literal)]
+    """Return the runs of a text the detector's IBAN candidate reads, each with its separators and marks taken out."""
+    return [SCAN_GAP.sub("", match.group()) for match in iban.IBAN_CANDIDATE.finditer(literal)]
 
 
 def test_f3_no_fixture_holds_a_valid_iban_as_a_literal() -> None:
@@ -549,7 +557,7 @@ def test_f3_no_fixture_holds_a_valid_iban_as_a_literal() -> None:
         data = json.loads(path.read_text(encoding="utf-8"))
         for case in [case for value in data.values() if isinstance(value, list) for case in value]:
             literal = re.sub(r"\{[^}]*\}", "", case["text"])
-            assert not any(iban_ok(chars) for chars in literal_ibans(literal)), path.name
+            assert not any(remainder(chars) == 1 for chars in literal_ibans(literal)), path.name
 
 
 def test_f3_the_scan_reads_every_iban_the_detector_finds() -> None:
