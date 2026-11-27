@@ -3,9 +3,9 @@
 Why: build-plan.md Phase 1, "Company and non-profit numbers": "Nine digits, same check digit;
 companies (ח.פ.) start with `5`, non-profits (ע.ר.) with `58`. Public-registry facts, so
 default is detect and flag, not replace." Gate: "Checksum-backed types >= 0.98 recall and >= 0.98
-precision on fixtures." The span and the types are the held-out batch's span rules
-(eval/heldout/SPAN_RULES.md): COMPANY_NUMBER and NONPROFIT_NUMBER, "The number only, as for
-IL_ID. Not the label, not the company's name."
+precision on fixtures." The span and the types are the held-out batch's span rules (which the
+detector side may read by Achia's third answer on #283): COMPANY_NUMBER and NONPROFIT_NUMBER,
+"The number only, as for IL_ID. Not the label, not the company's name."
 
 Test matrix:
 
