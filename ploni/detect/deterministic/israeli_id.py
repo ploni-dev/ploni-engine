@@ -7,20 +7,20 @@ candidate regex, strip, validate. Reject trivial sequences."). Recall comes from
 candidate, precision from the checksum, which is never weakened.
 
 Contract: `IsraeliId` is a Detector (`ploni/detect/base.py`) of type IL_ID. A detection is a run
-of nine ASCII digits, with at most one separator (SEPARATORS) between any two, not touching
-another digit (or a separator and a digit) on either side, whose digits pass
-`israeli_id_checksum_ok`, do not start with COMPANY_PREFIX, are not trivial (`is_trivial`), and
-whose written shape is not that of another number (`is_other_shape`), and which no label of
-another number stands before (`label_before`). Its span is the number only, first digit to last,
+of nine ASCII digits, or of SHORT_LENGTH to eight right after an ID label (an ID written without
+its leading zeros), with at most one separator (SEPARATORS) between any two, not touching
+another digit (or a separator and a digit) on either side, whose digits, padded with zeros to
+nine, pass `israeli_id_checksum_ok`, do not start with COMPANY_PREFIX, are not trivial
+(`is_trivial`), whose written shape is not that of another number (`is_other_shape`), and
+before which no label of another number stands (`label_before`). Its span is the number only, first digit to last,
 separators included, in code points of the projection's text (the held-out batch's span rule for
 IL_ID); the label before it is read, never put in the span. Under an ID label its confidence is
 CONFIDENCE_LABELLED, otherwise CONFIDENCE.
 
 Known limits: a landline written as nine digits with no separator (0X1234567) and no phone label
-is found as an ID; an ID written with fewer than nine digits (a leading zero dropped) is not
+is found as an ID; an ID written without its leading zeros and with no ID label before it is not
 found; a valid number in another context whose label is not one of OTHER_LABELS (a reference
-number) is found as an ID. The detection
-carries no id (detection_id is ""): ids are made just after detection, with the matter's key,
+number) is found as an ID. The detection carries no id (detection_id is ""): ids are made just after detection, with the matter's key,
 never inside a detector (Achia, 2026-11-26, issue #169, "Use the secret key (Recommended)").
 """
 
@@ -35,6 +35,10 @@ from ploni.types import Detection, Span, TextProjection
 ENTITY_TYPE = "IL_ID"
 # build-plan.md Phase 1: "Nine digits, last is a check digit".
 ID_LENGTH = 9
+# The fewest digits of an ID written without its leading zeros, read only after an ID label: the
+# plan's checksum pads with zeros (`digits.zfill(9)`); IDs with three leading zeros are not issued
+# in practice, and six digits are too common in other numbers.
+SHORT_LENGTH = 7
 # build-plan.md Phase 1: "companies (ח.פ.) start with `5`, non-profits (ע.ר.) with `58`": a number
 # that starts with 5 is a company's or an association's, not a person's.
 COMPANY_PREFIX = "5"
@@ -48,7 +52,7 @@ CASE_NUMBER_GROUPS = [5, 2, 2]
 # batch's span rules name ("hyphen, space, dot, slash"), and the forms of them Hebrew text uses.
 SEPARATORS = "-./  ־–"
 _SEP = "[" + re.escape(SEPARATORS) + "]"
-CANDIDATE = re.compile(rf"(?<![0-9])(?<![0-9]{_SEP})[0-9](?:{_SEP}?[0-9]){{{ID_LENGTH - 1}}}(?!{_SEP}?[0-9])")
+CANDIDATE = re.compile(rf"(?<![0-9])(?<![0-9]{_SEP})[0-9](?:{_SEP}?[0-9]){{{SHORT_LENGTH - 1},{ID_LENGTH - 1}}}(?!{_SEP}?[0-9])")
 # shortcut: one fixed confidence for every checksum match until calibration (build-plan.md
 # section 4.7, detect/calibration.py) gives a measured one; a random nine-digit number passes the
 # check one time in ten, and an ID label before it is more evidence.
@@ -165,13 +169,17 @@ def is_israeli_id(raw: str, label: str | None) -> bool:
     Why: the decision of the detector, apart from the search, so each rule is tested by itself.
 
     Contract: `raw`, a match of CANDIDATE; `label`, what `label_before` gives for it. True when no
-    label of another number stands before it, its digits pass the checksum, do not start with
+    label of another number stands before it, it has nine digits or, under an ID label, at least
+    SHORT_LENGTH, and its digits, padded with zeros to nine, pass the checksum, do not start with
     COMPANY_PREFIX, are not trivial, and its shape is not another number's.
 
     Known limits: those of the module.
     """
-    digits = re.sub(_SEP, "", raw)
-    if label == "other" or not israeli_id_checksum_ok(digits) or digits.startswith(COMPANY_PREFIX):
+    written = re.sub(_SEP, "", raw)
+    if label == "other" or (len(written) < ID_LENGTH and label != "id"):
+        return False
+    digits = written.zfill(ID_LENGTH)
+    if not israeli_id_checksum_ok(digits) or digits.startswith(COMPANY_PREFIX):
         return False
     return not is_trivial(digits) and not is_other_shape(raw)
 
