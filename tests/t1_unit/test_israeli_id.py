@@ -23,6 +23,7 @@ is_trivial:
   T2 the first eight ascending by one (123456782, 012345674 pass it)    True
   T3 the first eight descending by one                     True
   T4 an ordinary number                                    False
+  T5 the first seven run up by one, the eighth does not (1234567, then 9)    False
 
 is_other_shape (the written shape of a number that is not an ID):
   S1 a landline, 0 and an area code of build-plan.md Phase 1 (0[23489]), a separator, seven digits
@@ -30,6 +31,10 @@ is_other_shape (the written shape of a number that is not an ID):
   S2 a case number, five, two and two digits (Net HaMishpat style, build-plan.md Phase 1)  True
   S3 plain nine, eight and one, three-three-three          False
   S4 01-2345678: 0 then a digit that is no area code       False
+  S5 0, an area code, then groups of three and four (0X-XXX-XXXX)    False: only two and seven
+  S6 two and seven digits that do not start with 0 (3X-XXXXXXX)       False
+T5, S5 and S6 were added after the code, for three mutants that survived Cosmic Ray (the
+commit that added them names them).
 
 The detector (`IsraeliId`):
   EC1 each written form: plain; eight and the check digit after a hyphen, a maqaf (U+05BE), an
@@ -115,8 +120,11 @@ def test_c_the_checksum(digits: str, expected: bool) -> None:
 
 @pytest.mark.parametrize(
     ("digits", "expected"),
-    [("000000000", True), ("777777777", True), ("123456782", True), ("012345674", True), ("987654324", True), (VALID, False)],
-    ids=["t1 zeros", "t1 sevens", "t2 ascending", "t2 ascending from 0", "t3 descending", "t4 ordinary"],
+    [
+        ("000000000", True), ("777777777", True), ("123456782", True), ("012345674", True), ("987654324", True), (VALID, False),
+        ("123456791", False),
+    ],
+    ids=["t1 zeros", "t1 sevens", "t2 ascending", "t2 ascending from 0", "t3 descending", "t4 ordinary", "t5 seven run"],
 )
 def test_t_trivial(digits: str, expected: bool) -> None:
     assert is_trivial(digits) is expected
@@ -126,9 +134,9 @@ def test_t_trivial(digits: str, expected: bool) -> None:
     ("raw", "expected"),
     [
         (f"{LANDLINE[:2]}-{LANDLINE[2:]}", True), (f"{LANDLINE[:2]} {LANDLINE[2:]}", True), (f"{CASE[:5]}-{CASE[5:7]}-{CASE[7:]}", True), (VALID, False),
-        (f"{VALID[:8]}-{VALID[8]}", False), (f"{VALID[:3]}-{VALID[3:6]}-{VALID[6:]}", False), ("01-2345678", False),
+        (f"{VALID[:8]}-{VALID[8]}", False), (f"{VALID[:3]}-{VALID[3:6]}-{VALID[6:]}", False), ("01-2345678", False), (f"{LANDLINE[:2]}-{LANDLINE[2:5]}-{LANDLINE[5:]}", False), (f"3{LANDLINE[1]}-{LANDLINE[2:]}", False),
     ],
-    ids=["s1 hyphen", "s1 space", "s2 case", "s3 plain", "s3 eight and one", "s3 threes", "s4 no area code"],
+    ids=["s1 hyphen", "s1 space", "s2 case", "s3 plain", "s3 eight and one", "s3 threes", "s4 no area code", "s5 three and four", "s6 no 0"],
 )  # fmt: skip
 def test_s_other_shapes(raw: str, expected: bool) -> None:
     assert is_other_shape(raw) is expected
