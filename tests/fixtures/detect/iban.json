@@ -675,6 +675,174 @@
    "types": [
     "iban"
    ]
+  },
+  {
+   "text": "חשבון {valid[1]} בבנק",
+   "found": [
+    [
+     0,
+     0
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
+  },
+  {
+   "text": "סניף {account[4]:xxddd} של בנק לאומי, חשבון {account[4]:xxxxxdddddd}",
+   "found": [
+    [
+     1,
+     1
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
+  },
+  {
+   "text": "הכסף הועבר לחשבון {account[6]:xxxxxdddddd} אתמול.",
+   "found": [
+    [
+     0,
+     0
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
+  },
+  {
+   "text": "ח-ן {account[7]:xxxxxddddddd}",
+   "found": [
+    [
+     0,
+     0
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
+  },
+  {
+   "text": "ח\"ן: {account[8]:xxxxxdddddd}",
+   "found": [
+    [
+     0,
+     0
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
+  },
+  {
+   "text": "ח״ן {account[9]:xxxxxdddd}",
+   "found": [
+    [
+     0,
+     0
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
+  },
+  {
+   "text": "מספר חשבון: {account[10]:xxxxxddddddddd}",
+   "found": [
+    [
+     0,
+     0
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
+  },
+  {
+   "text": "חשבון {account[12]:xxddd-dddddd}",
+   "found": [
+    [
+     0,
+     0
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
+  },
+  {
+   "text": "סניף {account[13]:xxddd} חשבון {account[13]:xxxxxdddddd}",
+   "found": [
+    [
+     0,
+     1
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
+  },
+  {
+   "text": "בסניף מס' {account[14]:xxddd}, ח-ן {account[14]:xxxxxddddddd}",
+   "found": [
+    [
+     0,
+     1
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
+  },
+  {
+   "text": "סניף: {account[15]:xxddd}, ח\"ן: {account[15]:xxxxxdddddd}.",
+   "found": [
+    [
+     0,
+     1
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
+  },
+  {
+   "text": "ח–ן {account[17]:xxxxxdddddd} בבנק דיסקונט",
+   "found": [
+    [
+     0,
+     0
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
+  },
+  {
+   "text": "(חשבון {account[18]:xxxxxdddddddd})",
+   "found": [
+    [
+     0,
+     0
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
+  },
+  {
+   "text": "בנק לאומי, חשבון {account[19]:xxxxxdddddd}",
+   "found": [
+    [
+     0,
+     0
+    ]
+   ],
+   "types": [
+    "bank"
+   ]
   }
  ],
  "negatives": [
@@ -812,20 +980,74 @@
   },
   {
    "text": "יתרת החשבון: 12 345 6789,50"
+  },
+  {
+   "text": "חשבון {account[20]:xxxxxddd}"
+  },
+  {
+   "text": "הופקדו לחשבון {account[21]:xxxxxdddddd} ש\"ח"
+  },
+  {
+   "text": "יתרה בחשבון {account[22]:xxxxxdddddd}.50"
+  },
+  {
+   "text": "חשבון {landline[0]:dd-ddddddd}"
+  },
+  {
+   "text": "ת.ז. בעל החשבון {account[25]:xxxxxdddddd}"
+  },
+  {
+   "text": "חשבונות {account[26]:xxxxxdddddd}"
+  },
+  {
+   "text": "הופקדו לחשבון 12,345 ש\"ח"
+  },
+  {
+   "text": "יתרה בחשבון {account[27]:xxxxxdddd} {account[27]:xxxxxxxxxddd} ש\"ח"
+  },
+  {
+   "text": "החשבון 2019 נסגר"
+  },
+  {
+   "text": "הופקדו בחשבון {account[2]:xxxxxdddddd} דולר"
+  },
+  {
+   "text": "ישולם על חשבון {account[3]:xxxxxddddd} שבפסק הדין"
+  },
+  {
+   "text": "יתרה בחשבון -{account[5]:xxxxxdddddd} נכון להיום"
+  },
+  {
+   "text": "חשבון 2019-2020 הוגש"
+  },
+  {
+   "text": "הוא משך מחשבונו {account[6]:xxxxxddddd} בשבוע שעבר"
   }
  ],
  "known_misses": [
   {
-   "text": "חשבון {valid[1]} בבנק",
-   "limit": "an account with no bank's number before it, alone (Known limits; to be found after #315)"
-  },
-  {
-   "text": "סניף {account[4]:xxddd} של בנק לאומי, חשבון {account[4]:xxxxxdddddd}",
-   "limit": "a branch and an account with no bank's number, the bank named between them (Known limits; to be found after #315)"
-  },
-  {
    "text": "חשבון {account[29]:d-ddd-dddddd}",
    "limit": "a triple grouped by separators with a bank of one digit (Known limits)"
+  },
+  {
+   "text": "מס' חשבון בנק: {account[28]:xxxxxdddddd}",
+   "limit": "a word between the account word and an account with no bank's number (Known limits; Achia's answer on #315 asks for the word right before it)"
+  },
+  {
+   "text": "חשבון {account[29]:xxxxxdddddd}, {account[30]:xxxxxdddddd}",
+   "limit": "the second account of a list after one account word, with no bank's number (Known limits); the first is found"
+  },
+  {
+   "text": "בחשבונו מס' {account[11]:xxdddddddddddd}",
+   "limit": "a possessive form of the account word with no bank's name before, for an account with no bank's number (Known limits; the review of #315 at d6bfbd6, finding 2: Achia's words are \"the word חשבון (or ח-ן)\")"
+  },
+  {
+   "text": "הסכום יועבר לחשבונה {account[16]:xxxxxdddddd}/{account[16]:xxxxxxxxxxxdd}",
+   "limit": "a possessive form of the account word with no bank's name before, for an account with no bank's number (Known limits; the review of #315 at d6bfbd6, finding 2: Achia's words are \"the word חשבון (or ח-ן)\")"
+  },
+  {
+   "text": "חשבון {account[23]:xxxxxdddddd} 3 עותקים",
+   "limit": "an account with no bank's number with another number after it by a plain space (Known limits)"
   }
  ]
 }
