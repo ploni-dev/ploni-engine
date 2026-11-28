@@ -166,11 +166,14 @@ needs_review True):
       before this PR): a mobile in two groups and plain after חשבון, a VoIP number after ח-ן,
       a 1-800 number after חשבון מס', a mobile from abroad as 972 and no plus, a landline of
       nine digits after ח-ן and after ח״ן (the phone detector reads no label there), a
-      branch and a mobile                                         nothing; `phone_at` True
+      branch and a mobile                                         nothing; the phone detector
+                                                                 finds a phone there
   EA14 a landline of nine digits plain after חשבון and חשבון מס', which the phone detector
-      refuses under another number's label                       one BANK_ACCOUNT; `phone_at`
-                                                                 False
-  PA  `phone_at` at an account of six digits                     False
+      refuses under another number's label                       one BANK_ACCOUNT; no phone
+  PA  `Iban.alone` reads the projection: an account of six digits    its place; a mobile
+                                                                 nothing; a phone that
+      Phone().detect says starts at an account (patched: its places are the phone detector's
+      own, not a copy of its rules; the review of #315 at d6bfbd6, finding 5)    nothing
 Both:
   EB1 an IBAN and a triple in one text                           both, in the order of the text
   B1  the empty text; a text with no digit                       nothing
@@ -213,7 +216,8 @@ import pytest
 from ploni.detect.base import DetectContext
 from ploni.detect.deterministic import iban, israeli_id
 from ploni.detect.deterministic.iban import TRIPLE, Iban, bank_label_before, iban_ok, is_bank_account
-from ploni.types import Span
+from ploni.detect.deterministic.phone import Phone
+from ploni.types import Detection, Span
 from tests.detector_contract import projection
 from tests.invented_numbers import BANK_NUMBERS, ISRAELI_IDS, PHONES, combined, fill, with_check
 from tests.invented_numbers import iban_remainder as remainder
@@ -782,24 +786,42 @@ PHONE_AFTER_WORD = {
 }
 
 
+def phone_starts(text: str) -> set[int]:
+    """Return where the phone detector's detections start in a text."""
+    return {each.span.start for each in Phone().detect(projection(text), CTX)}
+
+
 @pytest.mark.parametrize("case", PHONE_AFTER_WORD)
 def test_na8_a_phone_after_the_account_word_stays_a_phone(case: str) -> None:
     text = PHONE_AFTER_WORD[case]
     assert found(text) == []
-    assert iban.phone_at(text, text.rindex(text.split()[-1]))
+    assert text.rindex(text.split()[-1]) in phone_starts(text)
 
 
 @pytest.mark.parametrize("before", ["חשבון ", "חשבון מס' "])
 def test_ea14_a_landline_of_nine_digits_under_the_account_word_is_an_account(before: str) -> None:
     # The phone detector refuses a number of nine digits or fewer under another number's label.
     text = f"{before}{LINE}"
-    assert not iban.phone_at(text, len(before))
+    assert phone_starts(text) == set()
     assert found(text) == only(text, LINE, "BANK_ACCOUNT")
 
 
-def test_pa_no_phone_at_an_account() -> None:
+def test_pa_alone_reads_the_projection() -> None:
     text = f"חשבון {NUMBER}"
-    assert not iban.phone_at(text, len("חשבון "))
+    start = len("חשבון ")
+    assert Iban().alone(projection(text)) == [Span(start, start + len(NUMBER))]
+    assert Iban().alone(projection(f"חשבון {MOBILE}")) == []
+
+
+def test_pa_alone_asks_the_phone_detector(monkeypatch: pytest.MonkeyPatch) -> None:
+    # The places come from Phone().detect itself, not from a copy of its rules (the review of #315
+    # at d6bfbd6, finding 5): a phone it says starts at an account refuses the account.
+    text = f"חשבון {NUMBER}"
+    start = len("חשבון ")
+    taken = Detection("", "body", Span(start, start + len(NUMBER)), NUMBER, "PHONE", 0.9, "high", "phone", None)
+    monkeypatch.setattr(Phone, "detect", lambda self, proj, ctx: [taken])
+    assert Iban().alone(projection(text)) == []
+    assert found(text) == []
 
 
 SECOND = BANK_NUMBERS.account[1]
