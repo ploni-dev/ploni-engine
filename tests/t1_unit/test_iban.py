@@ -182,6 +182,11 @@ needs_review True):
 Both:
   EB1 an IBAN and a triple in one text                           both, in the order of the text
   B1  the empty text; a text with no digit                       nothing
+  S1  time on long runs of glue (pass 2 of the review of #315 at adad401, finding 6: ALONE
+      started with the glue, so it tried every character of a run, in time that grows with the
+      square of the run; 20,000 characters " ," took 33 s): 20,000 spaces after a word; 400
+      blank lines of nine spaces (4,000 characters); 20,000 characters " ," after a digit; the
+      same after "חשבון"; each in under SLOW seconds, and nothing found
 
 The fixture (tests/fixtures/detect/iban.json; its numbers are filled in when the tests run, by
 tests/invented_numbers.py, from BANK_NUMBERS and ISRAELI_IDS; a positive's "found" lists, for
@@ -214,6 +219,7 @@ is a Known limit of the module).
 
 import json
 import re
+import time
 from pathlib import Path
 
 import pytest
@@ -909,6 +915,26 @@ def test_eb1_an_iban_and_an_account_in_one_text() -> None:
 @pytest.mark.parametrize("text", ["", "אין כאן מספר כלל."], ids=["empty", "no digit"])
 def test_b1_nothing_to_find(text: str) -> None:
     assert found(text) == []
+
+
+# A generous bound: the detector takes a few milliseconds on these texts when its time is linear
+# in the run, and tens of seconds when it is quadratic (the review of #315, pass 2, finding 6).
+SLOW = 0.5
+GLUE_RUNS = {
+    "spaces after a word": "טקסט" + " " * 20000 + "x",
+    "blank lines": "טקסט" + (" " * 9 + "\n") * 400 + "x",
+    "commas after a digit": "1" + " ," * 10000 + "x",
+    "commas after the account word": "חשבון" + " ," * 10000 + "x",
+}
+
+
+@pytest.mark.parametrize("case", GLUE_RUNS)
+def test_s1_a_long_run_of_glue_is_read_in_linear_time(case: str) -> None:
+    text = GLUE_RUNS[case]
+    started = time.perf_counter()
+    detections = found(text)
+    assert time.perf_counter() - started < SLOW
+    assert detections == []
 
 
 def cases() -> tuple[list[tuple[str, set[tuple[int, int, str]]]], int, int]:
