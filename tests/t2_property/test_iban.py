@@ -85,14 +85,18 @@ BY_NAME = (
     lambda n: (f"בבנק הפועלים בסניף {n[2:5]} בחשבונו {n[5:13]}", f"{n[2:5]} בחשבונו {n[5:13]}"),
 )
 # Issue #315: an account with no bank's number, right after an account word. Nine digits start
-# with n[0], never 0, so that none is a landline, which the phone detector takes (#36).
+# with n[0], never 0, so that none is a landline, which the phone detector takes (#36); four
+# digits start with 3 to 9, so that none is a year, which the detector refuses (the review of
+# #315 at d6bfbd6, N2).
 ALONE = (
     lambda n: n[5:11],
     lambda n: n[0] + n[6:],
-    lambda n: n[:4],
+    lambda n: str(3 + int(n[0]) % 7) + n[1:4],
     lambda n: f"{n[2:5]}-{n[5:11]}",
 )
-ALONE_LEFT = ("חשבון ", "ח-ן ", 'ח"ן ', "חשבון מס' ", "בחשבונו ", "לחשבון: ")
+# The words of an account alone: חשבון, ח-ן and ח"ן with proclitics, no possessive form (the
+# review of #315 at d6bfbd6, finding 2).
+ALONE_LEFT = ("חשבון ", "ח-ן ", 'ח"ן ', "חשבון מס' ", "בחשבון ", "לחשבון: ")
 # A branch and an account, no bank's number: (the text, its item from the branch on).
 BRANCHED = (
     lambda n: (f"סניף {n[2:5]} חשבון {n[5:11]}", f"{n[2:5]} חשבון {n[5:11]}"),
@@ -134,7 +138,7 @@ def iban_is_valid(surface: str) -> bool:
 # word right before it, with only the module's glue between (spaces, commas, colons, semicolons,
 # dots, brackets, hyphens) and מס'.
 ACCOUNT_AT_END = re.compile("[0-9]+(?:[-/][0-9]+)?$")
-ACCOUNT_WORD_BEFORE = re.compile("(?:חשבון|חשבונו|ח-ן|ח\"ן)[\\s,:;.()\\-\\u05be\\u2013]*(?:מס' )?$")
+ACCOUNT_WORD_BEFORE = re.compile("(?:חשבון|ח-ן|ח\"ן)[\\s,:;.()\\-\\u05be\\u2013]*(?:מס' )?$")
 # The digits of an account, 4 to 13, written apart from the module's ACCOUNT_SHORTEST and ACCOUNT_LONGEST.
 ACCOUNT_DIGITS = range(4, 14)
 

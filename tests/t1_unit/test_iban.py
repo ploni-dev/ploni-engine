@@ -89,7 +89,7 @@ The detector, BANK_ACCOUNT:
   NA4 words between, a bank of four digits; a branch of four digits    no triple (added after the
       code, for the mutants that survived on BANK_LONGEST and BRANCH_LONGEST, 3 made 4); since
       issue #315 the branch and the account, or the account alone, after their words, are found
-  EA6 the bank named by its name and no number, then the branch and the account with their
+  EA6 (BY_NAME, as on main) the bank named by its name and no number, then the branch and the account with their
       words: בנק לאומי, סניף R, חשבון A; with a proclitic on בנק and on the words; a name of
       one, two and three words, with gershayim (בע"מ)    one BANK_ACCOUNT, from the branch's
       first digit to the account's last (the batch's rule starts at the bank's number; with
@@ -97,26 +97,53 @@ The detector, BANK_ACCOUNT:
   NA5 by name: no account word before the account; no account    nothing (a name of four
       words, and no bank word, are found since issue #315: EA9)
 
-is_lone_account (the decision on a match of ALONE, issue #315):
-  AD1 a branch before the account word: under no label, with a number after    True
-  AD2 the account alone: labelled, nothing after, one group or two    True
-  AD3 the account alone, not labelled                            False
+is_lone_account (the decision on a match of ALONE, issue #315, read from the match's own text):
+  AD1 a branch before the account word: with a number after, with a year, with a dollar    True
+  AD2 the account alone: nothing after, one group or two         True
+  AD3 the account alone, another number's label beside the word  False
   AD4 the account alone, another number after it                 False
   AD5 the account alone in three groups (a triple's shape, TRIPLE's to judge)    False
   AD6 the account alone in a landline's shape, 0X-XXXXXXX         False
+  AD7 the account alone written as another number (`is_other_number`)    False
+
+is_other_number (the review of #315 at d6bfbd6, finding 1, its narrowings N2, N3b, N4, N5, N6
+and N9; each for an account alone only):
+  ON1 a year, four digits from 1900 to 2099: 1900, 1999, 2000, 2099    True; 1899, 2100, five
+      digits from 19                                             False
+  ON2 a case number NNNN/YY written exactly so                   True; NNNNN/YY, NNNN/YYY,
+      NNN/YY                                                     False
+  ON3 a foreign currency right after: דולר, אירו, יורו, $, €, ליש"ט with ", ״ and '', פאונד,
+      after a space or none                                      True
+  ON4 "על חשבון" right before, no בנק or סניף in the 30 characters before    True; בנק or
+      סניף there, or ועל                                         False
+  ON5 a minus sign right before the digits after a space or a colon    True; a dash with a
+      space after it                                             False
+  ON6 a range of years YYYY-YYYY and YYYY/YYYY                   True; a range from 18    False
+  ON7 an account of six digits with nothing around it            False
 
 The detector, BANK_ACCOUNT with no bank's number (issue #315, Achia, 2026-11-27, "Yes, with the
 word (Recommended)": found when חשבון or ח-ן stands right before it, with or without a branch,
 needs_review True):
-  EA8 an account alone right after each spelling of the account word: חשבון, its possessives,
-      ח-ן with a hyphen, a maqaf or an en dash, ח"ן with ", ״ or ''; with a proclitic, a colon,
-      מס' or מספר, in brackets; an account of four and of thirteen digits, in two groups (a
-      hyphen, a slash), an ID's nine digits after חשבון          one BANK_ACCOUNT, the account
+  EA8 an account alone right after each spelling of the account word: חשבון; ח-ן with a
+      hyphen, a maqaf or an en dash; ח"ן with ", ״ or '' (read as a spelling of ח-ן, Claude's
+      reading); with a proclitic, a colon, מס' or מספר, in brackets; an account of four and of
+      thirteen digits, in two groups (a hyphen, a slash), an ID's nine digits after חשבון
+                                                                 one BANK_ACCOUNT, the account
                                                                  only, the word out
   EA9 a branch and an account: סניף B חשבון A, with commas, colons, מס', proclitics, ח-ן and
-      ח"ן, a branch of one digit; after a bank's name of four words; with no bank word
+      ח"ן, a branch of one digit; after a bank's name of four words; after another bank word
                                                                  one, from the branch's first
                                                                  digit to the account's last
+  NA9 the possessive forms with no bank's name before (חשבונו, ובחשבונה, מחשבונו; the review
+      of #315 at d6bfbd6, finding 2: Achia's words are "the word חשבון (or ח-ן)"), alone and
+      after a branch                                             nothing (a triple keeps them,
+                                                                 and so does BY_NAME: L5, EA1,
+                                                                 EA6)
+  NA10 the narrowings in the detector: a year; NNNN/YY; a foreign currency; "על חשבון" with no
+      bank word near; a minus sign; a range of years             nothing
+  EA15 the narrowings' edges: 1899 and 2100; NNNNN/YY; a dash with a space after it; "על
+      חשבון" after בנק לאומי; a branch and a year, a branch and an account in dollars (the
+      narrowings are for an account alone only)                 one BANK_ACCOUNT each
   EA10 the fields: type BANK_ACCOUNT, band "medium", CONFIDENCE_PATTERN, needs_review True with
       its review_reason
   NA7 the account word not right before: a word between (חשבון בנק, חשבון הבנק, חשבון מיום);
@@ -138,7 +165,7 @@ needs_review True):
   NA8 a phone after the account word, which the phone detector takes there (#36, merged
       before this PR): a mobile in two groups and plain after חשבון, a VoIP number after ח-ן,
       a 1-800 number after חשבון מס', a mobile from abroad as 972 and no plus, a landline of
-      nine digits after ח-ן and after בחשבונו (the phone detector reads no label there), a
+      nine digits after ח-ן and after ח״ן (the phone detector reads no label there), a
       branch and a mobile                                         nothing; `phone_at` True
   EA14 a landline of nine digits plain after חשבון and חשבון מס', which the phone detector
       refuses under another number's label                       one BANK_ACCOUNT; `phone_at`
@@ -509,29 +536,81 @@ def test_na4_four_digits_with_words_between(which: str) -> None:
     assert found(text) == [(start, text.rindex(NUMBER) + len(NUMBER), "BANK_ACCOUNT")]
 
 
-def decide_alone(text: str, labelled: bool, beside: bool) -> bool:
+def decide_alone(text: str) -> bool:
     """Return the decision on the first match of ALONE in `text`."""
     match = iban.ALONE.search(text)
     assert match is not None
-    return iban.is_lone_account(match, labelled, beside)
+    return iban.is_lone_account(match)
 
 
 LANDLINE = ISRAELI_IDS.landline[0]
 ALONE_DECISIONS = {
-    "ad1 a branch, no label, a number after": (f"סניף {BRANCH} חשבון {NUMBER}", False, True, True),
-    "ad2 alone, one group": (f"חשבון {NUMBER}", True, False, True),
-    "ad2 alone, two groups": (f"חשבון {BRANCH}-{NUMBER}", True, False, True),
-    "ad3 alone, not labelled": (f"חשבון {NUMBER}", False, False, False),
-    "ad4 alone, a number after": (f"חשבון {NUMBER}", True, True, False),
-    "ad5 alone, three groups": (f"חשבון {BRANCH}-{NUMBER[:3]}-{NUMBER[3:]}", True, False, False),
-    "ad6 alone, a landline's shape": (f"חשבון {LANDLINE[:2]}-{LANDLINE[2:]}", True, False, False),
+    "ad1 a branch, a number after": (f"סניף {BRANCH} חשבון {NUMBER} 3", True),
+    "ad1 a branch, a year": (f"סניף {BRANCH} חשבון 2019", True),
+    "ad1 a branch, a dollar after": (f"סניף {BRANCH} חשבון {NUMBER} דולר", True),
+    "ad2 alone, one group": (f"חשבון {NUMBER}", True),
+    "ad2 alone, two groups": (f"חשבון {BRANCH}-{NUMBER}", True),
+    "ad3 alone, another number's label beside": (f"ת.ז. בעל החשבון {NUMBER}", False),
+    "ad4 alone, a number after": (f"חשבון {NUMBER} 3", False),
+    "ad5 alone, three groups": (f"חשבון {BRANCH}-{NUMBER[:3]}-{NUMBER[3:]}", False),
+    "ad6 alone, a landline's shape": (f"חשבון {LANDLINE[:2]}-{LANDLINE[2:]}", False),
+    "ad7 alone, a year": ("חשבון 2019", False),
+    "ad7 alone, a dollar after": (f"חשבון {NUMBER} דולר", False),
 }
 
 
 @pytest.mark.parametrize("case", ALONE_DECISIONS)
 def test_ad_the_decision_on_an_account_alone(case: str) -> None:
-    text, labelled, beside, expected = ALONE_DECISIONS[case]
-    assert decide_alone(text, labelled, beside) is expected
+    text, expected = ALONE_DECISIONS[case]
+    assert decide_alone(text) is expected
+
+
+def other(before: str, number: str, after: str = "") -> bool:
+    """Return `is_other_number` on `number` written between `before` and `after`."""
+    text = before + number + after
+    return iban.is_other_number(text, len(before), len(before) + len(number))
+
+
+OTHER_NUMBERS = {
+    "on1 the first year": ("חשבון ", "1900", "", True),
+    "on1 a year": ("חשבון ", "1999", "", True),
+    "on1 the year two thousand": ("חשבון ", "2000", "", True),
+    "on1 the last year": ("חשבון ", "2099", "", True),
+    "on1 before the first year": ("חשבון ", "1899", "", False),
+    "on1 after the last year": ("חשבון ", "2100", "", False),
+    "on1 five digits from 19": ("חשבון ", "19990", "", False),
+    "on2 NNNN/YY": ("חשבון ", "1234/20", "", True),
+    "on2 NNNNN/YY": ("חשבון ", "12345/20", "", False),
+    "on2 NNNN/YYY": ("חשבון ", "1234/205", "", False),
+    "on2 NNN/YY": ("חשבון ", "123/20", "", False),
+    "on3 דולר": ("בחשבון ", NUMBER, " דולר", True),
+    "on3 אירו": ("בחשבון ", NUMBER, " אירו", True),
+    "on3 יורו": ("בחשבון ", NUMBER, " יורו", True),
+    "on3 the dollar sign": ("בחשבון ", NUMBER, " $", True),
+    "on3 the dollar sign glued": ("בחשבון ", NUMBER, "$", True),
+    "on3 the euro sign": ("בחשבון ", NUMBER, " €", True),
+    'on3 ליש"ט': ("בחשבון ", NUMBER, ' ליש"ט', True),
+    "on3 ליש״ט": ("בחשבון ", NUMBER, " ליש״ט", True),
+    "on3 ליש''ט": ("בחשבון ", NUMBER, " ליש''ט", True),
+    "on3 פאונד": ("בחשבון ", NUMBER, " פאונד", True),
+    "on4 על חשבון": ("שולמה מקדמה על חשבון ", NUMBER, "", True),
+    "on4 על חשבון, בנק near": ("מבנק לאומי על חשבון ", NUMBER, "", False),
+    "on4 על חשבון, סניף near": ("בסניף, על חשבון ", NUMBER, "", False),
+    "on4 ועל חשבון": ("ועל חשבון ", NUMBER, "", False),
+    "on5 a minus after a space": ("יתרה בחשבון -", NUMBER, "", True),
+    "on5 a minus after a colon": ("חשבון:-", NUMBER, "", True),
+    "on5 a dash with a space after": ("חשבון - ", NUMBER, "", False),
+    "on6 YYYY-YYYY": ("חשבון ", "2019-2020", "", True),
+    "on6 YYYY/YYYY": ("חשבון ", "1999/2000", "", True),
+    "on6 a range from 18": ("חשבון ", "1899-1900", "", False),
+    "on7 an account": ("חשבון ", NUMBER, "", False),
+}
+
+
+@pytest.mark.parametrize("case", OTHER_NUMBERS)
+def test_on_another_number_after_the_word(case: str) -> None:
+    before, number, after, expected = OTHER_NUMBERS[case]
+    assert other(before, number, after) is expected
 
 
 ACCOUNT_WORDS = {
@@ -544,8 +623,6 @@ ACCOUNT_WORDS = {
     "a proclitic ב": "בחשבון ",
     "a proclitic ל": "לחשבון ",
     "a proclitic ה": "בעל החשבון ",
-    "a possessive": "חשבונו ",
-    "a possessive and proclitics": "ובחשבונה ",
     "ח-ן": "ח-ן ",
     "ח־ן, a maqaf": "ח־ן ",
     "ח–ן, an en dash": "ח–ן ",
@@ -585,7 +662,7 @@ BRANCHED = {
     'ח"ן': f'סניף {BRANCH}, ח"ן {NUMBER}',
     "a branch of one digit": f"סניף {BRANCH[0]} חשבון {NUMBER}",
     "after a bank's name of four words": f"בנק אחד שתיים שלוש ארבע סניף {BRANCH} חשבון {NUMBER}",
-    "after another bank word": f"בבנק סניף {BRANCH} חשבונו {NUMBER}",
+    "after another bank word": f"בבנק סניף {BRANCH} חשבון {NUMBER}",
 }
 
 
@@ -640,6 +717,58 @@ def test_na7_not_an_account_alone(case: str) -> None:
     assert found(NOT_ALONE[case]) == []
 
 
+POSSESSIVE_ALONE = {
+    "חשבונו": f"הכסף הופקד בחשבונו {NUMBER}",
+    "ובחשבונה": f"ובחשבונה {NUMBER} נותרו",
+    "מחשבונו": f"הוא משך מחשבונו {NUMBER} בשבוע שעבר",
+    "after a branch": f"בבנק סניף {BRANCH} חשבונו {NUMBER}",
+}
+
+
+@pytest.mark.parametrize("case", POSSESSIVE_ALONE)
+def test_na9_a_possessive_with_no_bank_name_finds_nothing(case: str) -> None:
+    assert found(POSSESSIVE_ALONE[case]) == []
+
+
+NARROWED = {
+    "a year": "החשבון 2019 נסגר",
+    "a case number NNNN/YY": "חשבון 1234/20 נדון בבית המשפט",
+    "an amount in dollars": f"הופקדו בחשבון {NUMBER} דולר",
+    "an amount in euros": f"הופקדו בחשבון {NUMBER} €",
+    "on account of": f"ישולם על חשבון {NUMBER} שבפסק הדין",
+    "a balance below zero": f"יתרה בחשבון -{NUMBER} נכון להיום",
+    "a range of years": "חשבון 2019-2020 הוגש",
+}
+
+
+@pytest.mark.parametrize("case", NARROWED)
+def test_na10_another_number_after_the_word_finds_nothing(case: str) -> None:
+    assert found(NARROWED[case]) == []
+
+
+EDGES = {
+    "the year before the first": ("חשבון 1899 ", "1899"),
+    "the year after the last": ("חשבון 2100 ", "2100"),
+    "NNNNN/YY": ("חשבון 12345/20 ", "12345/20"),
+    "a dash with a space after": (f"חשבון - {NUMBER}", NUMBER),
+    "on account of, after a bank": (f"הועבר מבנק לאומי על חשבון {NUMBER}", NUMBER),
+}
+
+
+@pytest.mark.parametrize("case", EDGES)
+def test_ea15_the_edges_of_the_narrowings(case: str) -> None:
+    text, item = EDGES[case]
+    assert found(text) == only(text, item, "BANK_ACCOUNT")
+
+
+@pytest.mark.parametrize("after", [" 2019", f" {NUMBER} דולר"], ids=["a year", "dollars"])
+def test_ea15_a_branch_is_not_narrowed(after: str) -> None:
+    text = f"סניף {BRANCH} חשבון{after}"
+    start = text.index(BRANCH)
+    end = len(text) - len(" דולר") if after.endswith("דולר") else len(text)
+    assert found(text) == [(start, end, "BANK_ACCOUNT")]
+
+
 MOBILE, LINE = PHONES.mobile[0], PHONES.landline[0]
 PHONE_AFTER_WORD = {
     "a mobile in two groups after חשבון": f"חשבון {MOBILE[:3]}-{MOBILE[3:]}",
@@ -648,7 +777,7 @@ PHONE_AFTER_WORD = {
     "a service number after חשבון מס'": f"חשבון מס' {PHONES.service[0]}",
     "a mobile from abroad, 972 with no plus": f"חשבון 972{MOBILE[1:]}",
     "a landline plain after ח-ן": f"ח-ן {LINE}",
-    "a landline plain after בחשבונו": f"בחשבונו {LINE}",
+    "a landline plain after ח״ן": f"ח״ן {LINE}",
     "a branch and a mobile": f"סניף {BRANCH} חשבון {MOBILE}",
 }
 

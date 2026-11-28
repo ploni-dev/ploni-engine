@@ -761,18 +761,6 @@
    ]
   },
   {
-   "text": "בחשבונו מס' {account[11]:xxdddddddddddd}",
-   "found": [
-    [
-     0,
-     0
-    ]
-   ],
-   "types": [
-    "bank"
-   ]
-  },
-  {
    "text": "חשבון {account[12]:xxddd-dddddd}",
    "found": [
     [
@@ -810,18 +798,6 @@
   },
   {
    "text": "סניף: {account[15]:xxddd}, ח\"ן: {account[15]:xxxxxdddddd}.",
-   "found": [
-    [
-     0,
-     1
-    ]
-   ],
-   "types": [
-    "bank"
-   ]
-  },
-  {
-   "text": "הסכום יועבר לחשבונה {account[16]:xxxxxdddddd}/{account[16]:xxxxxxxxxxxdd}",
    "found": [
     [
      0,
@@ -1015,9 +991,6 @@
    "text": "יתרה בחשבון {account[22]:xxxxxdddddd}.50"
   },
   {
-   "text": "חשבון {account[23]:xxxxxdddddd} 3 עותקים"
-  },
-  {
    "text": "חשבון {landline[0]:dd-ddddddd}"
   },
   {
@@ -1031,6 +1004,24 @@
   },
   {
    "text": "יתרה בחשבון {account[27]:xxxxxdddd} {account[27]:xxxxxxxxxddd} ש\"ח"
+  },
+  {
+   "text": "החשבון 2019 נסגר"
+  },
+  {
+   "text": "הופקדו בחשבון {account[2]:xxxxxdddddd} דולר"
+  },
+  {
+   "text": "ישולם על חשבון {account[3]:xxxxxddddd} שבפסק הדין"
+  },
+  {
+   "text": "יתרה בחשבון -{account[5]:xxxxxdddddd} נכון להיום"
+  },
+  {
+   "text": "חשבון 2019-2020 הוגש"
+  },
+  {
+   "text": "הוא משך מחשבונו {account[6]:xxxxxddddd} בשבוע שעבר"
   }
  ],
  "known_misses": [
@@ -1045,6 +1036,18 @@
   {
    "text": "חשבון {account[29]:xxxxxdddddd}, {account[30]:xxxxxdddddd}",
    "limit": "the second account of a list after one account word, with no bank's number (Known limits); the first is found"
+  },
+  {
+   "text": "בחשבונו מס' {account[11]:xxdddddddddddd}",
+   "limit": "a possessive form of the account word with no bank's name before, for an account with no bank's number (Known limits; the review of #315 at d6bfbd6, finding 2: Achia's words are \"the word חשבון (or ח-ן)\")"
+  },
+  {
+   "text": "הסכום יועבר לחשבונה {account[16]:xxxxxdddddd}/{account[16]:xxxxxxxxxxxdd}",
+   "limit": "a possessive form of the account word with no bank's name before, for an account with no bank's number (Known limits; the review of #315 at d6bfbd6, finding 2: Achia's words are \"the word חשבון (or ח-ן)\")"
+  },
+  {
+   "text": "חשבון {account[23]:xxxxxdddddd} 3 עותקים",
+   "limit": "an account with no bank's number with another number after it by a plain space (Known limits)"
   }
  ]
 }
