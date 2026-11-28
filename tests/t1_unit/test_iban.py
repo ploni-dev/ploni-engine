@@ -115,7 +115,12 @@ and N9; each for an account alone only):
   ON3 a foreign currency right after: דולר, אירו, יורו, $, €, ליש"ט with ", ״ and '', פאונד,
       after a space or none                                      True
   ON4 "על חשבון" right before, no בנק or סניף in the 30 characters before    True; בנק or
-      סניף there, or ועל                                         False
+      סניף there, or ועל                                         False; the window's edges: בנק
+      starting 30 characters before (False) and 31 (True), at the text's first character
+      (False), far before a long text (True) (added after the code, for the mutants of Cosmic
+      Ray that survived on BANK_NEAR and its window: 30 made 29 and 31, `-` made `//` and `>>`,
+      max(0, ...) made max(1, ...)); five digits from 0 that read as a year, 01999 (False; for
+      `==` made `>=` on YEAR_DIGITS)
   ON5 a minus sign right before the digits after a space or a colon    True; a dash with a
       space after it                                             False
   ON6 a range of years YYYY-YYYY and YYYY/YYYY                   True; a range from 18    False
@@ -583,6 +588,7 @@ OTHER_NUMBERS = {
     "on1 before the first year": ("חשבון ", "1899", "", False),
     "on1 after the last year": ("חשבון ", "2100", "", False),
     "on1 five digits from 19": ("חשבון ", "19990", "", False),
+    "on1 five digits from 0, a year's after it": ("חשבון ", "01999", "", False),
     "on2 NNNN/YY": ("חשבון ", "1234/20", "", True),
     "on2 NNNNN/YY": ("חשבון ", "12345/20", "", False),
     "on2 NNNN/YYY": ("חשבון ", "1234/205", "", False),
@@ -601,6 +607,12 @@ OTHER_NUMBERS = {
     "on4 על חשבון, בנק near": ("מבנק לאומי על חשבון ", NUMBER, "", False),
     "on4 על חשבון, סניף near": ("בסניף, על חשבון ", NUMBER, "", False),
     "on4 ועל חשבון": ("ועל חשבון ", NUMBER, "", False),
+    # BANK_NEAR, 30 characters: בנק starting 30 before the account is near; 31 before, not; בנק
+    # at the text's first character is near; one far before a long text is not.
+    "on4 בנק at the window's first character": ("בנק" + " " * 18 + "על חשבון ", NUMBER, "", False),
+    "on4 בנק one character before the window": ("בנק" + " " * 19 + "על חשבון ", NUMBER, "", True),
+    "on4 בנק at the text's first character": ("בנק על חשבון ", NUMBER, "", False),
+    "on4 בנק far before": (" " * 10 + "בנק" + " " * 78 + "על חשבון ", NUMBER, "", True),
     "on5 a minus after a space": ("יתרה בחשבון -", NUMBER, "", True),
     "on5 a minus after a colon": ("חשבון:-", NUMBER, "", True),
     "on5 a dash with a space after": ("חשבון - ", NUMBER, "", False),
