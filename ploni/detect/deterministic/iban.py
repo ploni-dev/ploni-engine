@@ -144,7 +144,11 @@ takes); so is a triple's account of nine digits after ח-ן or ח"ן, with words
 reviewer's script of the review of #34 at 28b6032, 3,000 invented triples per form: 0.104 after
 ח-ן, 0.088 after ח"ן, 0.104 after ח״ן; 0.000 after חשבון, and grouped after ח-ן): their labels
 of other numbers do not hold ח-ן and ח"ן; treating them as another number's label there is a
-follow-up named on issue #315. The detection carries no id (detection_id is ""): ids are made just after detection, with
+follow-up named on issue #315. A long run of spaces or punctuation right after a digit is read
+by TRIPLE in time that grows with the square of the run (its branch word, two runs of glue side
+by side: 20,000 characters " ," after a digit, 17 s, on main as here): issue #321; ALONE starts
+at its word and reads such a run in linear time (the review of #315, pass 2, finding 6). The
+detection carries no id (detection_id is ""): ids are made just after detection, with
 the matter's key, never inside a detector (Achia, 2026-11-26, issue #169, "Use the secret key
 (Recommended)").
 """
@@ -229,9 +233,13 @@ BY_NAME = re.compile(
 )
 # An account with no bank's number, right after its word, and before the word, or not, סניף and
 # the branch's number (issue #315). Its item runs from the branch's first digit, or the account's.
+# A match starts at its word (or at סניף, or at מס' before the word), never in the glue before
+# it: a start in the glue would be tried at every character of a run of spaces or punctuation,
+# in time that grows with the square of the run (pass 2 of the review of #315 at adad401,
+# finding 6: 20,000 characters " ," took 33 s). TRIPLE's word before a branch is issue #321.
 _BRANCH = rf"{_BEFORE}(?:{'|'.join(BRANCH_WORDS)}){_AFTER}{_GLUE}{_NO}(?P<branch>[0-9]{{1,{BRANCH_LONGEST}}})"
-_ALONE_WORD = rf"{_GLUE}{_NO}{_BEFORE}(?:{'|'.join(ALONE_WORDS)}){_AFTER}{_GLUE}{_NO}"
-ALONE = re.compile(rf"(?:{_BRANCH})?{_ALONE_WORD}(?P<account>{_ACCOUNT}){_ACCOUNT_END}")
+_ALONE_WORD = rf"{_NO}{_BEFORE}(?:{'|'.join(ALONE_WORDS)}){_AFTER}{_GLUE}{_NO}"
+ALONE = re.compile(rf"(?:{_BRANCH}{_GLUE})?{_ALONE_WORD}(?P<account>{_ACCOUNT}){_ACCOUNT_END}")
 # An account alone is written in one group of digits, or two (a branch and an account together);
 # in three or more it has a triple's shape, which TRIPLE judges. Claude's reading, no source.
 LONE_GROUPS = 2
