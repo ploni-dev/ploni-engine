@@ -62,8 +62,9 @@ most LONE_GROUPS groups of digits (three or more are a triple's shape, which TRI
 it is not in a landline's shape (`israeli_id.is_other_shape`), and it is not another number
 written so (`is_other_number`: a year, NNNN/YY, a range of years, a foreign currency after it,
 "על חשבון" before it with no bank word near, a minus sign before it; the review's narrowings).
-With a branch or none, it is refused where the phone detector takes a number that starts at
-the account (`phone_at`): a phone after the account word stays a phone, and no span is both.
+With a branch or none, it is refused where a detection of the phone detector starts at the
+account (`Iban.alone` asks `phone.Phone().detect` once per projection): a phone after the
+account word stays a phone, and no span is both.
 Its span runs from the branch's first digit, or with no branch from the account's, to the
 account's last; the words before them are read, never put in it. A match that shares a
 character with an accepted triple or a match of BY_NAME is dropped: that one holds the account.
@@ -125,7 +126,7 @@ review's script, "יתרת החשבון N5" 1.000 and "לפי חשבון N4" 0.9
 amount -XXXXX and XXXXX דולר, a case number NNNN/YY and a year (1.000 each before the review's
 narrowings); an ID 3-3-3; a company number 2-6-1; a card in fours with spaces or hyphens, and of
 sixteen digits; a landline 0X-XXXXXXX, 0X-XXX-XXXX and 0X XXX XXXX; a mobile 05X-XXX-XXXX,
-05X-XXXXXXX, 05XXXXXXXX (since `phone_at`; 1.000 before it) and +972-5X-XXX-XXXX; an amount
+05X-XXXXXXX, 05XXXXXXXX (since the phone detector is asked; 1.000 before) and +972-5X-XXX-XXXX; an amount
 XX,XXX ש"ח, XX,XXX, X,XXX,XXX, XXXXX ש"ח, XXXXX ₪, XXXXX.XX, XXXXX,XX, XX XXX ש"ח, XX XXX XXX,
 XX.XXX.XXX, X XXX XXX XXX, XX XXX XXX.XX and XX XXX XXXX ש"ח; a case number NNNNN-MM-YY; a date
 DD.MM.YYYY, D.M.YYYY, DD/MM/YYYY and D/M/YY, and DD.MM.YYYY after מיום; an IBAN, paper and
@@ -380,23 +381,6 @@ def is_other_number(text: str, start: int, end: int) -> bool:
     return year or shaped or currency or (paid and not near_bank) or text[start - 2 : start] in MINUS
 
 
-def phone_at(text: str, start: int) -> bool:
-    """Say whether the phone detector takes a number that starts where an account does.
-
-    Why: a mobile, a VoIP or 1-800 number, or a landline where the phone detector reads no label,
-    may stand right after an account word; it is that phone, and no span is both a phone and an
-    account (#36, merged before issue #315 was built).
-
-    Contract: `start`, the account's first digit in `text`. True when `phone.CANDIDATE` matches
-    there and `phone.refused` does not refuse it under `phone.label_before`, as `Phone.detect`
-    reads each candidate. False otherwise.
-
-    Known limits: those of `phone.refused`: under חשבון a number of nine digits or fewer is left
-    to the account, so a landline of nine digits right after חשבון is an account here.
-    """
-    match = phone.CANDIDATE.match(text, start)
-    return match is not None and not phone.refused(text, match, phone.label_before(text, start))
-
 
 class Iban:
     """The detector of IBANs and bank accounts, IBAN and BANK_ACCOUNT.
@@ -466,7 +450,7 @@ class Iban:
             if is_bank_account(match, listed or bank_label_before(proj.text, match.start())):
                 places.append(Span(match.start(), match.end()))
         places += [Span(match.start("branch"), match.end("account")) for match in BY_NAME.finditer(proj.text)]
-        places += [span for span in self.alone(proj.text) if not any(span.start < p.end and p.start < span.end for p in places)]
+        places += [span for span in self.alone(proj) if not any(span.start < p.end and p.start < span.end for p in places)]
         return [
             Detection(
                 "", proj.part, span, proj.text[span.start : span.end], BANK_ACCOUNT, CONFIDENCE_PATTERN, "medium",
@@ -475,21 +459,26 @@ class Iban:
             for span in sorted(places, key=lambda span: span.start)
         ]
 
-    def alone(self, text: str) -> list[Span]:
-        """Return the places of the accounts with no bank's number in a text, in the order of the text.
+    def alone(self, proj: TextProjection) -> list[Span]:
+        """Return the places of the accounts with no bank's number in one projection's text, in the order of the text.
 
         Why: the half of `accounts` that Achia's answer of 2026-11-27 on issue #315 adds, "Yes,
         with the word (Recommended)".
 
-        Contract: one Span per match of ALONE where no phone starts at its account (`phone_at`)
-        and that `is_lone_account` accepts; from the branch's first digit when its group branch
+        Contract: one Span per match of ALONE in `proj.text` that `is_lone_account` accepts and
+        where no detection of the phone detector starts at its account (`phone.Phone().detect`,
+        called once on `proj` with an empty context: a phone after the account word stays a
+        phone, and no span is both, #36); from the branch's first digit when its group branch
         matched, else from the account's, to the account's last digit.
 
-        Known limits: those of the module.
+        Known limits: those of the module, and of the phone detector: under חשבון it leaves a
+        number of nine digits or fewer to the account, so a landline of nine digits right after
+        חשבון is an account here.
         """
+        phones = {found.span.start for found in phone.Phone().detect(proj, DetectContext())}
         places = []
-        for match in ALONE.finditer(text):
+        for match in ALONE.finditer(proj.text):
             start, end = match.span("account")
-            if not phone_at(text, start) and is_lone_account(match):
+            if start not in phones and is_lone_account(match):
                 places.append(Span(match.start("branch") if match["branch"] is not None else start, end))
         return places
